@@ -91,7 +91,7 @@ function agentBody(venue: any, prompt: string) {
     platform_settings: {
       overrides: {
         conversation_config_override: {
-          agent: { prompt: true, first_message: true, language: true },
+          agent: { prompt: { prompt: true }, first_message: true, language: true },
         },
       },
     },

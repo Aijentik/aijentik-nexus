@@ -14,7 +14,14 @@ Deno.serve(async (req) => {
   try {
     const sb = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    const { venue_id } = await req.json();
+    let venueIds: string[] = [];
+    try { const b = await req.json(); if (b?.venue_id) venueIds = [b.venue_id]; } catch {}
+    if (!venueIds.length) {
+      const { data: vs } = await sb.from("venues").select("id");
+      venueIds = (vs || []).map((v: any) => v.id);
+    }
+    let totalAdded = 0;
+    for (const venue_id of venueIds) { try {
 
     const { data: calls } = await sb.from("calls").select("transcript,summary").eq("venue_id", venue_id).order("started_at", { ascending: false }).limit(40);
     const { data: existing } = await sb.from("knowledge_base").select("title").eq("venue_id", venue_id);

@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
       (Array.isArray(c.transcript) ? c.transcript.map((t: any) => `${t.role}: ${t.text}`).join("\n") : "")
     ).join("\n---\n").slice(0, 12000);
 
-    if (!blob.trim()) return new Response(JSON.stringify({ added: 0, reason: "no transcripts yet" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!blob.trim()) { continue; }
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

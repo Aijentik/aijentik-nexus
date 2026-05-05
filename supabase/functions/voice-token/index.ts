@@ -150,15 +150,17 @@ Deno.serve(async (req) => {
     let agentId = agent?.elevenlabs_agent_id;
 
     if (!agentId) {
-      agentId = await createElevenLabsAgent(venue, kb || [], context);
+      agentId = await createElevenLabsAgent(venue, prompt);
       if (agent) {
         await sb.from("agents").update({ elevenlabs_agent_id: agentId, status: "active", prompt }).eq("id", agent.id);
       } else {
         await sb.from("agents").insert({ venue_id, kind: "voice", name: "Voice Host", elevenlabs_agent_id: agentId, status: "active", prompt });
       }
-    } else if (agent?.prompt !== prompt) {
+    }
+    // Always sync to ensure tools + client_events are up-to-date
+    await syncElevenLabsAgent(agentId, venue, prompt);
+    if (agent && agent.prompt !== prompt) {
       await sb.from("agents").update({ prompt, status: "active" }).eq("id", agent.id);
-      await syncElevenLabsAgent(agentId, venue, prompt);
     }
 
     const tokenRes = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${agentId}`, {

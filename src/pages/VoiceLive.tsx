@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useConversation, ConversationProvider } from "@elevenlabs/react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,8 +19,37 @@ export default function VoiceLive() {
 function VoiceLiveInner() {
   const { venue } = useAuth();
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const [sessionConfig, setSessionConfig] = useState<any>(null);
   const [transcript, setTranscript] = useState<{ role: "user" | "agent"; text: string }[]>([]);
+
+  const prepareSession = useCallback(async (force = false) => {
+    if (!venue) return null;
+    if (!force && sessionConfig) return sessionConfig;
+    setPreparing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("voice-token", {
+        body: { venue_id: venue.id },
+      });
+      if (error) throw new Error(error.message || "voice-token failed");
+      if (!data?.token && !data?.signed_url) throw new Error(data?.error || "No voice session returned");
+      setSessionConfig(data);
+      return data;
+    } catch (e: any) {
+      setMicError(e.message || "Could not prepare voice agent");
+      toast.error(e.message || "Could not prepare voice agent");
+      return null;
+    } finally {
+      setPreparing(false);
+    }
+  }, [sessionConfig, venue]);
+
+  useEffect(() => {
+    setSessionConfig(null);
+    setTranscript([]);
+    if (venue) prepareSession(true);
+  }, [venue?.id]);
 
   const conversation = useConversation({
     onConnect: () => {
@@ -48,10 +77,9 @@ function VoiceLiveInner() {
     setBusy(true);
     setMicError(null);
     try {
-      // 1) Mic permission
+      // Mic permission must be requested from the Start button click before the SDK connects.
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // immediately release; SDK will reacquire
         stream.getTracks().forEach(t => t.stop());
       } catch (err: any) {
         const name = err?.name || "";
@@ -65,20 +93,24 @@ function VoiceLiveInner() {
         throw new Error(msg);
       }
 
-      // 2) Get conversation token from edge function
-      const { data, error } = await supabase.functions.invoke("voice-token", {
-        body: { venue_id: venue.id },
-      });
-      if (error) throw new Error(error.message || "voice-token failed");
-      if (!data?.token) throw new Error(data?.error || "No token returned");
+      const config = sessionConfig || await prepareSession();
+      if (!config) throw new Error("Voice agent is not ready yet. Try again in a moment.");
 
-      // 3) Start WebRTC session
-      await conversation.startSession({
-        conversationToken: data.token,
-        connectionType: "webrtc",
-      });
+      const baseOptions = {
+        useWakeLock: false,
+        dynamicVariables: {
+          venue_name: venue.name,
+          venue_id: venue.id,
+        },
+      };
 
-      // 4) Log brain event (best-effort)
+      if (config.signed_url) {
+        conversation.startSession({ ...baseOptions, signedUrl: config.signed_url, connectionType: "websocket" });
+      } else {
+        conversation.startSession({ ...baseOptions, conversationToken: config.token, connectionType: "webrtc" });
+      }
+
+      // Log brain event (best-effort)
       supabase.from("brain_events").insert({
         venue_id: venue.id,
         title: "Live voice session opened",
@@ -91,7 +123,7 @@ function VoiceLiveInner() {
     } finally {
       setBusy(false);
     }
-  }, [conversation, venue]);
+  }, [conversation, prepareSession, venue]);
 
   const stop = async () => {
     try { await conversation.endSession(); } catch (e) { console.error(e); }
@@ -105,6 +137,12 @@ function VoiceLiveInner() {
   return (
     <>
       <PageHeader title="Live Voice" subtitle="Speak to your venue's AI host. Real WebRTC, sub-second latency." />
+
+      {preparing && (
+        <div className="mb-6 glass rounded-2xl p-4 border border-primary/20 flex items-center gap-3 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" /> Preparing your venue-aware voice agent…
+        </div>
+      )}
 
       {micError && (
         <div className="mb-6 glass rounded-2xl p-4 border border-[hsl(var(--warning))]/30 flex items-start gap-3">
@@ -130,12 +168,12 @@ function VoiceLiveInner() {
           </motion.div>
           <div className="relative mt-8 text-center">
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">{venue?.name}</div>
-            <div className="text-lg font-medium">{isOn ? (isSpeaking ? "Agent speaking…" : "Listening…") : "Tap to talk"}</div>
+            <div className="text-lg font-medium">{status === "connecting" ? "Connecting…" : isOn ? (isSpeaking ? "Agent speaking…" : "Listening…") : "Tap to talk"}</div>
           </div>
           <div className="relative mt-6 flex gap-2">
             {!isOn ? (
-              <Button size="lg" onClick={start} disabled={busy} className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground shadow-[0_0_30px_hsl(var(--primary)/0.5)]">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Phone className="h-4 w-4 mr-2" />} Start call
+              <Button size="lg" onClick={start} disabled={busy || preparing || status === "connecting"} className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground shadow-[0_0_30px_hsl(var(--primary)/0.5)]">
+                {busy || preparing || status === "connecting" ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Phone className="h-4 w-4 mr-2" />} {preparing ? "Preparing" : status === "connecting" ? "Connecting" : "Start call"}
               </Button>
             ) : (
               <Button size="lg" variant="destructive" onClick={stop}><PhoneOff className="h-4 w-4 mr-2" /> End call</Button>

@@ -1,17 +1,27 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, Save, Users, Square, Circle as CircleIcon, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Trash2, Save, Users, Square, Circle as CircleIcon, Sparkles, Loader2, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 type TableRow = { id: string; label: string; capacity: number; shape: string; x: number; y: number; width: number; height: number; zone_id: string | null };
 
+const DEMO_TABLES = [
+  { label: "T1", capacity: 2, shape: "round", x: 60, y: 60 }, { label: "T2", capacity: 2, shape: "round", x: 180, y: 60 },
+  { label: "T3", capacity: 2, shape: "round", x: 300, y: 60 }, { label: "T4", capacity: 4, shape: "square", x: 60, y: 200 },
+  { label: "T5", capacity: 4, shape: "square", x: 200, y: 200 }, { label: "T6", capacity: 4, shape: "square", x: 340, y: 200 },
+  { label: "T7", capacity: 6, shape: "square", x: 60, y: 360 }, { label: "T8", capacity: 6, shape: "square", x: 220, y: 360 },
+  { label: "Bar", capacity: 8, shape: "square", x: 480, y: 60 },
+];
+
 export default function FloorPlan() {
-  const { venue } = useAuth();
+  const nav = useNavigate();
+  const { venue, venues, setActiveVenue } = useAuth();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [tables, setTables] = useState<TableRow[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -21,12 +31,28 @@ export default function FloorPlan() {
   const [seatingForm, setSeatingForm] = useState({ party_size: 2, vip: false, notes: "" });
   const dragOffset = useRef({ x: 0, y: 0 });
 
+  const [seedingDemo, setSeedingDemo] = useState(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+
   const load = async () => {
     if (!venue) return;
     const { data } = await supabase.from("tables").select("*").eq("venue_id", venue.id).order("created_at");
     setTables((data as any) || []);
   };
   useEffect(() => { load(); }, [venue?.id]);
+
+  const seedDemo = async () => {
+    if (!venue) return;
+    setSeedingDemo(true);
+    try {
+      const { data, error } = await supabase.from("tables").insert(
+        DEMO_TABLES.map(t => ({ ...t, venue_id: venue.id, width: 80, height: 80 }))
+      ).select();
+      if (error) throw error;
+      setTables(t => [...t, ...(data as any[])]);
+      toast.success("Demo floor plan loaded");
+    } catch (e: any) { toast.error(e.message); } finally { setSeedingDemo(false); }
+  };
 
   const addTable = async (shape: "round" | "square") => {
     if (!venue) return;

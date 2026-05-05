@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, Save, Users, Square, Circle as CircleIcon } from "lucide-react";
+import { Plus, Trash2, Save, Users, Square, Circle as CircleIcon, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 type TableRow = { id: string; label: string; capacity: number; shape: string; x: number; y: number; width: number; height: number; zone_id: string | null };

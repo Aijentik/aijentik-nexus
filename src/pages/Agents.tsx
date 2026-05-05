@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
-import { Bot, Mic, Calendar, Megaphone, Sparkles, Phone, Copy, Check } from "lucide-react";
+import { Bot, Mic, Calendar, Megaphone, Sparkles, Phone, Copy, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ export default function Agents() {
   const [agents, setAgents] = useState<any[]>([]);
   const [phoneEdits, setPhoneEdits] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   const load = async () => {
     if (!venue) return;
@@ -44,10 +45,21 @@ export default function Agents() {
       toast.error("Use E.164 format, e.g. +14155551212");
       return;
     }
-    const { error } = await supabase.from("agents").update({ twilio_phone_number: value }).eq("id", a.id);
-    if (error) return toast.error(error.message.includes("unique") ? "That number is already linked to another agent." : error.message);
-    toast.success(value ? "Phone number linked" : "Phone number cleared");
-    load();
+    setSavingId(a.id);
+    try {
+      if (value && !a.elevenlabs_agent_id) {
+        const { data, error } = await supabase.functions.invoke("voice-token", { body: { venue_id: a.venue_id } });
+        if (error || !data?.agent_id) throw new Error(error?.message || data?.error || "Could not prepare the voice agent");
+      }
+      const { error } = await supabase.from("agents").update({ twilio_phone_number: value }).eq("id", a.id);
+      if (error) throw error;
+      toast.success(value ? "Phone number linked and voice host ready" : "Phone number cleared");
+      load();
+    } catch (e: any) {
+      toast.error(e.message?.includes("unique") ? "That number is already linked to another agent." : (e.message || "Could not link phone number"));
+    } finally {
+      setSavingId(null);
+    }
   };
 
   const copyWebhook = async () => {
@@ -101,7 +113,9 @@ export default function Agents() {
                       placeholder="+14155551212"
                       className="text-xs"
                     />
-                    <Button size="sm" variant="outline" className="border-white/10" onClick={() => savePhone(a)}>Save</Button>
+                    <Button size="sm" variant="outline" className="border-white/10" onClick={() => savePhone(a)} disabled={savingId === a.id}>
+                      {savingId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+                    </Button>
                   </div>
                   <div className={`text-[10px] mt-1.5 ${linked ? 'text-[hsl(var(--success))]' : 'text-muted-foreground'}`}>
                     {linked ? `● Live — calls to ${a.twilio_phone_number} reach this agent` : "Not linked yet"}

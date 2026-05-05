@@ -9,6 +9,70 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const xmlHeaders = { "Content-Type": "text/xml; charset=utf-8" };
 
+function buildPrompt(venue: any, kb: any[] = []) {
+  const knowledge = kb.slice(0, 30).map(k => `• ${k.title}: ${k.content}`).join("\n");
+  return `You are ${venue.name}'s AI host — a warm, professional voice agent for a ${venue.venue_type || "restaurant"}${venue.cuisine ? ` serving ${venue.cuisine}` : ""}.
+
+Help callers with reservations, hours, location, menu questions, policies, and general venue enquiries. Be concise, natural, and friendly.
+
+Venue details:
+- Name: ${venue.name}
+- Address: ${venue.address || "—"}, ${venue.city || ""}
+- Phone: ${venue.phone || "—"}
+- Capacity: ${venue.capacity || 60}
+- Brand voice: ${venue.brand_voice || "warm, professional"}
+- Hours: ${JSON.stringify(venue.hours || {})}
+${venue.description ? `\nAbout: ${venue.description}` : ""}
+
+Knowledge base:
+${knowledge || "(none yet)"}
+
+Rules:
+- For bookings: collect name, party size, date, time, phone. Confirm explicitly.
+- If unsure, offer to take a message rather than invent facts.
+- Keep responses under 2 sentences unless asked for detail.`;
+}
+
+function agentBody(venue: any, prompt: string) {
+  return {
+    name: `${venue.name} — Voice Host`,
+    conversation_config: {
+      agent: {
+        prompt: { prompt },
+        first_message: `Hi, thanks for calling ${venue.name}. How can I help today?`,
+        language: "en",
+      },
+      tts: {
+        voice_id: "EXAVITQu4vr4xnSDxMaL",
+        model_id: "eleven_turbo_v2",
+        stability: 0.35,
+        similarity_boost: 0.7,
+        style: 0.45,
+        use_speaker_boost: true,
+      },
+      client_events: ["audio", "interruption", "user_transcript", "agent_response", "agent_response_correction", "ping"],
+    },
+  };
+}
+
+async function provisionElevenLabsAgent(sb: any, agent: any) {
+  const [{ data: venue }, { data: kb }] = await Promise.all([
+    sb.from("venues").select("*").eq("id", agent.venue_id).single(),
+    sb.from("knowledge_base").select("title,content").eq("venue_id", agent.venue_id).limit(30),
+  ]);
+  if (!venue) throw new Error("venue not found for linked voice agent");
+  const prompt = buildPrompt(venue, kb || []);
+  const res = await fetch("https://api.elevenlabs.io/v1/convai/agents/create", {
+    method: "POST",
+    headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify(agentBody(venue, prompt)),
+  });
+  if (!res.ok) throw new Error(`ElevenLabs agent create failed: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  await sb.from("agents").update({ elevenlabs_agent_id: data.agent_id, status: "active", prompt }).eq("id", agent.id);
+  return data.agent_id;
+}
+
 function twiml(body: string) {
   return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`, { headers: xmlHeaders });
 }
@@ -58,15 +122,27 @@ Deno.serve(async (req) => {
       return twiml(`<Say voice="Polly.Joanna">This number is not linked to an A I host yet. Goodbye.</Say><Hangup/>`);
     }
 
-    if (!agent.elevenlabs_agent_id) {
+    let elevenlabsAgentId = agent.elevenlabs_agent_id;
+    if (!elevenlabsAgentId) {
       console.error("[twilio-voice-webhook] agent has no elevenlabs_agent_id", agent.id);
-      await sb.from("brain_events").insert({
-        venue_id: agent.venue_id, agent_id: agent.id, severity: "error",
-        title: "Inbound call rejected — voice agent not provisioned",
-        reason: "Open Voice Live once to provision the ElevenLabs agent, then retry.",
-        meta: { from, to, callSid },
-      });
-      return twiml(`<Say voice="Polly.Joanna">The A I host has not been set up yet. Please open Voice Live in the dashboard once and try again. Goodbye.</Say><Hangup/>`);
+      try {
+        elevenlabsAgentId = await provisionElevenLabsAgent(sb, agent);
+        await sb.from("brain_events").insert({
+          venue_id: agent.venue_id, agent_id: agent.id, severity: "success",
+          title: "Voice host auto-provisioned for inbound call",
+          reason: `Created the ElevenLabs agent when ${to} rang.`,
+          meta: { from, to, callSid },
+        });
+      } catch (e) {
+        console.error("[twilio-voice-webhook] auto-provision failed", e);
+        await sb.from("brain_events").insert({
+          venue_id: agent.venue_id, agent_id: agent.id, severity: "error",
+          title: "Inbound call rejected — voice agent provisioning failed",
+          reason: String(e).slice(0, 500),
+          meta: { from, to, callSid },
+        });
+        return twiml(`<Say voice="Polly.Joanna">The A I host is still being set up. Please try again in a moment. Goodbye.</Say><Hangup/>`);
+      }
     }
 
     // 1) Try the official native register-call endpoint first
@@ -76,7 +152,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
         body: JSON.stringify({
-          agent_id: agent.elevenlabs_agent_id,
+          agent_id: elevenlabsAgentId,
           agent_phone_number_id: null,
           to_number: to,
           from_number: from,
@@ -96,7 +172,7 @@ Deno.serve(async (req) => {
     // 2) Fallback: signed URL → bridge via <Connect><Stream>
     if (!xml) {
       const signedRes = await fetch(
-        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agent.elevenlabs_agent_id}`,
+        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${elevenlabsAgentId}`,
         { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
       );
       if (!signedRes.ok) {

@@ -12,11 +12,16 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const auth = req.headers.get("Authorization");
-    if (!auth) return new Response(JSON.stringify({ error: "auth required" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    const sb = createClient(SUPABASE_URL, SERVICE_KEY, { global: { headers: { Authorization: auth } } });
+    const sb = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    const { venue_id } = await req.json();
+    let venueIds: string[] = [];
+    try { const b = await req.json(); if (b?.venue_id) venueIds = [b.venue_id]; } catch {}
+    if (!venueIds.length) {
+      const { data: vs } = await sb.from("venues").select("id");
+      venueIds = (vs || []).map((v: any) => v.id);
+    }
+    let totalAdded = 0;
+    for (const venue_id of venueIds) { try {
 
     const { data: calls } = await sb.from("calls").select("transcript,summary").eq("venue_id", venue_id).order("started_at", { ascending: false }).limit(40);
     const { data: existing } = await sb.from("knowledge_base").select("title").eq("venue_id", venue_id);
@@ -27,7 +32,7 @@ Deno.serve(async (req) => {
       (Array.isArray(c.transcript) ? c.transcript.map((t: any) => `${t.role}: ${t.text}`).join("\n") : "")
     ).join("\n---\n").slice(0, 12000);
 
-    if (!blob.trim()) return new Response(JSON.stringify({ added: 0, reason: "no transcripts yet" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!blob.trim()) { continue; }
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -62,10 +67,7 @@ Deno.serve(async (req) => {
         tool_choice: { type: "function", function: { name: "propose_faqs" } },
       }),
     });
-    if (!aiRes.ok) {
-      const t = await aiRes.text();
-      return new Response(JSON.stringify({ error: "AI: " + aiRes.status, details: t.slice(0, 200) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    if (!aiRes.ok) { continue; }
     const data = await aiRes.json();
     const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
     const parsed = args ? JSON.parse(args) : { faqs: [] };
@@ -81,9 +83,12 @@ Deno.serve(async (req) => {
         reason: faqs.map((f: any) => `• ${f.title}`).join("\n"),
         severity: "success",
       });
+      totalAdded += faqs.length;
+    }
+    } catch (err) { console.error("self-heal venue error", venue_id, err); }
     }
 
-    return new Response(JSON.stringify({ added: faqs.length, faqs }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ added: totalAdded }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

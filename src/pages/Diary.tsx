@@ -25,9 +25,13 @@ export default function Diary() {
 
   const create = async () => {
     if (!venue || !form.guest_name || !form.booking_time) return;
-    const { error } = await supabase.from("bookings").insert({ venue_id: venue.id, ...form, booking_time: new Date(form.booking_time).toISOString(), source: "manual", status: "confirmed" });
+    const when = new Date(form.booking_time);
+    const { data: booking, error } = await supabase.from("bookings").insert({ venue_id: venue.id, ...form, booking_time: when.toISOString(), source: "manual", status: "confirmed" }).select().single();
     if (error) return toast.error(error.message);
     await supabase.from("brain_events").insert({ venue_id: venue.id, title: "Booking added manually", reason: `${form.guest_name} · party of ${form.party_size}`, severity: "info" });
+    if (form.guest_phone) {
+      supabase.functions.invoke("send-sms", { body: { venue_id: venue.id, to: form.guest_phone, booking_id: booking?.id, body: `Hi ${form.guest_name}, your table for ${form.party_size} at ${venue.name} on ${format(when, "EEE d MMM 'at' HH:mm")} is confirmed. Reply STOP to opt out.` } }).then(() => toast.success("Confirmation SMS sent")).catch(() => {});
+    }
     toast.success("Booking added");
     setOpen(false); setForm({ guest_name: "", party_size: 2, booking_time: "", guest_phone: "", notes: "" });
     load();

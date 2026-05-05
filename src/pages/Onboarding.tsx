@@ -53,7 +53,20 @@ export default function Onboarding() {
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}`, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
               body: JSON.stringify({ venue_id: venueId }),
             });
-            setTimeout(() => nav("/app"), 1200);
+            if (form.website && venueId) {
+              setSteps(s => [...s, { step: "website", message: `Reading ${form.website}…` }]);
+              try {
+                const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scrape-website`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}`, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+                  body: JSON.stringify({ venue_id: venueId, url: form.website }),
+                });
+                const j = await r.json();
+                setSteps(s => [...s, { step: "website", message: j.ok ? `Imported ${j.count} entries from your site.` : `Skipped website import.` }]);
+              } catch { setSteps(s => [...s, { step: "website", message: "Skipped website import." }]); }
+            }
+            setSteps(s => [...s, { step: "done", message: "Welcome aboard." }]);
+            setTimeout(() => nav("/app"), 1500);
           }
         }
       }

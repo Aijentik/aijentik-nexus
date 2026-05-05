@@ -1,1 +1,4 @@
 project_id = "ifqizzldcgkttwlltdbo"
+
+[functions.twilio-voice-webhook]
+verify_jwt = false

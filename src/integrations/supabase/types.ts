@@ -24,6 +24,7 @@ export type Database = {
           name: string
           prompt: string | null
           status: Database["public"]["Enums"]["agent_status"]
+          twilio_phone_number: string | null
           updated_at: string
           venue_id: string
           voice_id: string | null
@@ -37,6 +38,7 @@ export type Database = {
           name: string
           prompt?: string | null
           status?: Database["public"]["Enums"]["agent_status"]
+          twilio_phone_number?: string | null
           updated_at?: string
           venue_id: string
           voice_id?: string | null
@@ -50,6 +52,7 @@ export type Database = {
           name?: string
           prompt?: string | null
           status?: Database["public"]["Enums"]["agent_status"]
+          twilio_phone_number?: string | null
           updated_at?: string
           venue_id?: string
           voice_id?: string | null

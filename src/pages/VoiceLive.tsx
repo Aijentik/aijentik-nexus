@@ -77,10 +77,12 @@ function VoiceLiveInner() {
     setBusy(true);
     setMicError(null);
     try {
-      // 1) Mic permission
+      const config = await prepareSession();
+      if (!config) throw new Error("Voice agent is not ready yet. Try again in a moment.");
+
+      // Mic permission must be requested from the Start button click before the SDK connects.
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // immediately release; SDK will reacquire
         stream.getTracks().forEach(t => t.stop());
       } catch (err: any) {
         const name = err?.name || "";
@@ -94,20 +96,20 @@ function VoiceLiveInner() {
         throw new Error(msg);
       }
 
-      // 2) Get conversation token from edge function
-      const { data, error } = await supabase.functions.invoke("voice-token", {
-        body: { venue_id: venue.id },
-      });
-      if (error) throw new Error(error.message || "voice-token failed");
-      if (!data?.token) throw new Error(data?.error || "No token returned");
+      const startOptions = config.signed_url
+        ? { signedUrl: config.signed_url, connectionType: "websocket" as const }
+        : { conversationToken: config.token, connectionType: "webrtc" as const };
 
-      // 3) Start WebRTC session
-      await conversation.startSession({
-        conversationToken: data.token,
-        connectionType: "webrtc",
+      conversation.startSession({
+        ...startOptions,
+        useWakeLock: false,
+        dynamicVariables: {
+          venue_name: venue.name,
+          venue_id: venue.id,
+        },
       });
 
-      // 4) Log brain event (best-effort)
+      // Log brain event (best-effort)
       supabase.from("brain_events").insert({
         venue_id: venue.id,
         title: "Live voice session opened",
@@ -120,7 +122,7 @@ function VoiceLiveInner() {
     } finally {
       setBusy(false);
     }
-  }, [conversation, venue]);
+  }, [conversation, prepareSession, venue]);
 
   const stop = async () => {
     try { await conversation.endSession(); } catch (e) { console.error(e); }

@@ -163,18 +163,23 @@ Deno.serve(async (req) => {
       await sb.from("agents").update({ prompt, status: "active" }).eq("id", agent.id);
     }
 
-    const tokenRes = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${agentId}`, {
-      headers: { "xi-api-key": ELEVENLABS_API_KEY },
-    });
-    if (!tokenRes.ok) throw new Error(`token failed: ${tokenRes.status} ${await tokenRes.text()}`);
-    const { token } = await tokenRes.json();
-
     const signedUrlRes = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`, {
       headers: { "xi-api-key": ELEVENLABS_API_KEY },
     });
-    const signedUrlData = signedUrlRes.ok ? await signedUrlRes.json() : {};
+    if (!signedUrlRes.ok) {
+      const txt = await signedUrlRes.text();
+      if (signedUrlRes.status === 429) {
+        return new Response(JSON.stringify({
+          error: "ElevenLabs is at concurrent-call capacity for your workspace. End any other active calls (browser tabs, phone calls, dashboard test sessions) and try again in ~30s.",
+          code: "concurrency_limit",
+          retryable: true,
+        }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw new Error(`signed_url failed: ${signedUrlRes.status} ${txt}`);
+    }
+    const signedUrlData = await signedUrlRes.json();
 
-    return new Response(JSON.stringify({ token, signed_url: signedUrlData.signed_url, agent_id: agentId, prompt }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ signed_url: signedUrlData.signed_url, agent_id: agentId, prompt }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

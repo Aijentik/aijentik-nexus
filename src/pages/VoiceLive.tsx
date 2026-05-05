@@ -23,6 +23,7 @@ function VoiceLiveInner() {
   const [micError, setMicError] = useState<string | null>(null);
   const [sessionConfig, setSessionConfig] = useState<any>(null);
   const [transcript, setTranscript] = useState<{ role: "user" | "agent"; text: string }[]>([]);
+  const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
 
   const prepareSession = useCallback(async (force = false) => {
     if (!venue) return null;
@@ -55,8 +56,26 @@ function VoiceLiveInner() {
     onConnect: () => {
       toast.success("Connected to voice agent");
       setMicError(null);
+      setCallStartedAt(Date.now());
+      setTranscript([]);
     },
-    onDisconnect: () => toast.message("Call ended"),
+    onDisconnect: async () => {
+      toast.message("Call ended");
+      // Persist transcript
+      if (venue && callStartedAt && transcript.length > 0) {
+        try {
+          await supabase.functions.invoke("save-call", {
+            body: {
+              venue_id: venue.id,
+              transcript,
+              started_at: new Date(callStartedAt).toISOString(),
+              duration_seconds: Math.round((Date.now() - callStartedAt) / 1000),
+            },
+          });
+        } catch (e) { console.error("save-call", e); }
+      }
+      setCallStartedAt(null);
+    },
     onMessage: (m: any) => {
       console.log("[VoiceLive] message", m);
       if (m?.source === "user" && typeof m.message === "string") {

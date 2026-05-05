@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard, Phone, CalendarDays, BookOpen, Bot, BarChart3,
-  Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic
+  Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ const nav = [
   { to: "/app/voice", label: "Live Voice", icon: Mic },
   { to: "/app/brain", label: "Live Brain", icon: Brain },
   { to: "/app/diary", label: "Diary", icon: CalendarDays },
+  { to: "/app/floor", label: "Floor Plan", icon: Map },
   { to: "/app/calls", label: "Calls", icon: Phone },
   { to: "/app/agents", label: "Agents", icon: Bot },
   { to: "/app/knowledge", label: "Knowledge", icon: BookOpen },

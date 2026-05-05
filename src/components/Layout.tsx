@@ -2,6 +2,8 @@ import { ReactNode } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { Sidebar } from "./Sidebar";
+import { FloatingBrain } from "./FloatingBrain";
+import { StaffCopilot } from "./StaffCopilot";
 import { motion } from "framer-motion";
 
 export function ProtectedLayout() {
@@ -17,6 +19,8 @@ export function ProtectedLayout() {
           <Outlet />
         </motion.div>
       </main>
+      <FloatingBrain />
+      <StaffCopilot />
     </div>
   );
 }

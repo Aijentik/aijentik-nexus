@@ -96,18 +96,19 @@ function VoiceLiveInner() {
         throw new Error(msg);
       }
 
-      const startOptions = config.signed_url
-        ? { signedUrl: config.signed_url, connectionType: "websocket" as const }
-        : { conversationToken: config.token, connectionType: "webrtc" as const };
-
-      conversation.startSession({
-        ...startOptions,
+      const baseOptions = {
         useWakeLock: false,
         dynamicVariables: {
           venue_name: venue.name,
           venue_id: venue.id,
         },
-      });
+      };
+
+      if (config.signed_url) {
+        conversation.startSession({ ...baseOptions, signedUrl: config.signed_url, connectionType: "websocket" });
+      } else {
+        conversation.startSession({ ...baseOptions, conversationToken: config.token, connectionType: "webrtc" });
+      }
 
       // Log brain event (best-effort)
       supabase.from("brain_events").insert({

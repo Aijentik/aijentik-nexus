@@ -9,6 +9,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
 export default function VoiceLive() {
+  return (
+    <ConversationProvider>
+      <VoiceLiveInner />
+    </ConversationProvider>
+  );
+}
+
+function VoiceLiveInner() {
   const { venue, session } = useAuth();
   const [busy, setBusy] = useState(false);
   const [transcript, setTranscript] = useState<{ role: "user" | "agent"; text: string }[]>([]);

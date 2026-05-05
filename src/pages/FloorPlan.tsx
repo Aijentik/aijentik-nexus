@@ -121,7 +121,15 @@ export default function FloorPlan() {
     <>
       <PageHeader title="Floor Plan" subtitle="Drag, resize and define every table. Your AI uses this to seat guests."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex items-center gap-1.5 glass rounded-md px-2 h-10">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <select value={venue?.id || ""} onChange={e => setActiveVenue(e.target.value)}
+                className="bg-transparent text-sm outline-none pr-2 max-w-[180px]">
+                {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </div>
+            <Button variant="outline" onClick={() => nav("/app/floor/new")}><Plus className="h-4 w-4 mr-2" /> New floor plan</Button>
             <Button variant="outline" onClick={() => addTable("round")}><CircleIcon className="h-4 w-4 mr-2" /> Round</Button>
             <Button onClick={() => addTable("square")} className="bg-primary text-primary-foreground"><Square className="h-4 w-4 mr-2" /> Square</Button>
           </div>
@@ -139,6 +147,21 @@ export default function FloorPlan() {
           <div className="absolute top-3 left-3 text-[11px] uppercase tracking-wider text-muted-foreground bg-background/70 backdrop-blur px-2.5 py-1 rounded-full border border-white/10">
             {tables.length} tables · {totalSeats} seats
           </div>
+          {tables.length === 0 && (
+            <div className="absolute inset-0 grid place-items-center">
+              <div className="text-center max-w-sm glass-strong rounded-2xl p-8">
+                <Sparkles className="h-8 w-8 text-primary mx-auto mb-3" />
+                <div className="font-medium mb-1">No tables yet</div>
+                <div className="text-sm text-muted-foreground mb-4">Drop in a demo layout to see your AI seating engine in action.</div>
+                <div className="flex gap-2 justify-center">
+                  <Button onClick={seedDemo} disabled={seedingDemo} className="bg-primary text-primary-foreground">
+                    {seedingDemo ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />} Load demo tables
+                  </Button>
+                  <Button variant="outline" onClick={() => nav("/app/floor/new")}>New plan</Button>
+                </div>
+              </div>
+            </div>
+          )}
           {tables.map(t => (
             <div
               key={t.id}

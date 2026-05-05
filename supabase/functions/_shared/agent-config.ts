@@ -151,9 +151,9 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         type: "object",
         required: ["caller_name", "message"],
         properties: {
-          caller_name: { type: "string" },
-          caller_phone: { type: "string" },
-          message: { type: "string" },
+          caller_name: { type: "string", description: "Full name of the caller leaving the message" },
+          caller_phone: { type: "string", description: "Callback phone number, optional" },
+          message: { type: "string", description: "The message to relay to the venue team" },
         },
       },
     });

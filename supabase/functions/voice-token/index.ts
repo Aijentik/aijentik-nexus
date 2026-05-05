@@ -130,6 +130,7 @@ Deno.serve(async (req) => {
       }
     } else if (agent?.prompt !== prompt) {
       await sb.from("agents").update({ prompt, status: "active" }).eq("id", agent.id);
+      await syncElevenLabsAgent(agentId, venue, prompt);
     }
 
     const tokenRes = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${agentId}`, {

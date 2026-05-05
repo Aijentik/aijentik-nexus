@@ -11,6 +11,7 @@ import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import VoiceLive from "./pages/VoiceLive";
 import FloorPlan from "./pages/FloorPlan";
+import NewFloorPlan from "./pages/NewFloorPlan";
 import LiveBrain from "./pages/LiveBrain";
 import Diary from "./pages/Diary";
 import Calls from "./pages/Calls";
@@ -42,6 +43,7 @@ const App = () => (
               <Route path="brain" element={<LiveBrain />} />
               <Route path="diary" element={<Diary />} />
               <Route path="floor" element={<FloorPlan />} />
+              <Route path="floor/new" element={<NewFloorPlan />} />
               <Route path="calls" element={<Calls />} />
               <Route path="agents" element={<Agents />} />
               <Route path="knowledge" element={<Knowledge />} />

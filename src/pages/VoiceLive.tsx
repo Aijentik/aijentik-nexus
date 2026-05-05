@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useConversation } from "@elevenlabs/react";
+import { useConversation, ConversationProvider } from "@elevenlabs/react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
@@ -9,6 +9,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
 export default function VoiceLive() {
+  return (
+    <ConversationProvider>
+      <VoiceLiveInner />
+    </ConversationProvider>
+  );
+}
+
+function VoiceLiveInner() {
   const { venue, session } = useAuth();
   const [busy, setBusy] = useState(false);
   const [transcript, setTranscript] = useState<{ role: "user" | "agent"; text: string }[]>([]);

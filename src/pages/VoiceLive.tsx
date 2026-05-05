@@ -77,9 +77,6 @@ function VoiceLiveInner() {
     setBusy(true);
     setMicError(null);
     try {
-      const config = await prepareSession();
-      if (!config) throw new Error("Voice agent is not ready yet. Try again in a moment.");
-
       // Mic permission must be requested from the Start button click before the SDK connects.
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -95,6 +92,9 @@ function VoiceLiveInner() {
         setMicError(msg);
         throw new Error(msg);
       }
+
+      const config = sessionConfig || await prepareSession();
+      if (!config) throw new Error("Voice agent is not ready yet. Try again in a moment.");
 
       const baseOptions = {
         useWakeLock: false,

@@ -9,6 +9,70 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const xmlHeaders = { "Content-Type": "text/xml; charset=utf-8" };
 
+function buildPrompt(venue: any, kb: any[] = []) {
+  const knowledge = kb.slice(0, 30).map(k => `• ${k.title}: ${k.content}`).join("\n");
+  return `You are ${venue.name}'s AI host — a warm, professional voice agent for a ${venue.venue_type || "restaurant"}${venue.cuisine ? ` serving ${venue.cuisine}` : ""}.
+
+Help callers with reservations, hours, location, menu questions, policies, and general venue enquiries. Be concise, natural, and friendly.
+
+Venue details:
+- Name: ${venue.name}
+- Address: ${venue.address || "—"}, ${venue.city || ""}
+- Phone: ${venue.phone || "—"}
+- Capacity: ${venue.capacity || 60}
+- Brand voice: ${venue.brand_voice || "warm, professional"}
+- Hours: ${JSON.stringify(venue.hours || {})}
+${venue.description ? `\nAbout: ${venue.description}` : ""}
+
+Knowledge base:
+${knowledge || "(none yet)"}
+
+Rules:
+- For bookings: collect name, party size, date, time, phone. Confirm explicitly.
+- If unsure, offer to take a message rather than invent facts.
+- Keep responses under 2 sentences unless asked for detail.`;
+}
+
+function agentBody(venue: any, prompt: string) {
+  return {
+    name: `${venue.name} — Voice Host`,
+    conversation_config: {
+      agent: {
+        prompt: { prompt },
+        first_message: `Hi, thanks for calling ${venue.name}. How can I help today?`,
+        language: "en",
+      },
+      tts: {
+        voice_id: "EXAVITQu4vr4xnSDxMaL",
+        model_id: "eleven_turbo_v2",
+        stability: 0.35,
+        similarity_boost: 0.7,
+        style: 0.45,
+        use_speaker_boost: true,
+      },
+      client_events: ["audio", "interruption", "user_transcript", "agent_response", "agent_response_correction", "ping"],
+    },
+  };
+}
+
+async function provisionElevenLabsAgent(sb: any, agent: any) {
+  const [{ data: venue }, { data: kb }] = await Promise.all([
+    sb.from("venues").select("*").eq("id", agent.venue_id).single(),
+    sb.from("knowledge_base").select("title,content").eq("venue_id", agent.venue_id).limit(30),
+  ]);
+  if (!venue) throw new Error("venue not found for linked voice agent");
+  const prompt = buildPrompt(venue, kb || []);
+  const res = await fetch("https://api.elevenlabs.io/v1/convai/agents/create", {
+    method: "POST",
+    headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify(agentBody(venue, prompt)),
+  });
+  if (!res.ok) throw new Error(`ElevenLabs agent create failed: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  await sb.from("agents").update({ elevenlabs_agent_id: data.agent_id, status: "active", prompt }).eq("id", agent.id);
+  return data.agent_id;
+}
+
 function twiml(body: string) {
   return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`, { headers: xmlHeaders });
 }

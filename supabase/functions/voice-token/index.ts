@@ -77,7 +77,15 @@ function agentBody(venue: any, prompt: string) {
         first_message: `Hi, thanks for calling ${venue.name}. How can I help today?`,
         language: "en",
       },
-      tts: { voice_id: "EXAVITQu4vr4xnSDxMaL", model_id: "eleven_turbo_v2" },
+      tts: {
+        voice_id: voiceId,
+        model_id: "eleven_turbo_v2",
+        stability: 0.35,
+        similarity_boost: 0.7,
+        style: 0.45,
+        use_speaker_boost: true,
+        speed: 1.0,
+      },
       client_events: [
         "audio",
         "interruption",

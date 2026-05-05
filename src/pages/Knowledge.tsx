@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Globe, Loader2, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -14,6 +14,9 @@ export default function Knowledge() {
   const { venue } = useAuth();
   const [items, setItems] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
+  const [scrapeUrl, setScrapeUrl] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [healing, setHealing] = useState(false);
   const [form, setForm] = useState({ category: "policy", title: "", content: "" });
 
   const load = async () => {
@@ -35,6 +38,31 @@ export default function Knowledge() {
 
   const grouped = items.reduce((a: any, k) => { (a[k.category] ||= []).push(k); return a; }, {});
 
+  const scrape = async () => {
+    if (!venue || !scrapeUrl) return;
+    setScraping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("scrape-website", { body: { venue_id: venue.id, url: scrapeUrl } });
+      if (error) throw error;
+      toast.success(`Imported ${data.count} entries`);
+      setScrapeUrl("");
+      load();
+    } catch (e: any) { toast.error(e.message || "Scrape failed"); }
+    finally { setScraping(false); }
+  };
+
+  const heal = async () => {
+    if (!venue) return;
+    setHealing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("self-heal-faq", { body: { venue_id: venue.id } });
+      if (error) throw error;
+      toast.success(`Added ${data.added} self-healed FAQ${data.added === 1 ? "" : "s"}`);
+      load();
+    } catch (e: any) { toast.error(e.message || "Self-heal failed"); }
+    finally { setHealing(false); }
+  };
+
   return (
     <>
       <PageHeader title="Knowledge" subtitle="What your AI knows. Update anytime — agents pick it up immediately."
@@ -52,6 +80,17 @@ export default function Knowledge() {
             </DialogContent>
           </Dialog>
         } />
+
+      <div className="glass rounded-2xl p-4 mb-6 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+        <Globe className="h-4 w-4 text-primary shrink-0 ml-1" />
+        <Input value={scrapeUrl} onChange={e => setScrapeUrl(e.target.value)} placeholder="https://your-venue.com — auto-import menu, hours, FAQs" className="flex-1" />
+        <Button onClick={scrape} disabled={scraping || !scrapeUrl} className="bg-primary text-primary-foreground">
+          {scraping ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Globe className="h-4 w-4 mr-2" />} Learn website
+        </Button>
+        <Button onClick={heal} disabled={healing} variant="outline">
+          {healing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />} Self-heal from calls
+        </Button>
+      </div>
 
       <div className="space-y-6">
         {Object.entries(grouped).map(([cat, ks]: any) => (

@@ -23,6 +23,7 @@ function VoiceLiveInner() {
   const [micError, setMicError] = useState<string | null>(null);
   const [sessionConfig, setSessionConfig] = useState<any>(null);
   const [transcript, setTranscript] = useState<{ role: "user" | "agent"; text: string }[]>([]);
+  const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
 
   const prepareSession = useCallback(async (force = false) => {
     if (!venue) return null;

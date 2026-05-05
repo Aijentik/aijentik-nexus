@@ -45,10 +45,32 @@ Rules:
 - If the caller asks to change live data, confirm the details and say you have noted it for the team.
 - If unsure, offer to take a message rather than invent facts.
 - Never share private operational data beyond what is needed to help the caller.
-- Keep responses under 2 sentences unless asked for detail.`;
+- Keep responses under 2 sentences unless asked for detail.
+
+Delivery style:
+- Talk like a real person working at the venue, not a narrator or AI assistant.
+- Sound relaxed, warm, and conversational — slightly informal, never stiff or scripted.
+- Use natural fillers sparingly ("sure", "of course", "let me check", "one sec") and small pauses with commas and ellipses to break rhythm.
+- Vary phrasing across responses — never repeat the exact same sentence twice. Mix up greetings, confirmations, and acknowledgements.
+- Avoid overly enunciated, dramatic, or audiobook-like delivery. Keep it casual but clear.`;
+}
+
+// Curated conversational, hospitality-friendly voices.
+// Default: Sarah (warm, natural). Alternates: Jessica (friendly assistant), Brian (relaxed male host).
+const VOICE_CANDIDATES: Record<string, string> = {
+  sarah: "EXAVITQu4vr4xnSDxMaL",
+  jessica: "cgSgspJ2msm6clMCkdW9",
+  brian: "nPczCjzI2devNBz1zQrb",
+};
+function resolveVoiceId(venue: any): string {
+  const cfg = venue?.config?.voice || venue?.brand_voice_id;
+  if (typeof cfg === "string" && VOICE_CANDIDATES[cfg]) return VOICE_CANDIDATES[cfg];
+  if (typeof cfg === "string" && cfg.length > 15) return cfg; // raw voice_id
+  return VOICE_CANDIDATES.sarah;
 }
 
 function agentBody(venue: any, prompt: string) {
+  const voiceId = resolveVoiceId(venue);
   return {
     name: `${venue.name} — Voice Host`,
     conversation_config: {

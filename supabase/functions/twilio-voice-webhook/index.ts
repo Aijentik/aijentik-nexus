@@ -122,15 +122,27 @@ Deno.serve(async (req) => {
       return twiml(`<Say voice="Polly.Joanna">This number is not linked to an A I host yet. Goodbye.</Say><Hangup/>`);
     }
 
-    if (!agent.elevenlabs_agent_id) {
+    let elevenlabsAgentId = agent.elevenlabs_agent_id;
+    if (!elevenlabsAgentId) {
       console.error("[twilio-voice-webhook] agent has no elevenlabs_agent_id", agent.id);
-      await sb.from("brain_events").insert({
-        venue_id: agent.venue_id, agent_id: agent.id, severity: "error",
-        title: "Inbound call rejected — voice agent not provisioned",
-        reason: "Open Voice Live once to provision the ElevenLabs agent, then retry.",
-        meta: { from, to, callSid },
-      });
-      return twiml(`<Say voice="Polly.Joanna">The A I host has not been set up yet. Please open Voice Live in the dashboard once and try again. Goodbye.</Say><Hangup/>`);
+      try {
+        elevenlabsAgentId = await provisionElevenLabsAgent(sb, agent);
+        await sb.from("brain_events").insert({
+          venue_id: agent.venue_id, agent_id: agent.id, severity: "success",
+          title: "Voice host auto-provisioned for inbound call",
+          reason: `Created the ElevenLabs agent when ${to} rang.`,
+          meta: { from, to, callSid },
+        });
+      } catch (e) {
+        console.error("[twilio-voice-webhook] auto-provision failed", e);
+        await sb.from("brain_events").insert({
+          venue_id: agent.venue_id, agent_id: agent.id, severity: "error",
+          title: "Inbound call rejected — voice agent provisioning failed",
+          reason: String(e).slice(0, 500),
+          meta: { from, to, callSid },
+        });
+        return twiml(`<Say voice="Polly.Joanna">The A I host is still being set up. Please try again in a moment. Goodbye.</Say><Hangup/>`);
+      }
     }
 
     // 1) Try the official native register-call endpoint first
@@ -140,7 +152,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
         body: JSON.stringify({
-          agent_id: agent.elevenlabs_agent_id,
+          agent_id: elevenlabsAgentId,
           agent_phone_number_id: null,
           to_number: to,
           from_number: from,
@@ -160,7 +172,7 @@ Deno.serve(async (req) => {
     // 2) Fallback: signed URL → bridge via <Connect><Stream>
     if (!xml) {
       const signedRes = await fetch(
-        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agent.elevenlabs_agent_id}`,
+        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${elevenlabsAgentId}`,
         { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
       );
       if (!signedRes.ok) {

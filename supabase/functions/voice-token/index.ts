@@ -88,17 +88,29 @@ Deno.serve(async (req) => {
     const { data: venue } = await sb.from("venues").select("*").eq("id", venue_id).single();
     if (!venue) return new Response(JSON.stringify({ error: "venue not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+    const [{ data: kb }, { data: bookings }, { data: messages }, { data: events }, { data: insights }] = await Promise.all([
+      sb.from("knowledge_base").select("title,content").eq("venue_id", venue_id).limit(30),
+      sb.from("bookings").select("guest_name,party_size,booking_time,status,notes").eq("venue_id", venue_id).gte("booking_time", new Date().toISOString()).order("booking_time", { ascending: true }).limit(10),
+      sb.from("messages").select("direction,channel,contact,body,created_at").eq("venue_id", venue_id).order("created_at", { ascending: false }).limit(10),
+      sb.from("brain_events").select("title,reason,severity,created_at").eq("venue_id", venue_id).order("created_at", { ascending: false }).limit(10),
+      sb.from("insights").select("title,body,category,impact,created_at").eq("venue_id", venue_id).order("created_at", { ascending: false }).limit(8),
+    ]);
+
+    const context = { bookings: bookings || [], messages: messages || [], events: events || [], insights: insights || [] };
+    const prompt = buildPrompt(venue, kb || [], context);
+
     let { data: agent } = await sb.from("agents").select("*").eq("venue_id", venue_id).eq("kind", "voice").maybeSingle();
     let agentId = agent?.elevenlabs_agent_id;
 
     if (!agentId) {
-      const { data: kb } = await sb.from("knowledge_base").select("*").eq("venue_id", venue_id);
-      agentId = await createElevenLabsAgent(venue, kb || []);
+      agentId = await createElevenLabsAgent(venue, kb || [], context);
       if (agent) {
-        await sb.from("agents").update({ elevenlabs_agent_id: agentId, status: "active" }).eq("id", agent.id);
+        await sb.from("agents").update({ elevenlabs_agent_id: agentId, status: "active", prompt }).eq("id", agent.id);
       } else {
-        await sb.from("agents").insert({ venue_id, kind: "voice", name: "Voice Host", elevenlabs_agent_id: agentId, status: "active" });
+        await sb.from("agents").insert({ venue_id, kind: "voice", name: "Voice Host", elevenlabs_agent_id: agentId, status: "active", prompt });
       }
+    } else if (agent?.prompt !== prompt) {
+      await sb.from("agents").update({ prompt, status: "active" }).eq("id", agent.id);
     }
 
     const tokenRes = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${agentId}`, {
@@ -107,7 +119,12 @@ Deno.serve(async (req) => {
     if (!tokenRes.ok) throw new Error(`token failed: ${tokenRes.status} ${await tokenRes.text()}`);
     const { token } = await tokenRes.json();
 
-    return new Response(JSON.stringify({ token, agent_id: agentId }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const signedUrlRes = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`, {
+      headers: { "xi-api-key": ELEVENLABS_API_KEY },
+    });
+    const signedUrlData = signedUrlRes.ok ? await signedUrlRes.json() : {};
+
+    return new Response(JSON.stringify({ token, signed_url: signedUrlData.signed_url, agent_id: agentId, prompt }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

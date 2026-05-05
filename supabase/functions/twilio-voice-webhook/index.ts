@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     // Try exact match first, then loose match (strip non-digits) as a safety net
     let { data: agent } = await sb
       .from("agents")
-      .select("id, venue_id, elevenlabs_agent_id, name, twilio_phone_number")
+      .select("id, venue_id, elevenlabs_agent_id, name, twilio_phone_number, config")
       .eq("twilio_phone_number", to)
       .maybeSingle();
 
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       const digits = to.replace(/\D/g, "");
       const { data: all } = await sb
         .from("agents")
-        .select("id, venue_id, elevenlabs_agent_id, name, twilio_phone_number")
+        .select("id, venue_id, elevenlabs_agent_id, name, twilio_phone_number, config")
         .not("twilio_phone_number", "is", null);
       agent = (all || []).find((a: any) => (a.twilio_phone_number || "").replace(/\D/g, "") === digits) || null;
     }

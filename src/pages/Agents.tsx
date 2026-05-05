@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
-import { Bot, Mic, Calendar, Megaphone, Sparkles, Phone, Copy, Check, Loader2 } from "lucide-react";
+import { Bot, Mic, Calendar, Megaphone, Sparkles, Phone, Copy, Check, Loader2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { AgentConfigDialog } from "@/components/AgentConfigDialog";
 
 const icons: any = { voice: Mic, booking: Calendar, ops: Bot, marketing: Megaphone, concierge: Sparkles };
 
@@ -19,6 +20,7 @@ export default function Agents() {
   const [phoneEdits, setPhoneEdits] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [configAgent, setConfigAgent] = useState<any | null>(null);
 
   const load = async () => {
     if (!venue) return;
@@ -123,7 +125,8 @@ export default function Agents() {
                 </div>
               )}
 
-              <div className="flex gap-2 mt-4">
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Button size="sm" variant="outline" onClick={() => setConfigAgent(a)} className="flex-1 border-white/10"><Settings2 className="h-3 w-3 mr-1.5" /> Configure</Button>
                 {a.kind === "voice" && <Link to="/app/voice" className="flex-1"><Button size="sm" className="w-full bg-primary text-primary-foreground"><Mic className="h-3 w-3 mr-1.5" /> Talk</Button></Link>}
                 <Button size="sm" variant="outline" onClick={() => toggle(a)} className="flex-1 border-white/10">{a.status === 'active' ? 'Pause' : 'Activate'}</Button>
               </div>
@@ -131,6 +134,8 @@ export default function Agents() {
           );
         })}
       </div>
+
+      <AgentConfigDialog agent={configAgent} open={!!configAgent} onOpenChange={(o) => !o && setConfigAgent(null)} onSaved={load} />
     </>
   );
 }

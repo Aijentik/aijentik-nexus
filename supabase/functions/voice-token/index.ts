@@ -1,149 +1,26 @@
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+import { buildPrompt, buildAgentBody } from "../_shared/agent-config.ts";
 
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-function buildPrompt(venue: any, kb: any[], context: any = {}) {
-  const knowledge = kb.slice(0, 30).map(k => `• ${k.title}: ${k.content}`).join("\n");
-  const bookings = (context.bookings || []).map((b: any) => `• ${b.guest_name}, party of ${b.party_size}, ${b.booking_time}, status: ${b.status}${b.notes ? `, notes: ${b.notes}` : ""}`).join("\n");
-  const messages = (context.messages || []).map((m: any) => `• ${m.direction || "message"} ${m.channel || "sms"} ${m.contact || ""}: ${m.body}`).join("\n");
-  const events = (context.events || []).map((e: any) => `• ${e.title}: ${e.reason || ""}`).join("\n");
-  const insights = (context.insights || []).map((i: any) => `• ${i.title}: ${i.body}`).join("\n");
-
-  return `You are ${venue.name}'s AI host — a warm, professional voice agent for a ${venue.venue_type || "restaurant"}${venue.cuisine ? ` serving ${venue.cuisine}` : ""}.
-
-Your job: greet guests, take reservations, answer questions about the menu, hours, location, dress code, policies, and current operational context. Be concise, friendly, and confident.
-
-Venue details:
-- Name: ${venue.name}
-- Address: ${venue.address || "—"}, ${venue.city || ""}
-- Phone: ${venue.phone || "—"}
-- Capacity: ${venue.capacity || 60}
-- Brand voice: ${venue.brand_voice || "warm, professional"}
-- Hours: ${JSON.stringify(venue.hours || {})}
-${venue.description ? `\nAbout: ${venue.description}` : ""}
-
-Knowledge base:
-${knowledge || "(none yet)"}
-
-Upcoming bookings:
-${bookings || "(none available)"}
-
-Recent messages:
-${messages || "(none available)"}
-
-Live Brain / action context:
-${events || "(none available)"}
-
-Insights:
-${insights || "(none available)"}
-
-Rules:
-- For bookings: collect name, party size, date, time, phone. Confirm explicitly.
-- If the caller asks to change live data, confirm the details and say you have noted it for the team.
-- If unsure, offer to take a message rather than invent facts.
-- Never share private operational data beyond what is needed to help the caller.
-- Keep responses under 2 sentences unless asked for detail.
-
-Delivery style:
-- Talk like a real person working at the venue, not a narrator or AI assistant.
-- Sound relaxed, warm, and conversational — slightly informal, never stiff or scripted.
-- Use natural fillers sparingly ("sure", "of course", "let me check", "one sec") and small pauses with commas and ellipses to break rhythm.
-- Vary phrasing across responses — never repeat the exact same sentence twice. Mix up greetings, confirmations, and acknowledgements.
-- Avoid overly enunciated, dramatic, or audiobook-like delivery. Keep it casual but clear.`;
-}
-
-// Curated conversational, hospitality-friendly voices.
-// Default: Sarah (warm, natural). Alternates: Jessica (friendly assistant), Brian (relaxed male host).
-const VOICE_CANDIDATES: Record<string, string> = {
-  sarah: "EXAVITQu4vr4xnSDxMaL",
-  jessica: "cgSgspJ2msm6clMCkdW9",
-  brian: "nPczCjzI2devNBz1zQrb",
-};
-function resolveVoiceId(venue: any): string {
-  const cfg = venue?.config?.voice || venue?.brand_voice_id;
-  if (typeof cfg === "string" && VOICE_CANDIDATES[cfg]) return VOICE_CANDIDATES[cfg];
-  if (typeof cfg === "string" && cfg.length > 15) return cfg; // raw voice_id
-  return VOICE_CANDIDATES.sarah;
-}
-
-function agentBody(venue: any, prompt: string) {
-  const voiceId = resolveVoiceId(venue);
-  return {
-    name: `${venue.name} — Voice Host`,
-    conversation_config: {
-      agent: {
-        prompt: {
-          prompt,
-          tools: [
-            {
-              type: "client",
-              name: "create_booking",
-              description: "Create a confirmed booking in the venue's diary. Call this only after explicitly confirming all required details with the caller.",
-              parameters: {
-                type: "object",
-                required: ["guest_name", "party_size", "booking_time"],
-                properties: {
-                  guest_name: { type: "string", description: "Full name of the guest" },
-                  party_size: { type: "integer", description: "Number of guests" },
-                  booking_time: { type: "string", description: "ISO 8601 datetime, e.g. 2026-05-06T19:30:00Z" },
-                  guest_phone: { type: "string", description: "Phone number, optional" },
-                  notes: { type: "string", description: "Special requests / notes, optional" },
-                },
-              },
-            },
-          ],
-        },
-        first_message: `Hi, thanks for calling ${venue.name}. How can I help today?`,
-        language: "en",
-      },
-      tts: {
-        voice_id: voiceId,
-        model_id: "eleven_turbo_v2",
-        stability: 0.35,
-        similarity_boost: 0.7,
-        style: 0.45,
-        use_speaker_boost: true,
-        speed: 1.0,
-      },
-      client_events: [
-        "audio",
-        "interruption",
-        "user_transcript",
-        "agent_response",
-        "agent_response_correction",
-        "client_tool_call",
-        "ping",
-      ],
-    },
-    platform_settings: {
-      overrides: {
-        conversation_config_override: {
-          agent: { prompt: { prompt: true }, first_message: true, language: true },
-        },
-      },
-    },
-  };
-}
-
-async function createElevenLabsAgent(venue: any, prompt: string) {
+async function createElAgent(body: any) {
   const res = await fetch("https://api.elevenlabs.io/v1/convai/agents/create", {
     method: "POST",
     headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify(agentBody(venue, prompt)),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`agent create failed: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  return data.agent_id;
+  return (await res.json()).agent_id as string;
 }
 
-async function syncElevenLabsAgent(agentId: string, venue: any, prompt: string) {
+async function syncElAgent(agentId: string, body: any) {
   const res = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
     method: "PATCH",
     headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify(agentBody(venue, prompt)),
+    body: JSON.stringify(body),
   });
   if (!res.ok) console.warn("agent sync failed", res.status, await res.text());
 }
@@ -173,24 +50,26 @@ Deno.serve(async (req) => {
       sb.from("insights").select("title,body,category,impact,created_at").eq("venue_id", venue_id).order("created_at", { ascending: false }).limit(8),
     ]);
 
-    const context = { bookings: bookings || [], messages: messages || [], events: events || [], insights: insights || [] };
-    const prompt = buildPrompt(venue, kb || [], context);
-
     let { data: agent } = await sb.from("agents").select("*").eq("venue_id", venue_id).eq("kind", "voice").maybeSingle();
-    let agentId = agent?.elevenlabs_agent_id;
+    const cfg = agent?.config || {};
+    const context = { bookings: bookings || [], messages: messages || [], events: events || [], insights: insights || [] };
+    const prompt = buildPrompt(venue, kb || [], cfg, context);
+    const body = buildAgentBody(venue, prompt, cfg);
 
+    let agentId = agent?.elevenlabs_agent_id;
     if (!agentId) {
-      agentId = await createElevenLabsAgent(venue, prompt);
+      agentId = await createElAgent(body);
       if (agent) {
         await sb.from("agents").update({ elevenlabs_agent_id: agentId, status: "active", prompt }).eq("id", agent.id);
       } else {
-        await sb.from("agents").insert({ venue_id, kind: "voice", name: "Voice Host", elevenlabs_agent_id: agentId, status: "active", prompt });
+        const { data: inserted } = await sb.from("agents").insert({ venue_id, kind: "voice", name: "Voice Host", elevenlabs_agent_id: agentId, status: "active", prompt }).select().single();
+        agent = inserted;
       }
-    }
-    // Always sync to ensure tools + client_events are up-to-date
-    await syncElevenLabsAgent(agentId, venue, prompt);
-    if (agent && agent.prompt !== prompt) {
-      await sb.from("agents").update({ prompt, status: "active" }).eq("id", agent.id);
+    } else {
+      await syncElAgent(agentId, body);
+      if (agent && agent.prompt !== prompt) {
+        await sb.from("agents").update({ prompt, status: "active" }).eq("id", agent.id);
+      }
     }
 
     const signedUrlRes = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`, {
@@ -200,9 +79,8 @@ Deno.serve(async (req) => {
       const txt = await signedUrlRes.text();
       if (signedUrlRes.status === 429) {
         return new Response(JSON.stringify({
-          error: "ElevenLabs is at concurrent-call capacity for your workspace. End any other active calls (browser tabs, phone calls, dashboard test sessions) and try again in ~30s.",
-          code: "concurrency_limit",
-          retryable: true,
+          error: "ElevenLabs is at concurrent-call capacity. End any other active sessions and try again in ~30s.",
+          code: "concurrency_limit", retryable: true,
         }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       throw new Error(`signed_url failed: ${signedUrlRes.status} ${txt}`);

@@ -32,7 +32,6 @@ export default function FloorPlan() {
   const dragOffset = useRef({ x: 0, y: 0 });
 
   const [seedingDemo, setSeedingDemo] = useState(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
 
   const load = async () => {
     if (!venue) return;

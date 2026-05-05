@@ -58,14 +58,55 @@ function VoiceLiveInner() {
     },
     onDisconnect: () => toast.message("Call ended"),
     onMessage: (m: any) => {
-      if (m.type === "user_transcript" && m.user_transcription_event?.user_transcript)
+      console.log("[VoiceLive] message", m);
+      if (m?.source === "user" && typeof m.message === "string") {
+        setTranscript(t => [...t, { role: "user", text: m.message }]);
+        return;
+      }
+      if (m?.source === "ai" && typeof m.message === "string") {
+        setTranscript(t => [...t, { role: "agent", text: m.message }]);
+        return;
+      }
+      if (m?.type === "user_transcript" && m.user_transcription_event?.user_transcript)
         setTranscript(t => [...t, { role: "user", text: m.user_transcription_event.user_transcript }]);
-      if (m.type === "agent_response" && m.agent_response_event?.agent_response)
+      if (m?.type === "agent_response" && m.agent_response_event?.agent_response)
         setTranscript(t => [...t, { role: "agent", text: m.agent_response_event.agent_response }]);
     },
     onError: (e: any) => {
       console.error("[VoiceLive] error", e);
       toast.error(e?.message || "Voice error");
+    },
+    clientTools: {
+      create_booking: async (params: any) => {
+        try {
+          if (!venue) return "No venue selected";
+          const time = new Date(params.booking_time);
+          if (isNaN(time.getTime())) return "Invalid booking_time; please use ISO 8601";
+          const { data, error } = await supabase.from("bookings").insert({
+            venue_id: venue.id,
+            guest_name: params.guest_name,
+            party_size: Number(params.party_size) || 2,
+            booking_time: time.toISOString(),
+            guest_phone: params.guest_phone || null,
+            notes: params.notes || null,
+            source: "ai_voice",
+            status: "confirmed",
+          }).select().single();
+          if (error) throw error;
+          await supabase.from("brain_events").insert({
+            venue_id: venue.id,
+            title: "Booking created by voice agent",
+            reason: `${params.guest_name} · party of ${params.party_size} · ${time.toLocaleString()}`,
+            severity: "info",
+          });
+          toast.success(`Booking added: ${params.guest_name}`);
+          return `Booking confirmed for ${params.guest_name}, party of ${params.party_size} at ${time.toLocaleString()}. Booking id: ${data.id}`;
+        } catch (e: any) {
+          console.error("[create_booking] failed", e);
+          toast.error(e.message || "Booking failed");
+          return `Failed to create booking: ${e.message || "unknown error"}`;
+        }
+      },
     },
   });
 

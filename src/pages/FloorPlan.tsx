@@ -1,17 +1,27 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, Save, Users, Square, Circle as CircleIcon, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Trash2, Save, Users, Square, Circle as CircleIcon, Sparkles, Loader2, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 type TableRow = { id: string; label: string; capacity: number; shape: string; x: number; y: number; width: number; height: number; zone_id: string | null };
 
+const DEMO_TABLES = [
+  { label: "T1", capacity: 2, shape: "round", x: 60, y: 60 }, { label: "T2", capacity: 2, shape: "round", x: 180, y: 60 },
+  { label: "T3", capacity: 2, shape: "round", x: 300, y: 60 }, { label: "T4", capacity: 4, shape: "square", x: 60, y: 200 },
+  { label: "T5", capacity: 4, shape: "square", x: 200, y: 200 }, { label: "T6", capacity: 4, shape: "square", x: 340, y: 200 },
+  { label: "T7", capacity: 6, shape: "square", x: 60, y: 360 }, { label: "T8", capacity: 6, shape: "square", x: 220, y: 360 },
+  { label: "Bar", capacity: 8, shape: "square", x: 480, y: 60 },
+];
+
 export default function FloorPlan() {
-  const { venue } = useAuth();
+  const nav = useNavigate();
+  const { venue, venues, setActiveVenue } = useAuth();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [tables, setTables] = useState<TableRow[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -21,12 +31,27 @@ export default function FloorPlan() {
   const [seatingForm, setSeatingForm] = useState({ party_size: 2, vip: false, notes: "" });
   const dragOffset = useRef({ x: 0, y: 0 });
 
+  const [seedingDemo, setSeedingDemo] = useState(false);
+
   const load = async () => {
     if (!venue) return;
     const { data } = await supabase.from("tables").select("*").eq("venue_id", venue.id).order("created_at");
     setTables((data as any) || []);
   };
   useEffect(() => { load(); }, [venue?.id]);
+
+  const seedDemo = async () => {
+    if (!venue) return;
+    setSeedingDemo(true);
+    try {
+      const { data, error } = await supabase.from("tables").insert(
+        DEMO_TABLES.map(t => ({ ...t, venue_id: venue.id, width: 80, height: 80 }))
+      ).select();
+      if (error) throw error;
+      setTables(t => [...t, ...(data as any[])]);
+      toast.success("Demo floor plan loaded");
+    } catch (e: any) { toast.error(e.message); } finally { setSeedingDemo(false); }
+  };
 
   const addTable = async (shape: "round" | "square") => {
     if (!venue) return;
@@ -96,7 +121,15 @@ export default function FloorPlan() {
     <>
       <PageHeader title="Floor Plan" subtitle="Drag, resize and define every table. Your AI uses this to seat guests."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex items-center gap-1.5 glass rounded-md px-2 h-10">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <select value={venue?.id || ""} onChange={e => setActiveVenue(e.target.value)}
+                className="bg-transparent text-sm outline-none pr-2 max-w-[180px]">
+                {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </div>
+            <Button variant="outline" onClick={() => nav("/app/floor/new")}><Plus className="h-4 w-4 mr-2" /> New floor plan</Button>
             <Button variant="outline" onClick={() => addTable("round")}><CircleIcon className="h-4 w-4 mr-2" /> Round</Button>
             <Button onClick={() => addTable("square")} className="bg-primary text-primary-foreground"><Square className="h-4 w-4 mr-2" /> Square</Button>
           </div>
@@ -114,6 +147,21 @@ export default function FloorPlan() {
           <div className="absolute top-3 left-3 text-[11px] uppercase tracking-wider text-muted-foreground bg-background/70 backdrop-blur px-2.5 py-1 rounded-full border border-white/10">
             {tables.length} tables · {totalSeats} seats
           </div>
+          {tables.length === 0 && (
+            <div className="absolute inset-0 grid place-items-center">
+              <div className="text-center max-w-sm glass-strong rounded-2xl p-8">
+                <Sparkles className="h-8 w-8 text-primary mx-auto mb-3" />
+                <div className="font-medium mb-1">No tables yet</div>
+                <div className="text-sm text-muted-foreground mb-4">Drop in a demo layout to see your AI seating engine in action.</div>
+                <div className="flex gap-2 justify-center">
+                  <Button onClick={seedDemo} disabled={seedingDemo} className="bg-primary text-primary-foreground">
+                    {seedingDemo ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />} Load demo tables
+                  </Button>
+                  <Button variant="outline" onClick={() => nav("/app/floor/new")}>New plan</Button>
+                </div>
+              </div>
+            </div>
+          )}
           {tables.map(t => (
             <div
               key={t.id}

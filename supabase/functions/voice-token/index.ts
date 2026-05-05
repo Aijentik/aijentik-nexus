@@ -48,23 +48,61 @@ Rules:
 - Keep responses under 2 sentences unless asked for detail.`;
 }
 
-async function createElevenLabsAgent(venue: any, kb: any[], context: any) {
-  const prompt = buildPrompt(venue, kb, context);
+function agentBody(venue: any, prompt: string) {
+  return {
+    name: `${venue.name} — Voice Host`,
+    conversation_config: {
+      agent: {
+        prompt: {
+          prompt,
+          tools: [
+            {
+              type: "client",
+              name: "create_booking",
+              description: "Create a confirmed booking in the venue's diary. Call this only after explicitly confirming all required details with the caller.",
+              parameters: {
+                type: "object",
+                required: ["guest_name", "party_size", "booking_time"],
+                properties: {
+                  guest_name: { type: "string", description: "Full name of the guest" },
+                  party_size: { type: "integer", description: "Number of guests" },
+                  booking_time: { type: "string", description: "ISO 8601 datetime, e.g. 2026-05-06T19:30:00Z" },
+                  guest_phone: { type: "string", description: "Phone number, optional" },
+                  notes: { type: "string", description: "Special requests / notes, optional" },
+                },
+              },
+            },
+          ],
+        },
+        first_message: `Hi, thanks for calling ${venue.name}. How can I help today?`,
+        language: "en",
+      },
+      tts: { voice_id: "EXAVITQu4vr4xnSDxMaL" },
+      client_events: [
+        "audio",
+        "interruption",
+        "user_transcript",
+        "agent_response",
+        "agent_response_correction",
+        "client_tool_call",
+        "ping",
+      ],
+    },
+    platform_settings: {
+      overrides: {
+        conversation_config_override: {
+          agent: { prompt: true, first_message: true, language: true },
+        },
+      },
+    },
+  };
+}
 
+async function createElevenLabsAgent(venue: any, prompt: string) {
   const res = await fetch("https://api.elevenlabs.io/v1/convai/agents/create", {
     method: "POST",
     headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: `${venue.name} — Voice Host`,
-      conversation_config: {
-        agent: {
-          prompt: { prompt },
-          first_message: `Hi, thanks for calling ${venue.name}. How can I help today?`,
-          language: "en",
-        },
-        tts: { voice_id: "EXAVITQu4vr4xnSDxMaL" },
-      },
-    }),
+    body: JSON.stringify(agentBody(venue, prompt)),
   });
   if (!res.ok) throw new Error(`agent create failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
@@ -75,17 +113,7 @@ async function syncElevenLabsAgent(agentId: string, venue: any, prompt: string) 
   const res = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
     method: "PATCH",
     headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: `${venue.name} — Voice Host`,
-      conversation_config: {
-        agent: {
-          prompt: { prompt },
-          first_message: `Hi, thanks for calling ${venue.name}. How can I help today?`,
-          language: "en",
-        },
-        tts: { voice_id: "EXAVITQu4vr4xnSDxMaL" },
-      },
-    }),
+    body: JSON.stringify(agentBody(venue, prompt)),
   });
   if (!res.ok) console.warn("agent sync failed", res.status, await res.text());
 }

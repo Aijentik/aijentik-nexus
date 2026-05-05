@@ -138,6 +138,12 @@ function VoiceLiveInner() {
     <>
       <PageHeader title="Live Voice" subtitle="Speak to your venue's AI host. Real WebRTC, sub-second latency." />
 
+      {preparing && (
+        <div className="mb-6 glass rounded-2xl p-4 border border-primary/20 flex items-center gap-3 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" /> Preparing your venue-aware voice agent…
+        </div>
+      )}
+
       {micError && (
         <div className="mb-6 glass rounded-2xl p-4 border border-[hsl(var(--warning))]/30 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-[hsl(var(--warning))] mt-0.5 shrink-0" />
@@ -162,12 +168,12 @@ function VoiceLiveInner() {
           </motion.div>
           <div className="relative mt-8 text-center">
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">{venue?.name}</div>
-            <div className="text-lg font-medium">{isOn ? (isSpeaking ? "Agent speaking…" : "Listening…") : "Tap to talk"}</div>
+            <div className="text-lg font-medium">{status === "connecting" ? "Connecting…" : isOn ? (isSpeaking ? "Agent speaking…" : "Listening…") : "Tap to talk"}</div>
           </div>
           <div className="relative mt-6 flex gap-2">
             {!isOn ? (
-              <Button size="lg" onClick={start} disabled={busy} className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground shadow-[0_0_30px_hsl(var(--primary)/0.5)]">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Phone className="h-4 w-4 mr-2" />} Start call
+              <Button size="lg" onClick={start} disabled={busy || preparing || status === "connecting"} className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground shadow-[0_0_30px_hsl(var(--primary)/0.5)]">
+                {busy || preparing || status === "connecting" ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Phone className="h-4 w-4 mr-2" />} {preparing ? "Preparing" : status === "connecting" ? "Connecting" : "Start call"}
               </Button>
             ) : (
               <Button size="lg" variant="destructive" onClick={stop}><PhoneOff className="h-4 w-4 mr-2" /> End call</Button>

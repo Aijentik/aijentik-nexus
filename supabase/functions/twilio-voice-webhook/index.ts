@@ -145,50 +145,47 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 1) Try the official native register-call endpoint first
-    let xml: string | undefined;
+    // Register the Twilio call with ElevenLabs and return their TwiML directly.
+    // A browser signed_url is not a Twilio media-stream bridge and causes calls to hang up.
+    let twilioXml: string | undefined;
     try {
-      const reg = await fetch("https://api.elevenlabs.io/v1/convai/twilio/inbound_call", {
+      const reg = await fetch("https://api.elevenlabs.io/v1/convai/twilio/register-call", {
         method: "POST",
         headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
         body: JSON.stringify({
           agent_id: elevenlabsAgentId,
-          agent_phone_number_id: null,
-          to_number: to,
           from_number: from,
-          call_sid: callSid,
+          to_number: to,
+          direction: "inbound",
+          conversation_initiation_client_data: {
+            dynamic_variables: { caller_number: from, twilio_call_sid: callSid },
+          },
         }),
       });
       if (reg.ok) {
-        const result = await reg.json().catch(() => ({} as any));
-        xml = result?.twiml || result?.TwiML;
+        const text = await reg.text();
+        if (text.trim().startsWith("<")) {
+          twilioXml = text;
+        } else {
+          const result = JSON.parse(text || "{}");
+          twilioXml = result?.twiml || result?.TwiML || result?.xml;
+        }
       } else {
-        console.warn("[twilio-voice-webhook] inbound_call non-200", reg.status, await reg.text());
-      }
-    } catch (e) {
-      console.warn("[twilio-voice-webhook] inbound_call error", e);
-    }
-
-    // 2) Fallback: signed URL → bridge via <Connect><Stream>
-    if (!xml) {
-      const signedRes = await fetch(
-        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${elevenlabsAgentId}`,
-        { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
-      );
-      if (!signedRes.ok) {
-        const txt = await signedRes.text();
-        console.error("[twilio-voice-webhook] signed-url failed", signedRes.status, txt);
+        const txt = await reg.text();
+        console.error("[twilio-voice-webhook] register-call non-200", reg.status, txt);
         await sb.from("brain_events").insert({
           venue_id: agent.venue_id, agent_id: agent.id, severity: "error",
           title: "Inbound call routing failed",
-          reason: `signed-url ${signedRes.status}: ${txt.slice(0, 400)}`,
-          meta: { from, to, callSid },
+          reason: `ElevenLabs register-call ${reg.status}: ${txt.slice(0, 400)}`,
+          meta: { from, to, callSid, elevenlabsAgentId },
         });
-        return twiml(`<Say>Sorry, our A I host is unavailable right now. Please try again shortly.</Say><Hangup/>`);
       }
-      const { signed_url } = await signedRes.json();
-      const url = escapeXml(signed_url);
-      xml = `<Connect><Stream url="${url}"><Parameter name="caller_number" value="${escapeXml(from)}"/><Parameter name="call_sid" value="${escapeXml(callSid)}"/></Stream></Connect>`;
+    } catch (e) {
+      console.error("[twilio-voice-webhook] register-call error", e);
+    }
+
+    if (!twilioXml) {
+      return twiml(`<Say>Sorry, our A I host is unavailable right now. Please try again shortly.</Say><Hangup/>`);
     }
 
     // Log the call + brain event
@@ -202,7 +199,7 @@ Deno.serve(async (req) => {
       reason: `Caller ${from} → ${to}`, meta: { from, to, callSid },
     });
 
-    return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${xml}</Response>`, { headers: xmlHeaders });
+    return new Response(twilioXml.includes("<Response") ? twilioXml : `<?xml version="1.0" encoding="UTF-8"?><Response>${twilioXml}</Response>`, { headers: xmlHeaders });
   } catch (e) {
     console.error("[twilio-voice-webhook] error", e);
     return twiml(`<Say>An unexpected error occurred. Goodbye.</Say><Hangup/>`);

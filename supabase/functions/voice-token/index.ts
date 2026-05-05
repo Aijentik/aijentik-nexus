@@ -5,11 +5,16 @@ const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-async function createElevenLabsAgent(venue: any, kb: any[]) {
-  const knowledge = kb.slice(0, 20).map(k => `• ${k.title}: ${k.content}`).join("\n");
-  const prompt = `You are ${venue.name}'s AI host — a warm, professional voice agent for a ${venue.venue_type || "restaurant"}${venue.cuisine ? ` serving ${venue.cuisine}` : ""}.
+function buildPrompt(venue: any, kb: any[], context: any = {}) {
+  const knowledge = kb.slice(0, 30).map(k => `• ${k.title}: ${k.content}`).join("\n");
+  const bookings = (context.bookings || []).map((b: any) => `• ${b.guest_name}, party of ${b.party_size}, ${b.booking_time}, status: ${b.status}${b.notes ? `, notes: ${b.notes}` : ""}`).join("\n");
+  const messages = (context.messages || []).map((m: any) => `• ${m.direction || "message"} ${m.channel || "sms"} ${m.contact || ""}: ${m.body}`).join("\n");
+  const events = (context.events || []).map((e: any) => `• ${e.title}: ${e.reason || ""}`).join("\n");
+  const insights = (context.insights || []).map((i: any) => `• ${i.title}: ${i.body}`).join("\n");
 
-Your job: greet callers, take reservations, answer questions about the menu, hours, location, dress code, and policies. Be concise, friendly, and confident.
+  return `You are ${venue.name}'s AI host — a warm, professional voice agent for a ${venue.venue_type || "restaurant"}${venue.cuisine ? ` serving ${venue.cuisine}` : ""}.
+
+Your job: greet guests, take reservations, answer questions about the menu, hours, location, dress code, policies, and current operational context. Be concise, friendly, and confident.
 
 Venue details:
 - Name: ${venue.name}
@@ -23,11 +28,28 @@ ${venue.description ? `\nAbout: ${venue.description}` : ""}
 Knowledge base:
 ${knowledge || "(none yet)"}
 
+Upcoming bookings:
+${bookings || "(none available)"}
+
+Recent messages:
+${messages || "(none available)"}
+
+Live Brain / action context:
+${events || "(none available)"}
+
+Insights:
+${insights || "(none available)"}
+
 Rules:
 - For bookings: collect name, party size, date, time, phone. Confirm explicitly.
+- If the caller asks to change live data, confirm the details and say you have noted it for the team.
 - If unsure, offer to take a message rather than invent facts.
-- Never share private operational data.
+- Never share private operational data beyond what is needed to help the caller.
 - Keep responses under 2 sentences unless asked for detail.`;
+}
+
+async function createElevenLabsAgent(venue: any, kb: any[], context: any) {
+  const prompt = buildPrompt(venue, kb, context);
 
   const res = await fetch("https://api.elevenlabs.io/v1/convai/agents/create", {
     method: "POST",

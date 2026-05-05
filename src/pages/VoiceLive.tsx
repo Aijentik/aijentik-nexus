@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useConversation, ConversationProvider } from "@elevenlabs/react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,8 +19,37 @@ export default function VoiceLive() {
 function VoiceLiveInner() {
   const { venue } = useAuth();
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const [sessionConfig, setSessionConfig] = useState<any>(null);
   const [transcript, setTranscript] = useState<{ role: "user" | "agent"; text: string }[]>([]);
+
+  const prepareSession = useCallback(async (force = false) => {
+    if (!venue) return null;
+    if (!force && sessionConfig) return sessionConfig;
+    setPreparing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("voice-token", {
+        body: { venue_id: venue.id },
+      });
+      if (error) throw new Error(error.message || "voice-token failed");
+      if (!data?.token && !data?.signed_url) throw new Error(data?.error || "No voice session returned");
+      setSessionConfig(data);
+      return data;
+    } catch (e: any) {
+      setMicError(e.message || "Could not prepare voice agent");
+      toast.error(e.message || "Could not prepare voice agent");
+      return null;
+    } finally {
+      setPreparing(false);
+    }
+  }, [sessionConfig, venue]);
+
+  useEffect(() => {
+    setSessionConfig(null);
+    setTranscript([]);
+    if (venue) prepareSession(true);
+  }, [venue?.id]);
 
   const conversation = useConversation({
     onConnect: () => {

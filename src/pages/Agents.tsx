@@ -20,6 +20,7 @@ export default function Agents() {
   const [phoneEdits, setPhoneEdits] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [configAgent, setConfigAgent] = useState<any | null>(null);
 
   const load = async () => {
     if (!venue) return;

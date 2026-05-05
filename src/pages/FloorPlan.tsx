@@ -80,6 +80,18 @@ export default function FloorPlan() {
   const sel = tables.find(t => t.id === selected);
   const totalSeats = tables.reduce((a, t) => a + t.capacity, 0);
 
+  const suggestSeating = async () => {
+    if (!venue) return;
+    setSeatingBusy(true); setSeatingResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("suggest-seating", { body: { venue_id: venue.id, ...seatingForm } });
+      if (error) throw error;
+      if (!data?.suggestion) { toast.error(data?.reason || "No table fits"); return; }
+      setSeatingResult({ table: data.suggestion, reason: data.reason });
+      setSelected(data.suggestion.id);
+    } catch (e: any) { toast.error(e.message); } finally { setSeatingBusy(false); }
+  };
+
   return (
     <>
       <PageHeader title="Floor Plan" subtitle="Drag, resize and define every table. Your AI uses this to seat guests."
@@ -142,8 +154,32 @@ export default function FloorPlan() {
               </Button>
             </>
           ) : (
-            <div className="text-sm text-muted-foreground py-12 text-center">Click a table to edit it. Drag to reposition.</div>
+            <div className="text-sm text-muted-foreground py-8 text-center">Click a table to edit it. Drag to reposition.</div>
           )}
+
+          <div className="border-t border-white/10 pt-4 space-y-3">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-primary" /> AI seating
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label className="text-xs">Party</Label><Input className="mt-1 h-9" type="number" min={1} value={seatingForm.party_size} onChange={e => setSeatingForm({...seatingForm, party_size: +e.target.value})} /></div>
+              <div className="flex items-end gap-2">
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input type="checkbox" checked={seatingForm.vip} onChange={e => setSeatingForm({...seatingForm, vip: e.target.checked})} className="accent-primary" /> VIP
+                </label>
+              </div>
+            </div>
+            <Input className="h-9" placeholder="Notes (window, quiet, anniversary…)" value={seatingForm.notes} onChange={e => setSeatingForm({...seatingForm, notes: e.target.value})} />
+            <Button onClick={suggestSeating} disabled={seatingBusy} className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground">
+              {seatingBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />} Suggest table
+            </Button>
+            {seatingResult?.table && (
+              <div className="rounded-lg bg-primary/10 border border-primary/30 p-3 text-xs">
+                <div className="font-semibold text-primary">{seatingResult.table.label} · seats {seatingResult.table.capacity}</div>
+                <div className="text-muted-foreground mt-1">{seatingResult.reason}</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>

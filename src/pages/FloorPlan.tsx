@@ -16,6 +16,9 @@ export default function FloorPlan() {
   const [tables, setTables] = useState<TableRow[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [seatingBusy, setSeatingBusy] = useState(false);
+  const [seatingResult, setSeatingResult] = useState<{ table: TableRow | null; reason: string } | null>(null);
+  const [seatingForm, setSeatingForm] = useState({ party_size: 2, vip: false, notes: "" });
   const dragOffset = useRef({ x: 0, y: 0 });
 
   const load = async () => {

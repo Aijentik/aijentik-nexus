@@ -55,8 +55,26 @@ function VoiceLiveInner() {
     onConnect: () => {
       toast.success("Connected to voice agent");
       setMicError(null);
+      setCallStartedAt(Date.now());
+      setTranscript([]);
     },
-    onDisconnect: () => toast.message("Call ended"),
+    onDisconnect: async () => {
+      toast.message("Call ended");
+      // Persist transcript
+      if (venue && callStartedAt && transcript.length > 0) {
+        try {
+          await supabase.functions.invoke("save-call", {
+            body: {
+              venue_id: venue.id,
+              transcript,
+              started_at: new Date(callStartedAt).toISOString(),
+              duration_seconds: Math.round((Date.now() - callStartedAt) / 1000),
+            },
+          });
+        } catch (e) { console.error("save-call", e); }
+      }
+      setCallStartedAt(null);
+    },
     onMessage: (m: any) => {
       console.log("[VoiceLive] message", m);
       if (m?.source === "user" && typeof m.message === "string") {

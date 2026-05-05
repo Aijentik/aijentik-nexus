@@ -67,10 +67,7 @@ Deno.serve(async (req) => {
         tool_choice: { type: "function", function: { name: "propose_faqs" } },
       }),
     });
-    if (!aiRes.ok) {
-      const t = await aiRes.text();
-      return new Response(JSON.stringify({ error: "AI: " + aiRes.status, details: t.slice(0, 200) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    if (!aiRes.ok) { continue; }
     const data = await aiRes.json();
     const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
     const parsed = args ? JSON.parse(args) : { faqs: [] };
@@ -86,9 +83,12 @@ Deno.serve(async (req) => {
         reason: faqs.map((f: any) => `• ${f.title}`).join("\n"),
         severity: "success",
       });
+      totalAdded += faqs.length;
+    }
+    } catch (err) { console.error("self-heal venue error", venue_id, err); }
     }
 
-    return new Response(JSON.stringify({ added: faqs.length, faqs }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ added: totalAdded }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

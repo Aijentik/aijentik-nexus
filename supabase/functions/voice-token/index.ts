@@ -71,6 +71,25 @@ async function createElevenLabsAgent(venue: any, kb: any[], context: any) {
   return data.agent_id;
 }
 
+async function syncElevenLabsAgent(agentId: string, venue: any, prompt: string) {
+  const res = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
+    method: "PATCH",
+    headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: `${venue.name} — Voice Host`,
+      conversation_config: {
+        agent: {
+          prompt: { prompt },
+          first_message: `Hi, thanks for calling ${venue.name}. How can I help today?`,
+          language: "en",
+        },
+        tts: { voice_id: "EXAVITQu4vr4xnSDxMaL" },
+      },
+    }),
+  });
+  if (!res.ok) console.warn("agent sync failed", res.status, await res.text());
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {

@@ -125,7 +125,8 @@ export default function Agents() {
                 </div>
               )}
 
-              <div className="flex gap-2 mt-4">
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Button size="sm" variant="outline" onClick={() => setConfigAgent(a)} className="flex-1 border-white/10"><Settings2 className="h-3 w-3 mr-1.5" /> Configure</Button>
                 {a.kind === "voice" && <Link to="/app/voice" className="flex-1"><Button size="sm" className="w-full bg-primary text-primary-foreground"><Mic className="h-3 w-3 mr-1.5" /> Talk</Button></Link>}
                 <Button size="sm" variant="outline" onClick={() => toggle(a)} className="flex-1 border-white/10">{a.status === 'active' ? 'Pause' : 'Activate'}</Button>
               </div>
@@ -133,6 +134,8 @@ export default function Agents() {
           );
         })}
       </div>
+
+      <AgentConfigDialog agent={configAgent} open={!!configAgent} onOpenChange={(o) => !o && setConfigAgent(null)} onSaved={load} />
     </>
   );
 }

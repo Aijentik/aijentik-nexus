@@ -145,9 +145,11 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
     caller_number: callerPhone || "unknown",
     caller_known: "no",
     caller_name: "",
+    caller_first_name: "",
     caller_notes: "none",
     caller_history: "no prior visits on record",
     caller_bookings: "none on file",
+    caller_next_booking: "none",
   };
   if (!callerPhone) return base;
   const digits = callerPhone.replace(/\D/g, "");

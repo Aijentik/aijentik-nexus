@@ -103,6 +103,7 @@ Deno.serve(async (req) => {
 
     // Register the Twilio call with ElevenLabs and return their TwiML directly.
     // A browser signed_url is not a Twilio media-stream bridge and causes calls to hang up.
+    const callerCtx = await buildCallerContext(sb, agent.venue_id, from);
     let twilioXml: string | undefined;
     try {
       const reg = await fetch("https://api.elevenlabs.io/v1/convai/twilio/register-call", {
@@ -114,7 +115,7 @@ Deno.serve(async (req) => {
           to_number: to,
           direction: "inbound",
           conversation_initiation_client_data: {
-            dynamic_variables: { caller_number: from, twilio_call_sid: callSid },
+            dynamic_variables: { ...callerCtx, twilio_call_sid: callSid },
           },
         }),
       });

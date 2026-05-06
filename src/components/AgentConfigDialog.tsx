@@ -58,7 +58,7 @@ const DEFAULTS: AgentConfig = {
   firstMessage: "",
   responseLength: "medium",
   customInstructions: "",
-  tools: { create_booking: true, take_message: true, transfer_call: false, transfer_number: "" },
+  tools: { create_booking: true, update_booking: true, take_message: true, transfer_call: false, transfer_number: "" },
   speed: 1.0, stability: 0.35, similarity_boost: 0.7, style: 0.45,
 };
 

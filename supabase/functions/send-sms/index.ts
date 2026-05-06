@@ -74,27 +74,42 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: `Invalid destination number: ${to}` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const res = await fetch(`${GATEWAY}/Messages.json`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "X-Connection-Api-Key": TWILIO_API_KEY,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ To: toNumber, From: fromNumber, Body: body }),
-    });
-    const data = await res.json();
-    const status = res.ok ? "sent" : "failed";
-
-    await sb.from("messages").insert({ venue_id, contact: to, body, channel: "sms", direction: "outbound", status });
-    if (booking_id) {
-      await sb.from("brain_events").insert({ venue_id, title: "Confirmation SMS sent", reason: `→ ${to}`, severity: "info", meta: { booking_id, sid: data.sid } });
+    const results: any[] = [];
+    let lastError: any = null;
+    for (const ch of sendChannels) {
+      const isWa = ch === "whatsapp";
+      const To = isWa ? `whatsapp:${toNumber}` : toNumber;
+      const From = isWa ? `whatsapp:${fromNumber}` : fromNumber;
+      try {
+        const res = await fetch(`${GATEWAY}/Messages.json`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "X-Connection-Api-Key": TWILIO_API_KEY,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ To, From, Body: body }),
+        });
+        const data = await res.json();
+        const status = res.ok ? "sent" : "failed";
+        await sb.from("messages").insert({ venue_id, contact: to, body, channel: ch, direction: "outbound", status });
+        if (booking_id) {
+          await sb.from("brain_events").insert({ venue_id, title: `Confirmation ${ch.toUpperCase()} ${status}`, reason: `→ ${to}`, severity: res.ok ? "info" : "warning", meta: { booking_id, sid: data?.sid, channel: ch, error: res.ok ? undefined : data } });
+        }
+        results.push({ channel: ch, ok: res.ok, sid: data?.sid, error: res.ok ? undefined : data });
+        if (!res.ok) lastError = data;
+      } catch (e) {
+        lastError = String(e);
+        await sb.from("messages").insert({ venue_id, contact: to, body, channel: ch, direction: "outbound", status: "failed" });
+        results.push({ channel: ch, ok: false, error: String(e) });
+      }
     }
 
-    if (!res.ok) {
-      return new Response(JSON.stringify({ error: data }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const anyOk = results.some(r => r.ok);
+    if (!anyOk) {
+      return new Response(JSON.stringify({ error: lastError, results }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    return new Response(JSON.stringify({ ok: true, sid: data.sid }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

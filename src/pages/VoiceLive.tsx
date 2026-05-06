@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useConversation, ConversationProvider } from "@elevenlabs/react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";

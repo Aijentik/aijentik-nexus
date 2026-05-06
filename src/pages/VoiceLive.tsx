@@ -80,9 +80,11 @@ function VoiceLiveInner() {
       setMicError(null);
       setCallStartedAt(Date.now());
       setTranscript([]);
+      startAmbience();
     },
     onDisconnect: async () => {
       toast.message("Call ended");
+      stopAmbience();
       // Persist transcript
       if (venue && callStartedAt && transcript.length > 0) {
         try {

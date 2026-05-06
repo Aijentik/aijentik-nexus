@@ -74,6 +74,8 @@ function VoiceLiveInner() {
     if (venue) prepareSession(true);
   }, [venue?.id]);
 
+  useEffect(() => () => stopAmbience(), [stopAmbience]);
+
   const conversation = useConversation({
     onConnect: () => {
       toast.success("Connected to voice agent");

@@ -89,10 +89,25 @@ VENUE DETAILS
 - Hours: ${JSON.stringify(venue.hours || {})}
 ${venue.description ? `\nAbout: ${venue.description}` : ""}
 
+CALLER CONTEXT (this specific call)
+- Caller phone number: {{caller_number}}
+- Recognised guest: {{caller_known}}
+- Guest name (if known): {{caller_name}}
+- Guest notes / tags: {{caller_notes}}
+- Visit history: {{caller_history}}
+- Bookings on file: {{caller_bookings}}
+
+CALLER-AWARE BEHAVIOUR
+- If "Recognised guest" is "yes", greet them by name immediately and warmly (e.g. "Hi {{caller_name}}, welcome back to ${venue.name}").
+- If they have an upcoming booking, proactively reference it ("I can see you've got a table for X on Y — is that what you're calling about?").
+- If they're a VIP or have notes/tags, treat them with extra care, but never read raw notes verbatim.
+- If "Recognised guest" is "no", greet normally and ask for their name.
+- Never claim to recognise a caller when "Recognised guest" is "no".
+
 KNOWLEDGE BASE
 ${knowledge || "(none yet)"}
 
-UPCOMING BOOKINGS
+UPCOMING BOOKINGS (venue-wide)
 ${bookings || "(none available)"}
 
 RECENT MESSAGES
@@ -117,6 +132,71 @@ GENERAL RULES
 - Vary phrasing — never repeat the same sentence twice.
 
 ${cfg?.customInstructions ? `CUSTOM INSTRUCTIONS FROM THE OWNER\n${cfg.customInstructions}\n` : ""}`;
+}
+
+// Lookup caller context by phone number → returns dynamic_variables for ElevenLabs.
+export async function buildCallerContext(sb: any, venueId: string, callerPhone: string) {
+  const base: Record<string, string> = {
+    caller_number: callerPhone || "unknown",
+    caller_known: "no",
+    caller_name: "",
+    caller_notes: "none",
+    caller_history: "no prior visits on record",
+    caller_bookings: "none on file",
+  };
+  if (!callerPhone) return base;
+  const digits = callerPhone.replace(/\D/g, "");
+  if (!digits) return base;
+  const last10 = digits.slice(-10);
+  try {
+    const { data: guests } = await sb
+      .from("guests")
+      .select("id,name,phone,vip,tags,notes,visit_count,last_visit")
+      .eq("venue_id", venueId)
+      .limit(500);
+    const guest = (guests || []).find((g: any) => (g.phone || "").replace(/\D/g, "").endsWith(last10));
+    if (guest) {
+      base.caller_known = "yes";
+      base.caller_name = guest.name || "";
+      const tagPart = guest.tags?.length ? `tags: ${guest.tags.join(", ")}` : "";
+      const vipPart = guest.vip ? "VIP guest" : "";
+      base.caller_notes = [vipPart, tagPart, guest.notes].filter(Boolean).join(" — ") || "none";
+      base.caller_history = guest.visit_count
+        ? `${guest.visit_count} previous visit(s)${guest.last_visit ? `, last on ${new Date(guest.last_visit).toDateString()}` : ""}`
+        : "no prior visits on record";
+      const { data: bks } = await sb
+        .from("bookings")
+        .select("party_size,booking_time,status,notes")
+        .eq("venue_id", venueId)
+        .eq("guest_id", guest.id)
+        .order("booking_time", { ascending: false })
+        .limit(5);
+      if (bks?.length) {
+        base.caller_bookings = bks.map((b: any) =>
+          `party of ${b.party_size} on ${new Date(b.booking_time).toLocaleString()} (${b.status})${b.notes ? ` — ${b.notes}` : ""}`
+        ).join(" | ");
+      }
+    } else {
+      const { data: bks } = await sb
+        .from("bookings")
+        .select("guest_name,guest_phone,party_size,booking_time,status")
+        .eq("venue_id", venueId)
+        .not("guest_phone", "is", null)
+        .order("booking_time", { ascending: false })
+        .limit(100);
+      const matches = (bks || []).filter((b: any) => (b.guest_phone || "").replace(/\D/g, "").endsWith(last10));
+      if (matches.length) {
+        base.caller_known = "yes";
+        base.caller_name = matches[0].guest_name || "";
+        base.caller_bookings = matches
+          .map((b: any) => `party of ${b.party_size} on ${new Date(b.booking_time).toLocaleString()} (${b.status})`)
+          .join(" | ");
+      }
+    }
+  } catch (e) {
+    console.error("[buildCallerContext] lookup failed", e);
+  }
+  return base;
 }
 
 export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | null | undefined) {

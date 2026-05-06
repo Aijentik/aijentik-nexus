@@ -39,6 +39,33 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "No Twilio From number configured for venue" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // Normalize To into E.164. If it's a local number (e.g. "0420505750"), use the From number's
+    // country code as the default. Common country codes covered; falls back to From's leading digits.
+    const COUNTRY_TRUNK: Record<string, string> = {
+      "+61": "0", // AU
+      "+44": "0", // UK
+      "+33": "0", // FR
+      "+49": "0", // DE
+      "+39": "0", // IT (kept as-is usually, but harmless)
+      "+34": "0", // ES
+      "+1":  "1", // NANP (rare local form)
+    };
+    const normalizeTo = (raw: string, fromE164: string): string => {
+      let t = (raw || "").trim().replace(/[\s\-().]/g, "");
+      if (t.startsWith("+")) return t;
+      if (t.startsWith("00")) return "+" + t.slice(2);
+      // Determine country code from From
+      const cc = Object.keys(COUNTRY_TRUNK).find(c => fromE164.startsWith(c)) || "";
+      const trunk = cc ? COUNTRY_TRUNK[cc] : "";
+      if (cc && trunk && t.startsWith(trunk)) t = t.slice(trunk.length);
+      if (cc) return cc + t;
+      return "+" + t;
+    };
+    const toNumber = normalizeTo(to, fromNumber);
+    if (!/^\+[1-9]\d{6,14}$/.test(toNumber)) {
+      return new Response(JSON.stringify({ error: `Invalid destination number: ${to}` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const res = await fetch(`${GATEWAY}/Messages.json`, {
       method: "POST",
       headers: {
@@ -46,7 +73,7 @@ Deno.serve(async (req) => {
         "X-Connection-Api-Key": TWILIO_API_KEY,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({ To: to, From: fromNumber, Body: body }),
+      body: new URLSearchParams({ To: toNumber, From: fromNumber, Body: body }),
     });
     const data = await res.json();
     const status = res.ok ? "sent" : "failed";

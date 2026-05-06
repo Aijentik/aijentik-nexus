@@ -67,9 +67,10 @@ export function buildPrompt(venue: any, kb: any[] = [], cfg: AgentConfig | null 
   const intention = cfg?.intention?.trim() || "Greet guests, take reservations, and answer questions about the menu, hours, location, policies, and current operational context.";
   const demeanor = resolveDemeanor(cfg);
   const lengthRule = LENGTH_PRESETS[cfg?.responseLength || "medium"];
-  const tools = cfg?.tools || { create_booking: true, take_message: true };
+  const tools = cfg?.tools || { create_booking: true, update_booking: true, take_message: true };
   const enabledTools: string[] = [];
   if (tools.create_booking !== false) enabledTools.push("create_booking — confirm bookings only after collecting name, party size, date, time, and phone.");
+  if (tools.update_booking !== false) enabledTools.push("update_booking — change or cancel an existing booking. Use the caller's recognised booking from CALLER CONTEXT when available; otherwise confirm which booking to change before calling.");
   if (tools.take_message) enabledTools.push("take_message — for anything you cannot resolve, take a clear message for the team.");
   if (tools.transfer_call && tools.transfer_number) enabledTools.push(`transfer_call — if the caller insists on speaking to a human, transfer to ${tools.transfer_number}.`);
 

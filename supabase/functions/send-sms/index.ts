@@ -54,6 +54,10 @@ Deno.serve(async (req) => {
       let t = (raw || "").trim().replace(/[\s\-().]/g, "");
       if (t.startsWith("+")) return t;
       if (t.startsWith("00")) return "+" + t.slice(2);
+      // Heuristic: AU mobile local format (04XXXXXXXX, 10 digits) → +61
+      if (/^04\d{8}$/.test(t)) return "+61" + t.slice(1);
+      // UK mobile local format (07XXXXXXXXX, 11 digits) → +44
+      if (/^07\d{9}$/.test(t)) return "+44" + t.slice(1);
       // Determine country code from From
       const cc = Object.keys(COUNTRY_TRUNK).find(c => fromE164.startsWith(c)) || "";
       const trunk = cc ? COUNTRY_TRUNK[cc] : "";

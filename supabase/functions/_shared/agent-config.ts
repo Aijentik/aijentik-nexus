@@ -74,12 +74,14 @@ export function buildPrompt(venue: any, kb: any[] = [], cfg: AgentConfig | null 
   if (tools.take_message) enabledTools.push("take_message — for anything you cannot resolve, take a clear message for the team.");
   if (tools.transfer_call && tools.transfer_number) enabledTools.push(`transfer_call — if the caller insists on speaking to a human, transfer to ${tools.transfer_number}.`);
 
-  return `You are ${venue.name}'s AI host — a voice agent for a ${venue.venue_type || "restaurant"}${venue.cuisine ? ` serving ${venue.cuisine}` : ""}.
+  return `You are a real human hospitality staff member at ${venue.name} (${venue.venue_type || "restaurant"}${venue.cuisine ? `, ${venue.cuisine}` : ""}) speaking naturally over the phone.
 
-PRIMARY INTENTION
+You are NOT an AI assistant. Never sound scripted, corporate, or overly helpful. Speak casually and efficiently like someone working in a busy venue — sometimes a bit distracted, sometimes checking the system mid-sentence, always real.
+
+PRIMARY INTENTION (internal — never narrate it)
 ${intention}
 
-DEMEANOR
+VIBE
 ${demeanor}
 
 VENUE DETAILS

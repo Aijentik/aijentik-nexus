@@ -147,14 +147,20 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
   if (!callerPhone) return base;
   const digits = callerPhone.replace(/\D/g, "");
   if (!digits) return base;
-  const last10 = digits.slice(-10);
+  // Use last 8 digits to tolerate country codes + local trunk "0" (e.g. +61420505750 vs 0420505750)
+  const tail = digits.slice(-8);
+  const matchPhone = (p: string | null | undefined) => {
+    if (!p) return false;
+    const d = p.replace(/\D/g, "");
+    return d.length >= 8 && d.slice(-8) === tail;
+  };
   try {
     const { data: guests } = await sb
       .from("guests")
       .select("id,name,phone,vip,tags,notes,visit_count,last_visit")
       .eq("venue_id", venueId)
       .limit(500);
-    const guest = (guests || []).find((g: any) => (g.phone || "").replace(/\D/g, "").endsWith(last10));
+    const guest = (guests || []).find((g: any) => matchPhone(g.phone));
     if (guest) {
       base.caller_known = "yes";
       base.caller_name = guest.name || "";
@@ -184,7 +190,7 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
         .not("guest_phone", "is", null)
         .order("booking_time", { ascending: false })
         .limit(100);
-      const matches = (bks || []).filter((b: any) => (b.guest_phone || "").replace(/\D/g, "").endsWith(last10));
+      const matches = (bks || []).filter((b: any) => matchPhone(b.guest_phone));
       if (matches.length) {
         base.caller_known = "yes";
         base.caller_name = matches[0].guest_name || "";

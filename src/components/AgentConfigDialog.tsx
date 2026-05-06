@@ -43,7 +43,7 @@ export type AgentConfig = {
   firstMessage?: string;
   responseLength?: "short" | "medium" | "detailed";
   customInstructions?: string;
-  tools?: { create_booking?: boolean; take_message?: boolean; transfer_call?: boolean; transfer_number?: string };
+  tools?: { create_booking?: boolean; update_booking?: boolean; take_message?: boolean; transfer_call?: boolean; transfer_number?: string };
   speed?: number;
   stability?: number;
   similarity_boost?: number;

@@ -269,6 +269,7 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         },
       },
     });
+  }
   if (tools.take_message) {
     toolDefs.push({
       type: "client",

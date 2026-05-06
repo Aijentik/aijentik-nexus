@@ -244,7 +244,7 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
         .limit(10);
       if (bks?.length) {
         base.caller_bookings = bks.map((b: any) =>
-          `party of ${b.party_size} on ${new Date(b.booking_time).toLocaleString()} (${b.status})${b.notes ? ` — ${b.notes}` : ""}`
+          `party of ${b.party_size} on ${fmtAuDateTime(new Date(b.booking_time))} (${b.status})${b.notes ? ` — ${b.notes}` : ""}`
         ).join(" | ");
         setNextBooking(bks);
       }

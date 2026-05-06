@@ -190,7 +190,7 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
         .not("guest_phone", "is", null)
         .order("booking_time", { ascending: false })
         .limit(100);
-      const matches = (bks || []).filter((b: any) => (b.guest_phone || "").replace(/\D/g, "").endsWith(last10));
+      const matches = (bks || []).filter((b: any) => matchPhone(b.guest_phone));
       if (matches.length) {
         base.caller_known = "yes";
         base.caller_name = matches[0].guest_name || "";

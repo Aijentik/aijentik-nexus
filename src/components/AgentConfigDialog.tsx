@@ -181,6 +181,7 @@ export function AgentConfigDialog({ agent, open, onOpenChange, onSaved }: {
 
           <TabsContent value="tools" className="space-y-3 mt-4">
             <ToolRow label="Create bookings" desc="Agent can confirm and write reservations to the diary." checked={cfg.tools?.create_booking !== false} onChange={v => updateTool({ create_booking: v })} />
+            <ToolRow label="Change or cancel bookings" desc="Agent can update times, party size, or cancel an existing booking." checked={cfg.tools?.update_booking !== false} onChange={v => updateTool({ update_booking: v })} />
             <ToolRow label="Take messages" desc="Agent can record a message for the team for anything it can't resolve." checked={!!cfg.tools?.take_message} onChange={v => updateTool({ take_message: v })} />
             <ToolRow label="Transfer to a human" desc="If the caller insists on a person, the agent transfers the call." checked={!!cfg.tools?.transfer_call} onChange={v => updateTool({ transfer_call: v })} />
             {cfg.tools?.transfer_call && (

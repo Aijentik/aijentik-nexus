@@ -147,7 +147,13 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
   if (!callerPhone) return base;
   const digits = callerPhone.replace(/\D/g, "");
   if (!digits) return base;
-  const last10 = digits.slice(-10);
+  // Use last 8 digits to tolerate country codes + local trunk "0" (e.g. +61420505750 vs 0420505750)
+  const tail = digits.slice(-8);
+  const matchPhone = (p: string | null | undefined) => {
+    if (!p) return false;
+    const d = p.replace(/\D/g, "");
+    return d.length >= 8 && d.slice(-8) === tail;
+  };
   try {
     const { data: guests } = await sb
       .from("guests")

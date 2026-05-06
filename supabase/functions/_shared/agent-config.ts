@@ -33,6 +33,7 @@ export type AgentConfig = {
   customInstructions?: string;
   tools?: {
     create_booking?: boolean;
+    update_booking?: boolean;
     take_message?: boolean;
     transfer_call?: boolean;
     transfer_number?: string;

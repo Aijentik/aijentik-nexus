@@ -59,7 +59,7 @@ const DEFAULTS: AgentConfig = {
   responseLength: "medium",
   customInstructions: "",
   tools: { create_booking: true, update_booking: true, take_message: true, transfer_call: false, transfer_number: "" },
-  speed: 1.0, stability: 0.35, similarity_boost: 0.7, style: 0.45,
+  speed: 1.0, stability: 0.4, similarity_boost: 0.75, style: 0.05,
 };
 
 export function AgentConfigDialog({ agent, open, onOpenChange, onSaved }: {

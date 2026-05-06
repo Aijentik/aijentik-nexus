@@ -91,6 +91,20 @@ VENUE DETAILS
 - Hours: ${JSON.stringify(venue.hours || {})}
 ${venue.description ? `\nAbout: ${venue.description}` : ""}
 
+DATE & TIME CONTEXT
+- Current date/time in venue's local timezone (Australia): {{current_datetime_local}}
+- Today is: {{today_weekday}}, {{today_long}}
+- Tomorrow is: {{tomorrow_weekday}}, {{tomorrow_long}}
+- Timezone: {{venue_timezone}} (always speak times in this local timezone, never UTC).
+- When the caller says relative dates ("tonight", "tomorrow", "this Friday", "next Friday", "next week"), resolve them using TODAY above. "Next Friday" = the Friday of the following week, not this coming Friday. If ambiguous, confirm the exact date with the caller.
+- Always confirm bookings back to the caller with the weekday AND date, e.g. "Friday the 8th of May at 7:30pm".
+
+SPEAKING TIMES & DATES (CRITICAL)
+- Never say times as raw digits like "eight hundred" or "nineteen thirty" or "800 o'clock". Always say them naturally: "8 o'clock", "8 a.m.", "7:30 p.m.", "half past seven", "quarter to eight".
+- Use 12-hour time with am/pm in speech (Australian convention). Reserve 24-hour only if the caller uses it.
+- Say dates as "Friday the 8th of May" — weekday + ordinal day + month. Avoid "May 8 2026" robotic style.
+- For booking_time tool arguments, ALWAYS pass full ISO 8601 with the Australian timezone offset (e.g. 2026-05-08T19:30:00+10:00). Never pass a bare date or naive time.
+
 CALLER CONTEXT (this specific call)
 - Caller phone number: {{caller_number}}
 - Recognised guest: {{caller_known}}
@@ -102,9 +116,10 @@ CALLER CONTEXT (this specific call)
 - Next/most relevant booking: {{caller_next_booking}}
 
 CALLER-AWARE BEHAVIOUR
-- The very first message you say is already personalised — do not re-greet.
-- If "Recognised guest" is "yes" AND there is a "Next/most relevant booking", you MUST proactively reference it in your first turn without being asked (e.g. "I can see your booking for {{caller_next_booking}} — is that what you're calling about?"). Do not wait for the caller to ask you to check.
-- If they have no upcoming booking but a past one, acknowledge them as a returning guest by first name.
+- Your first line is already personalised — do not re-greet.
+- If "Recognised guest" is "yes": greet them warmly by first name and ask an open "how can I help today?" — do NOT immediately ask "are you calling about your booking?". Let them say why they're calling first.
+- Only AFTER they mention changing, cancelling, or asking about a booking should you reference what's on file (e.g. "no problem — I can see a booking for {{caller_next_booking}}, is that the one?").
+- If they have no upcoming booking but a past one, acknowledge them as a returning guest by first name and ask how you can help.
 - If they're a VIP or have notes/tags, treat them with extra care, but never read raw notes verbatim.
 - If "Recognised guest" is "no", greet normally and ask for their name.
 - Never claim to recognise a caller when "Recognised guest" is "no".
@@ -149,7 +164,24 @@ ${cfg?.customInstructions ? `CUSTOM INSTRUCTIONS FROM THE OWNER\n${cfg.customIns
 }
 
 // Lookup caller context by phone number → returns dynamic_variables for ElevenLabs.
+// Format a Date as Australian local strings.
+const AU_TZ = "Australia/Sydney";
+function fmtAuDateTime(d: Date) {
+  return new Intl.DateTimeFormat("en-AU", {
+    timeZone: AU_TZ, weekday: "long", day: "numeric", month: "long", year: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  }).format(d);
+}
+function fmtAuLongDate(d: Date) {
+  return new Intl.DateTimeFormat("en-AU", { timeZone: AU_TZ, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(d);
+}
+function fmtAuWeekday(d: Date) {
+  return new Intl.DateTimeFormat("en-AU", { timeZone: AU_TZ, weekday: "long" }).format(d);
+}
+
 export async function buildCallerContext(sb: any, venueId: string, callerPhone: string) {
+  const now = new Date();
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const base: Record<string, string> = {
     caller_number: callerPhone || "unknown",
     caller_known: "no",
@@ -159,6 +191,12 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
     caller_history: "no prior visits on record",
     caller_bookings: "none on file",
     caller_next_booking: "none",
+    venue_timezone: AU_TZ,
+    current_datetime_local: fmtAuDateTime(now),
+    today_long: fmtAuLongDate(now),
+    today_weekday: fmtAuWeekday(now),
+    tomorrow_long: fmtAuLongDate(tomorrow),
+    tomorrow_weekday: fmtAuWeekday(tomorrow),
   };
   if (!callerPhone) return base;
   const digits = callerPhone.replace(/\D/g, "");
@@ -184,7 +222,7 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
         .sort((a: any, b: any) => new Date(a.booking_time).getTime() - new Date(b.booking_time).getTime());
       const chosen = upcoming[0] || bks[0];
       if (chosen) {
-        base.caller_next_booking = `party of ${chosen.party_size} on ${new Date(chosen.booking_time).toLocaleString()} (${chosen.status})`;
+        base.caller_next_booking = `party of ${chosen.party_size} on ${fmtAuDateTime(new Date(chosen.booking_time))} (${chosen.status})`;
       }
     };
     if (guest) {
@@ -206,7 +244,7 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
         .limit(10);
       if (bks?.length) {
         base.caller_bookings = bks.map((b: any) =>
-          `party of ${b.party_size} on ${new Date(b.booking_time).toLocaleString()} (${b.status})${b.notes ? ` — ${b.notes}` : ""}`
+          `party of ${b.party_size} on ${fmtAuDateTime(new Date(b.booking_time))} (${b.status})${b.notes ? ` — ${b.notes}` : ""}`
         ).join(" | ");
         setNextBooking(bks);
       }
@@ -224,7 +262,7 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
         base.caller_name = matches[0].guest_name || "";
         base.caller_first_name = (matches[0].guest_name || "").trim().split(/\s+/)[0] || "";
         base.caller_bookings = matches
-          .map((b: any) => `party of ${b.party_size} on ${new Date(b.booking_time).toLocaleString()} (${b.status})`)
+          .map((b: any) => `party of ${b.party_size} on ${fmtAuDateTime(new Date(b.booking_time))} (${b.status})`)
           .join(" | ");
         setNextBooking(matches);
       }

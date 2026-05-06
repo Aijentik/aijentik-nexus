@@ -249,6 +249,26 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
       },
     });
   }
+  if (tools.update_booking !== false) {
+    toolDefs.push({
+      type: "client",
+      name: "update_booking",
+      description: "Modify or cancel an existing booking. Provide as many identifying details as possible (booking_id if known, otherwise guest_name + original_booking_time + guest_phone). Set action to 'cancel' to cancel, or 'update' with the new fields.",
+      parameters: {
+        type: "object",
+        required: ["action"],
+        properties: {
+          action: { type: "string", description: "Either 'update' or 'cancel'." },
+          booking_id: { type: "string", description: "Booking id if known from caller context." },
+          guest_name: { type: "string", description: "Name on the booking, used to find it if no id." },
+          guest_phone: { type: "string", description: "Phone on the booking, used to find it if no id." },
+          original_booking_time: { type: "string", description: "Current ISO 8601 time on the booking, used to identify it." },
+          new_booking_time: { type: "string", description: "New ISO 8601 datetime if changing the time." },
+          new_party_size: { type: "integer", description: "New party size if changing." },
+          notes: { type: "string", description: "New or additional notes." },
+        },
+      },
+    });
   if (tools.take_message) {
     toolDefs.push({
       type: "client",

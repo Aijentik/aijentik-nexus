@@ -314,6 +314,8 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         first_message: firstMessage,
         language: cfg?.language || "en",
       },
+      asr: { quality: "high", user_input_audio_format: "pcm_16000" },
+      turn: { turn_timeout: 7, silence_end_call_timeout: 30, mode: "turn" },
       tts: {
         voice_id: voiceId,
         model_id: "eleven_turbo_v2",
@@ -324,6 +326,7 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         speed: typeof cfg?.speed === "number" ? cfg.speed : 1.05,
         optimize_streaming_latency: 3,
       },
+      conversation: { max_duration_seconds: 1800 },
       client_events: [
         "audio", "interruption", "user_transcript", "agent_response",
         "agent_response_correction", "client_tool_call", "ping",

@@ -118,6 +118,16 @@ function VoiceLiveInner() {
             reason: `${params.guest_name} · party of ${params.party_size} · ${time.toLocaleString()}`,
             severity: "info",
           });
+          if (params.guest_phone) {
+            supabase.functions.invoke("send-sms", {
+              body: {
+                venue_id: venue.id,
+                to: params.guest_phone,
+                booking_id: data.id,
+                body: `Hi ${params.guest_name}, your table for ${params.party_size} at ${venue.name} on ${time.toLocaleString()} is confirmed. Reply STOP to opt out.`,
+              },
+            }).catch(() => {});
+          }
           toast.success(`Booking added: ${params.guest_name}`);
           return `Booking confirmed for ${params.guest_name}, party of ${params.party_size} at ${time.toLocaleString()}. Booking id: ${data.id}`;
         } catch (e: any) {

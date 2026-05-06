@@ -30,7 +30,7 @@ export default function Diary() {
     if (error) return toast.error(error.message);
     await supabase.from("brain_events").insert({ venue_id: venue.id, title: "Booking added manually", reason: `${form.guest_name} · party of ${form.party_size}`, severity: "info" });
     if (form.guest_phone) {
-      supabase.functions.invoke("send-sms", { body: { venue_id: venue.id, to: form.guest_phone, booking_id: booking?.id, body: `Hi ${form.guest_name}, your table for ${form.party_size} at ${venue.name} on ${format(when, "EEE d MMM 'at' HH:mm")} is confirmed. Reply STOP to opt out.` } }).then(() => toast.success("Confirmation SMS sent")).catch(() => {});
+      supabase.functions.invoke("send-sms", { body: { venue_id: venue.id, to: form.guest_phone, booking_id: booking?.id, body: `Hi ${form.guest_name}, your table for ${form.party_size} at ${venue.name} on ${format(when, "EEE d MMM 'at' HH:mm")} is confirmed. Reply STOP to opt out.` } }).then(() => toast.success("Confirmation sent via SMS + WhatsApp")).catch(() => {});
     }
     toast.success("Booking added");
     setOpen(false); setForm({ guest_name: "", party_size: 2, booking_time: "", guest_phone: "", notes: "" });

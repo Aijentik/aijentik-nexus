@@ -262,7 +262,7 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
         base.caller_name = matches[0].guest_name || "";
         base.caller_first_name = (matches[0].guest_name || "").trim().split(/\s+/)[0] || "";
         base.caller_bookings = matches
-          .map((b: any) => `party of ${b.party_size} on ${new Date(b.booking_time).toLocaleString()} (${b.status})`)
+          .map((b: any) => `party of ${b.party_size} on ${fmtAuDateTime(new Date(b.booking_time))} (${b.status})`)
           .join(" | ");
         setNextBooking(matches);
       }

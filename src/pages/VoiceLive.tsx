@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useConversation, ConversationProvider } from "@elevenlabs/react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +24,28 @@ function VoiceLiveInner() {
   const [sessionConfig, setSessionConfig] = useState<any>(null);
   const [transcript, setTranscript] = useState<{ role: "user" | "agent"; text: string }[]>([]);
   const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
+  const ambienceRef = useRef<HTMLAudioElement | null>(null);
+
+  const startAmbience = useCallback(() => {
+    try {
+      if (!ambienceRef.current) {
+        const a = new Audio("/ambience-venue.mp3");
+        a.loop = true;
+        a.volume = 0.08; // subtle — under the agent
+        ambienceRef.current = a;
+      }
+      ambienceRef.current.currentTime = 0;
+      ambienceRef.current.play().catch(() => {});
+    } catch {}
+  }, []);
+  const stopAmbience = useCallback(() => {
+    try {
+      if (ambienceRef.current) {
+        ambienceRef.current.pause();
+        ambienceRef.current.currentTime = 0;
+      }
+    } catch {}
+  }, []);
 
   const prepareSession = useCallback(async (force = false) => {
     if (!venue) return null;
@@ -52,15 +74,19 @@ function VoiceLiveInner() {
     if (venue) prepareSession(true);
   }, [venue?.id]);
 
+  useEffect(() => () => stopAmbience(), [stopAmbience]);
+
   const conversation = useConversation({
     onConnect: () => {
       toast.success("Connected to voice agent");
       setMicError(null);
       setCallStartedAt(Date.now());
       setTranscript([]);
+      startAmbience();
     },
     onDisconnect: async () => {
       toast.message("Call ended");
+      stopAmbience();
       // Persist transcript
       if (venue && callStartedAt && transcript.length > 0) {
         try {

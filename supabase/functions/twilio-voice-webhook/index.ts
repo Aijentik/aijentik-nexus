@@ -1,6 +1,17 @@
 // Public webhook called by Twilio when a phone number rings.
 // Looks up the agent by the dialed number, gets a signed WebSocket URL from
 // ElevenLabs, and returns TwiML that bridges Twilio Media Streams <-> ElevenLabs.
+//
+// NOTE on background ambience for phone calls:
+// ElevenLabs' Twilio media-stream bridge replaces the call audio with the
+// agent's TTS output, so we cannot directly mix a "busy venue" ambient track
+// in here. To add ambience on real phone calls we'd need to insert our own
+// WebSocket proxy between Twilio <Stream> and ElevenLabs that mixes a looped
+// ambient PCM clip into each outbound audio frame. Browser test calls
+// (src/pages/VoiceLive.tsx) already loop /ambience-venue.mp3 client-side at
+// low volume to give the same effect during testing.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+import { buildPrompt, buildAgentBody, buildCallerContext } from "../_shared/agent-config.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 import { buildPrompt, buildAgentBody, buildCallerContext } from "../_shared/agent-config.ts";
 

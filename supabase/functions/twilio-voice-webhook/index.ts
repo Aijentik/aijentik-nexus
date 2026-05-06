@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     const venueName = venueRow?.name || "us";
 
     const wsUrl = `wss://${SUPABASE_URL.replace(/^https?:\/\//, "")}/functions/v1/twilio-stream-mixer?agent_id=${encodeURIComponent(elevenlabsAgentId)}`;
-    const params = [
+    const streamParams = [
       ["caller_first_name", callerCtx.caller_first_name || ""],
       ["caller_known", callerCtx.caller_known || "no"],
       ["venue_name", venueName],
@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
     ]
       .map(([k, v]) => `<Parameter name="${escapeXml(k)}" value="${escapeXml(String(v))}"/>`)
       .join("");
-    const twilioXml = `<Connect><Stream url="${escapeXml(wsUrl)}">${params}</Stream></Connect>`;
+    const twilioXml = `<Connect><Stream url="${escapeXml(wsUrl)}">${streamParams}</Stream></Connect>`;
 
     // Log the call + brain event
     await sb.from("calls").insert({

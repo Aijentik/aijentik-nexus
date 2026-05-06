@@ -2,7 +2,7 @@
 // Looks up the agent by the dialed number, gets a signed WebSocket URL from
 // ElevenLabs, and returns TwiML that bridges Twilio Media Streams <-> ElevenLabs.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
-import { buildPrompt, buildAgentBody } from "../_shared/agent-config.ts";
+import { buildPrompt, buildAgentBody, buildCallerContext } from "../_shared/agent-config.ts";
 
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;

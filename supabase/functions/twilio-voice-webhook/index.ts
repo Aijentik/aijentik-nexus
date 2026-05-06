@@ -2,7 +2,7 @@
 // Looks up the agent by the dialed number, gets a signed WebSocket URL from
 // ElevenLabs, and returns TwiML that bridges Twilio Media Streams <-> ElevenLabs.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
-import { buildPrompt, buildAgentBody } from "../_shared/agent-config.ts";
+import { buildPrompt, buildAgentBody, buildCallerContext } from "../_shared/agent-config.ts";
 
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -103,6 +103,7 @@ Deno.serve(async (req) => {
 
     // Register the Twilio call with ElevenLabs and return their TwiML directly.
     // A browser signed_url is not a Twilio media-stream bridge and causes calls to hang up.
+    const callerCtx = await buildCallerContext(sb, agent.venue_id, from);
     let twilioXml: string | undefined;
     try {
       const reg = await fetch("https://api.elevenlabs.io/v1/convai/twilio/register-call", {
@@ -114,7 +115,7 @@ Deno.serve(async (req) => {
           to_number: to,
           direction: "inbound",
           conversation_initiation_client_data: {
-            dynamic_variables: { caller_number: from, twilio_call_sid: callSid },
+            dynamic_variables: { ...callerCtx, twilio_call_sid: callSid },
           },
         }),
       });

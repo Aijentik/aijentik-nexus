@@ -317,11 +317,12 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
       tts: {
         voice_id: voiceId,
         model_id: "eleven_turbo_v2",
-        stability: typeof cfg?.stability === "number" ? cfg.stability : 0.35,
-        similarity_boost: typeof cfg?.similarity_boost === "number" ? cfg.similarity_boost : 0.7,
-        style: typeof cfg?.style === "number" ? cfg.style : 0.45,
+        stability: typeof cfg?.stability === "number" ? cfg.stability : 0.3,
+        similarity_boost: typeof cfg?.similarity_boost === "number" ? cfg.similarity_boost : 0.75,
+        style: typeof cfg?.style === "number" ? cfg.style : 0.55,
         use_speaker_boost: true,
-        speed: typeof cfg?.speed === "number" ? cfg.speed : 1.0,
+        speed: typeof cfg?.speed === "number" ? cfg.speed : 1.05,
+        optimize_streaming_latency: 3,
       },
       client_events: [
         "audio", "interruption", "user_transcript", "agent_response",

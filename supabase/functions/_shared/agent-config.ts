@@ -160,7 +160,7 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
       .select("id,name,phone,vip,tags,notes,visit_count,last_visit")
       .eq("venue_id", venueId)
       .limit(500);
-    const guest = (guests || []).find((g: any) => (g.phone || "").replace(/\D/g, "").endsWith(last10));
+    const guest = (guests || []).find((g: any) => matchPhone(g.phone));
     if (guest) {
       base.caller_known = "yes";
       base.caller_name = guest.name || "";

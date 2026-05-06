@@ -136,6 +136,15 @@ GENERAL RULES
 - Talk like a real person working at the venue, not a narrator or AI assistant.
 - Vary phrasing — never repeat the same sentence twice.
 
+NATURAL SPEECH STYLE
+- Speak like a real human host, not a polished script. Use light, occasional disfluencies — "um", "uh", "hmm", "let me see", "one sec" — sparingly and only where a person naturally would (e.g. while looking something up). Never more than once every few turns.
+- Use natural connectors: "yeah", "sure", "of course", "no worries", "right", "okay so…", "actually".
+- Use contractions always (I'll, we're, you've, can't).
+- Keep a steady conversational pace. Do not pause for long; if you need a beat to think, fill it with a short "let me check that for you" rather than silence.
+- Use short sentences. Break long thoughts into two short ones rather than one long one.
+- Mirror the caller's energy — calmer if they're calm, brisker if they're in a hurry.
+- Never sound robotic, never list things in a monotone "first… second… third…" pattern out loud.
+
 ${cfg?.customInstructions ? `CUSTOM INSTRUCTIONS FROM THE OWNER\n${cfg.customInstructions}\n` : ""}`;
 }
 
@@ -305,15 +314,19 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         first_message: firstMessage,
         language: cfg?.language || "en",
       },
+      asr: { quality: "high", user_input_audio_format: "pcm_16000" },
+      turn: { turn_timeout: 7, silence_end_call_timeout: 30, mode: "turn" },
       tts: {
         voice_id: voiceId,
         model_id: "eleven_turbo_v2",
-        stability: typeof cfg?.stability === "number" ? cfg.stability : 0.35,
-        similarity_boost: typeof cfg?.similarity_boost === "number" ? cfg.similarity_boost : 0.7,
-        style: typeof cfg?.style === "number" ? cfg.style : 0.45,
+        stability: typeof cfg?.stability === "number" ? cfg.stability : 0.3,
+        similarity_boost: typeof cfg?.similarity_boost === "number" ? cfg.similarity_boost : 0.75,
+        style: typeof cfg?.style === "number" ? cfg.style : 0.55,
         use_speaker_boost: true,
-        speed: typeof cfg?.speed === "number" ? cfg.speed : 1.0,
+        speed: typeof cfg?.speed === "number" ? cfg.speed : 1.05,
+        optimize_streaming_latency: 3,
       },
+      conversation: { max_duration_seconds: 1800 },
       client_events: [
         "audio", "interruption", "user_transcript", "agent_response",
         "agent_response_correction", "client_tool_call", "ping",

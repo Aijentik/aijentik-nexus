@@ -43,7 +43,7 @@ export type AgentConfig = {
   firstMessage?: string;
   responseLength?: "short" | "medium" | "detailed";
   customInstructions?: string;
-  tools?: { create_booking?: boolean; take_message?: boolean; transfer_call?: boolean; transfer_number?: string };
+  tools?: { create_booking?: boolean; update_booking?: boolean; take_message?: boolean; transfer_call?: boolean; transfer_number?: string };
   speed?: number;
   stability?: number;
   similarity_boost?: number;
@@ -58,7 +58,7 @@ const DEFAULTS: AgentConfig = {
   firstMessage: "",
   responseLength: "medium",
   customInstructions: "",
-  tools: { create_booking: true, take_message: true, transfer_call: false, transfer_number: "" },
+  tools: { create_booking: true, update_booking: true, take_message: true, transfer_call: false, transfer_number: "" },
   speed: 1.0, stability: 0.35, similarity_boost: 0.7, style: 0.45,
 };
 
@@ -181,6 +181,7 @@ export function AgentConfigDialog({ agent, open, onOpenChange, onSaved }: {
 
           <TabsContent value="tools" className="space-y-3 mt-4">
             <ToolRow label="Create bookings" desc="Agent can confirm and write reservations to the diary." checked={cfg.tools?.create_booking !== false} onChange={v => updateTool({ create_booking: v })} />
+            <ToolRow label="Change or cancel bookings" desc="Agent can update times, party size, or cancel an existing booking." checked={cfg.tools?.update_booking !== false} onChange={v => updateTool({ update_booking: v })} />
             <ToolRow label="Take messages" desc="Agent can record a message for the team for anything it can't resolve." checked={!!cfg.tools?.take_message} onChange={v => updateTool({ take_message: v })} />
             <ToolRow label="Transfer to a human" desc="If the caller insists on a person, the agent transfers the call." checked={!!cfg.tools?.transfer_call} onChange={v => updateTool({ transfer_call: v })} />
             {cfg.tools?.transfer_call && (

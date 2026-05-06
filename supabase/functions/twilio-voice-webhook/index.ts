@@ -104,6 +104,16 @@ Deno.serve(async (req) => {
     // Register the Twilio call with ElevenLabs and return their TwiML directly.
     // A browser signed_url is not a Twilio media-stream bridge and causes calls to hang up.
     const callerCtx = await buildCallerContext(sb, agent.venue_id, from);
+    // Build a personalised opening line so the agent greets by first name + booking immediately.
+    const venueName = (await sb.from("venues").select("name").eq("id", agent.venue_id).single()).data?.name || "us";
+    let dynamicFirstMessage: string | undefined;
+    if (callerCtx.caller_known === "yes" && callerCtx.caller_first_name) {
+      if (callerCtx.caller_next_booking && callerCtx.caller_next_booking !== "none") {
+        dynamicFirstMessage = `Hi ${callerCtx.caller_first_name}, welcome back to ${venueName}. I can see your booking — ${callerCtx.caller_next_booking}. Are you calling about that?`;
+      } else {
+        dynamicFirstMessage = `Hi ${callerCtx.caller_first_name}, welcome back to ${venueName}. How can I help today?`;
+      }
+    }
     let twilioXml: string | undefined;
     try {
       const reg = await fetch("https://api.elevenlabs.io/v1/convai/twilio/register-call", {
@@ -116,6 +126,7 @@ Deno.serve(async (req) => {
           direction: "inbound",
           conversation_initiation_client_data: {
             dynamic_variables: { ...callerCtx, twilio_call_sid: callSid },
+            ...(dynamicFirstMessage ? { conversation_config_override: { agent: { first_message: dynamicFirstMessage } } } : {}),
           },
         }),
       });

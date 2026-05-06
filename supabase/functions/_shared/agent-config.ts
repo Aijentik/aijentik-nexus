@@ -33,6 +33,7 @@ export type AgentConfig = {
   customInstructions?: string;
   tools?: {
     create_booking?: boolean;
+    update_booking?: boolean;
     take_message?: boolean;
     transfer_call?: boolean;
     transfer_number?: string;
@@ -66,9 +67,10 @@ export function buildPrompt(venue: any, kb: any[] = [], cfg: AgentConfig | null 
   const intention = cfg?.intention?.trim() || "Greet guests, take reservations, and answer questions about the menu, hours, location, policies, and current operational context.";
   const demeanor = resolveDemeanor(cfg);
   const lengthRule = LENGTH_PRESETS[cfg?.responseLength || "medium"];
-  const tools = cfg?.tools || { create_booking: true, take_message: true };
+  const tools = cfg?.tools || { create_booking: true, update_booking: true, take_message: true };
   const enabledTools: string[] = [];
   if (tools.create_booking !== false) enabledTools.push("create_booking — confirm bookings only after collecting name, party size, date, time, and phone.");
+  if (tools.update_booking !== false) enabledTools.push("update_booking — change or cancel an existing booking. Use the caller's recognised booking from CALLER CONTEXT when available; otherwise confirm which booking to change before calling.");
   if (tools.take_message) enabledTools.push("take_message — for anything you cannot resolve, take a clear message for the team.");
   if (tools.transfer_call && tools.transfer_number) enabledTools.push(`transfer_call — if the caller insists on speaking to a human, transfer to ${tools.transfer_number}.`);
 
@@ -92,14 +94,17 @@ ${venue.description ? `\nAbout: ${venue.description}` : ""}
 CALLER CONTEXT (this specific call)
 - Caller phone number: {{caller_number}}
 - Recognised guest: {{caller_known}}
-- Guest name (if known): {{caller_name}}
+- Guest first name (if known): {{caller_first_name}}
+- Guest full name (if known): {{caller_name}}
 - Guest notes / tags: {{caller_notes}}
 - Visit history: {{caller_history}}
 - Bookings on file: {{caller_bookings}}
+- Next/most relevant booking: {{caller_next_booking}}
 
 CALLER-AWARE BEHAVIOUR
-- If "Recognised guest" is "yes", greet them by name immediately and warmly (e.g. "Hi {{caller_name}}, welcome back to ${venue.name}").
-- If they have an upcoming booking, proactively reference it ("I can see you've got a table for X on Y — is that what you're calling about?").
+- The very first message you say is already personalised — do not re-greet.
+- If "Recognised guest" is "yes" AND there is a "Next/most relevant booking", you MUST proactively reference it in your first turn without being asked (e.g. "I can see your booking for {{caller_next_booking}} — is that what you're calling about?"). Do not wait for the caller to ask you to check.
+- If they have no upcoming booking but a past one, acknowledge them as a returning guest by first name.
 - If they're a VIP or have notes/tags, treat them with extra care, but never read raw notes verbatim.
 - If "Recognised guest" is "no", greet normally and ask for their name.
 - Never claim to recognise a caller when "Recognised guest" is "no".
@@ -140,9 +145,11 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
     caller_number: callerPhone || "unknown",
     caller_known: "no",
     caller_name: "",
+    caller_first_name: "",
     caller_notes: "none",
     caller_history: "no prior visits on record",
     caller_bookings: "none on file",
+    caller_next_booking: "none",
   };
   if (!callerPhone) return base;
   const digits = callerPhone.replace(/\D/g, "");
@@ -161,9 +168,20 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
       .eq("venue_id", venueId)
       .limit(500);
     const guest = (guests || []).find((g: any) => matchPhone(g.phone));
+    const setNextBooking = (bks: any[]) => {
+      if (!bks?.length) return;
+      const now = Date.now();
+      const upcoming = bks.filter((b: any) => new Date(b.booking_time).getTime() >= now)
+        .sort((a: any, b: any) => new Date(a.booking_time).getTime() - new Date(b.booking_time).getTime());
+      const chosen = upcoming[0] || bks[0];
+      if (chosen) {
+        base.caller_next_booking = `party of ${chosen.party_size} on ${new Date(chosen.booking_time).toLocaleString()} (${chosen.status})`;
+      }
+    };
     if (guest) {
       base.caller_known = "yes";
       base.caller_name = guest.name || "";
+      base.caller_first_name = (guest.name || "").trim().split(/\s+/)[0] || "";
       const tagPart = guest.tags?.length ? `tags: ${guest.tags.join(", ")}` : "";
       const vipPart = guest.vip ? "VIP guest" : "";
       base.caller_notes = [vipPart, tagPart, guest.notes].filter(Boolean).join(" — ") || "none";
@@ -172,31 +190,34 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
         : "no prior visits on record";
       const { data: bks } = await sb
         .from("bookings")
-        .select("party_size,booking_time,status,notes")
+        .select("id,party_size,booking_time,status,notes")
         .eq("venue_id", venueId)
         .eq("guest_id", guest.id)
         .order("booking_time", { ascending: false })
-        .limit(5);
+        .limit(10);
       if (bks?.length) {
         base.caller_bookings = bks.map((b: any) =>
           `party of ${b.party_size} on ${new Date(b.booking_time).toLocaleString()} (${b.status})${b.notes ? ` — ${b.notes}` : ""}`
         ).join(" | ");
+        setNextBooking(bks);
       }
     } else {
       const { data: bks } = await sb
         .from("bookings")
-        .select("guest_name,guest_phone,party_size,booking_time,status")
+        .select("id,guest_name,guest_phone,party_size,booking_time,status")
         .eq("venue_id", venueId)
         .not("guest_phone", "is", null)
         .order("booking_time", { ascending: false })
-        .limit(100);
+        .limit(200);
       const matches = (bks || []).filter((b: any) => matchPhone(b.guest_phone));
       if (matches.length) {
         base.caller_known = "yes";
         base.caller_name = matches[0].guest_name || "";
+        base.caller_first_name = (matches[0].guest_name || "").trim().split(/\s+/)[0] || "";
         base.caller_bookings = matches
           .map((b: any) => `party of ${b.party_size} on ${new Date(b.booking_time).toLocaleString()} (${b.status})`)
           .join(" | ");
+        setNextBooking(matches);
       }
     }
   } catch (e) {
@@ -224,6 +245,27 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
           booking_time: { type: "string", description: "ISO 8601 datetime, e.g. 2026-05-06T19:30:00Z" },
           guest_phone: { type: "string", description: "Phone number, optional" },
           notes: { type: "string", description: "Special requests / notes, optional" },
+        },
+      },
+    });
+  }
+  if (tools.update_booking !== false) {
+    toolDefs.push({
+      type: "client",
+      name: "update_booking",
+      description: "Modify or cancel an existing booking. Provide as many identifying details as possible (booking_id if known, otherwise guest_name + original_booking_time + guest_phone). Set action to 'cancel' to cancel, or 'update' with the new fields.",
+      parameters: {
+        type: "object",
+        required: ["action"],
+        properties: {
+          action: { type: "string", description: "Either 'update' or 'cancel'." },
+          booking_id: { type: "string", description: "Booking id if known from caller context." },
+          guest_name: { type: "string", description: "Name on the booking, used to find it if no id." },
+          guest_phone: { type: "string", description: "Phone on the booking, used to find it if no id." },
+          original_booking_time: { type: "string", description: "Current ISO 8601 time on the booking, used to identify it." },
+          new_booking_time: { type: "string", description: "New ISO 8601 datetime if changing the time." },
+          new_party_size: { type: "integer", description: "New party size if changing." },
+          notes: { type: "string", description: "New or additional notes." },
         },
       },
     });

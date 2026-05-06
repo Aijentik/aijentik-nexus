@@ -222,7 +222,7 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
         .sort((a: any, b: any) => new Date(a.booking_time).getTime() - new Date(b.booking_time).getTime());
       const chosen = upcoming[0] || bks[0];
       if (chosen) {
-        base.caller_next_booking = `party of ${chosen.party_size} on ${new Date(chosen.booking_time).toLocaleString()} (${chosen.status})`;
+        base.caller_next_booking = `party of ${chosen.party_size} on ${fmtAuDateTime(new Date(chosen.booking_time))} (${chosen.status})`;
       }
     };
     if (guest) {

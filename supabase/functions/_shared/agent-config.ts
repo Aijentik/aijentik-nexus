@@ -164,7 +164,24 @@ ${cfg?.customInstructions ? `CUSTOM INSTRUCTIONS FROM THE OWNER\n${cfg.customIns
 }
 
 // Lookup caller context by phone number → returns dynamic_variables for ElevenLabs.
+// Format a Date as Australian local strings.
+const AU_TZ = "Australia/Sydney";
+function fmtAuDateTime(d: Date) {
+  return new Intl.DateTimeFormat("en-AU", {
+    timeZone: AU_TZ, weekday: "long", day: "numeric", month: "long", year: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  }).format(d);
+}
+function fmtAuLongDate(d: Date) {
+  return new Intl.DateTimeFormat("en-AU", { timeZone: AU_TZ, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(d);
+}
+function fmtAuWeekday(d: Date) {
+  return new Intl.DateTimeFormat("en-AU", { timeZone: AU_TZ, weekday: "long" }).format(d);
+}
+
 export async function buildCallerContext(sb: any, venueId: string, callerPhone: string) {
+  const now = new Date();
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const base: Record<string, string> = {
     caller_number: callerPhone || "unknown",
     caller_known: "no",
@@ -174,6 +191,12 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
     caller_history: "no prior visits on record",
     caller_bookings: "none on file",
     caller_next_booking: "none",
+    venue_timezone: AU_TZ,
+    current_datetime_local: fmtAuDateTime(now),
+    today_long: fmtAuLongDate(now),
+    today_weekday: fmtAuWeekday(now),
+    tomorrow_long: fmtAuLongDate(tomorrow),
+    tomorrow_weekday: fmtAuWeekday(tomorrow),
   };
   if (!callerPhone) return base;
   const digits = callerPhone.replace(/\D/g, "");

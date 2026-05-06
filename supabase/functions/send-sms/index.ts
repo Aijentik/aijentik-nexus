@@ -18,14 +18,18 @@ Deno.serve(async (req) => {
     if (!auth) return new Response(JSON.stringify({ error: "auth required" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const sb = createClient(SUPABASE_URL, SERVICE_KEY, { global: { headers: { Authorization: auth } } });
 
-    const { venue_id, to, body, booking_id, from } = await req.json();
+    const { venue_id, to, body, booking_id, from, channels } = await req.json();
     if (!venue_id || !to || !body) {
       return new Response(JSON.stringify({ error: "venue_id, to, body required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    // Default: send via both SMS and WhatsApp using the same number.
+    const sendChannels: string[] = Array.isArray(channels) && channels.length ? channels : ["sms", "whatsapp"];
 
     if (!TWILIO_API_KEY) {
       // log only
-      await sb.from("messages").insert({ venue_id, contact: to, body, channel: "sms", direction: "outbound", status: "queued_no_twilio" });
+      for (const ch of sendChannels) {
+        await sb.from("messages").insert({ venue_id, contact: to, body, channel: ch, direction: "outbound", status: "queued_no_twilio" });
+      }
       return new Response(JSON.stringify({ ok: true, simulated: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

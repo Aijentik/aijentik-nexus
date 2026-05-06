@@ -110,56 +110,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Register the Twilio call with ElevenLabs and return their TwiML directly.
-    // A browser signed_url is not a Twilio media-stream bridge and causes calls to hang up.
+    // Bridge Twilio to our own WebSocket mixer (which talks to ElevenLabs and
+    // mixes a looped venue ambience under the agent's voice). This replaces
+    // the previous ElevenLabs register-call path so we control the audio path.
     const callerCtx = await buildCallerContext(sb, agent.venue_id, from);
-    // Build a personalised opening line so the agent greets by first name + booking immediately.
-    const venueName = (await sb.from("venues").select("name").eq("id", agent.venue_id).single()).data?.name || "us";
-    let dynamicFirstMessage: string | undefined;
-    if (callerCtx.caller_known === "yes" && callerCtx.caller_first_name) {
-      dynamicFirstMessage = `Hi ${callerCtx.caller_first_name}, welcome back to ${venueName}. How can I help today?`;
-    }
-    let twilioXml: string | undefined;
-    try {
-      const reg = await fetch("https://api.elevenlabs.io/v1/convai/twilio/register-call", {
-        method: "POST",
-        headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agent_id: elevenlabsAgentId,
-          from_number: from,
-          to_number: to,
-          direction: "inbound",
-          conversation_initiation_client_data: {
-            dynamic_variables: { ...callerCtx, twilio_call_sid: callSid },
-            ...(dynamicFirstMessage ? { conversation_config_override: { agent: { first_message: dynamicFirstMessage } } } : {}),
-          },
-        }),
-      });
-      if (reg.ok) {
-        const text = await reg.text();
-        if (text.trim().startsWith("<")) {
-          twilioXml = text;
-        } else {
-          const result = JSON.parse(text || "{}");
-          twilioXml = result?.twiml || result?.TwiML || result?.xml;
-        }
-      } else {
-        const txt = await reg.text();
-        console.error("[twilio-voice-webhook] register-call non-200", reg.status, txt);
-        await sb.from("brain_events").insert({
-          venue_id: agent.venue_id, agent_id: agent.id, severity: "error",
-          title: "Inbound call routing failed",
-          reason: `ElevenLabs register-call ${reg.status}: ${txt.slice(0, 400)}`,
-          meta: { from, to, callSid, elevenlabsAgentId },
-        });
-      }
-    } catch (e) {
-      console.error("[twilio-voice-webhook] register-call error", e);
-    }
+    const venueRow = (await sb.from("venues").select("name").eq("id", agent.venue_id).single()).data;
+    const venueName = venueRow?.name || "us";
 
-    if (!twilioXml) {
-      return twiml(`<Say>Sorry, our A I host is unavailable right now. Please try again shortly.</Say><Hangup/>`);
-    }
+    const wsUrl = `wss://${SUPABASE_URL.replace(/^https?:\/\//, "")}/functions/v1/twilio-stream-mixer?agent_id=${encodeURIComponent(elevenlabsAgentId)}`;
+    const params = [
+      ["caller_first_name", callerCtx.caller_first_name || ""],
+      ["caller_known", callerCtx.caller_known || "no"],
+      ["venue_name", venueName],
+      ["call_sid", callSid],
+    ]
+      .map(([k, v]) => `<Parameter name="${escapeXml(k)}" value="${escapeXml(String(v))}"/>`)
+      .join("");
+    const twilioXml = `<Connect><Stream url="${escapeXml(wsUrl)}">${params}</Stream></Connect>`;
 
     // Log the call + brain event
     await sb.from("calls").insert({

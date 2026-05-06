@@ -168,9 +168,20 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
       .eq("venue_id", venueId)
       .limit(500);
     const guest = (guests || []).find((g: any) => matchPhone(g.phone));
+    const setNextBooking = (bks: any[]) => {
+      if (!bks?.length) return;
+      const now = Date.now();
+      const upcoming = bks.filter((b: any) => new Date(b.booking_time).getTime() >= now)
+        .sort((a: any, b: any) => new Date(a.booking_time).getTime() - new Date(b.booking_time).getTime());
+      const chosen = upcoming[0] || bks[0];
+      if (chosen) {
+        base.caller_next_booking = `party of ${chosen.party_size} on ${new Date(chosen.booking_time).toLocaleString()} (${chosen.status})`;
+      }
+    };
     if (guest) {
       base.caller_known = "yes";
       base.caller_name = guest.name || "";
+      base.caller_first_name = (guest.name || "").trim().split(/\s+/)[0] || "";
       const tagPart = guest.tags?.length ? `tags: ${guest.tags.join(", ")}` : "";
       const vipPart = guest.vip ? "VIP guest" : "";
       base.caller_notes = [vipPart, tagPart, guest.notes].filter(Boolean).join(" — ") || "none";
@@ -179,31 +190,34 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
         : "no prior visits on record";
       const { data: bks } = await sb
         .from("bookings")
-        .select("party_size,booking_time,status,notes")
+        .select("id,party_size,booking_time,status,notes")
         .eq("venue_id", venueId)
         .eq("guest_id", guest.id)
         .order("booking_time", { ascending: false })
-        .limit(5);
+        .limit(10);
       if (bks?.length) {
         base.caller_bookings = bks.map((b: any) =>
           `party of ${b.party_size} on ${new Date(b.booking_time).toLocaleString()} (${b.status})${b.notes ? ` — ${b.notes}` : ""}`
         ).join(" | ");
+        setNextBooking(bks);
       }
     } else {
       const { data: bks } = await sb
         .from("bookings")
-        .select("guest_name,guest_phone,party_size,booking_time,status")
+        .select("id,guest_name,guest_phone,party_size,booking_time,status")
         .eq("venue_id", venueId)
         .not("guest_phone", "is", null)
         .order("booking_time", { ascending: false })
-        .limit(100);
+        .limit(200);
       const matches = (bks || []).filter((b: any) => matchPhone(b.guest_phone));
       if (matches.length) {
         base.caller_known = "yes";
         base.caller_name = matches[0].guest_name || "";
+        base.caller_first_name = (matches[0].guest_name || "").trim().split(/\s+/)[0] || "";
         base.caller_bookings = matches
           .map((b: any) => `party of ${b.party_size} on ${new Date(b.booking_time).toLocaleString()} (${b.status})`)
           .join(" | ");
+        setNextBooking(matches);
       }
     }
   } catch (e) {

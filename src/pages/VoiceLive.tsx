@@ -24,6 +24,28 @@ function VoiceLiveInner() {
   const [sessionConfig, setSessionConfig] = useState<any>(null);
   const [transcript, setTranscript] = useState<{ role: "user" | "agent"; text: string }[]>([]);
   const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
+  const ambienceRef = useRef<HTMLAudioElement | null>(null);
+
+  const startAmbience = useCallback(() => {
+    try {
+      if (!ambienceRef.current) {
+        const a = new Audio("/ambience-venue.mp3");
+        a.loop = true;
+        a.volume = 0.08; // subtle — under the agent
+        ambienceRef.current = a;
+      }
+      ambienceRef.current.currentTime = 0;
+      ambienceRef.current.play().catch(() => {});
+    } catch {}
+  }, []);
+  const stopAmbience = useCallback(() => {
+    try {
+      if (ambienceRef.current) {
+        ambienceRef.current.pause();
+        ambienceRef.current.currentTime = 0;
+      }
+    } catch {}
+  }, []);
 
   const prepareSession = useCallback(async (force = false) => {
     if (!venue) return null;

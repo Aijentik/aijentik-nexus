@@ -11,6 +11,7 @@ const nav = [
   { to: "/app", label: "Overview", icon: LayoutDashboard },
   { to: "/app/voice", label: "Live Voice", icon: Mic },
   { to: "/app/brain", label: "Live Brain", icon: Brain },
+  { to: "/app/flow", label: "Flow Studio", icon: Workflow },
   { to: "/app/diary", label: "Diary", icon: CalendarDays },
   { to: "/app/floor", label: "Floor Plan", icon: Map },
   { to: "/app/calls", label: "Calls", icon: Phone },

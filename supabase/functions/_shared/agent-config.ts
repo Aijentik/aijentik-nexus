@@ -373,10 +373,10 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         language: cfg?.language || "en",
       },
       asr: { quality: "high", user_input_audio_format: "ulaw_8000" },
-      turn: { turn_timeout: 7, silence_end_call_timeout: 30, mode: "turn" },
+      turn: { turn_timeout: 1, silence_end_call_timeout: 30, mode: "turn" },
       tts: {
         voice_id: voiceId,
-        model_id: "eleven_turbo_v2",
+        model_id: "eleven_flash_v2_5",
         agent_output_audio_format: "ulaw_8000",
         stability: typeof cfg?.stability === "number" ? cfg.stability : 0.4,
         similarity_boost: typeof cfg?.similarity_boost === "number" ? cfg.similarity_boost : 0.75,

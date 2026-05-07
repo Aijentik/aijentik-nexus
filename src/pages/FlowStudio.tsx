@@ -356,7 +356,7 @@ export default function FlowStudio() {
   ];
 
   return (
-    <div className="h-[calc(100vh-1px)] flex flex-col bg-background text-foreground -m-6">
+    <div className="fixed inset-0 left-64 flex flex-col bg-background text-foreground z-10">
       {/* TOP BAR */}
       <header className="h-14 shrink-0 glass-strong border-b border-white/5 flex items-center gap-3 px-4 z-20">
         <div className="flex items-center gap-2">

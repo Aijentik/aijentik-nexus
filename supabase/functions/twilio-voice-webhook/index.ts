@@ -137,35 +137,37 @@ Deno.serve(async (req) => {
         .join("");
       twilioXml = `<Connect><Stream url="${escapeXml(wsUrl)}">${streamParams}</Stream></Connect>`;
     }
-    let twilioXml: string | undefined;
-    try {
-      const reg = await fetch("https://api.elevenlabs.io/v1/convai/twilio/register-call", {
-        method: "POST",
-        headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agent_id: elevenlabsAgentId,
-          from_number: from,
-          to_number: to,
-          direction: "inbound",
-          conversation_initiation_client_data: {
-            dynamic_variables: { ...callerCtx, twilio_call_sid: callSid },
-            ...(dynamicFirstMessage ? { conversation_config_override: { agent: { first_message: dynamicFirstMessage } } } : {}),
-          },
-        }),
-      });
-      if (reg.ok) {
-        const text = await reg.text();
-        if (text.trim().startsWith("<")) {
-          twilioXml = text;
+
+    if (!twilioXml) {
+      try {
+        const reg = await fetch("https://api.elevenlabs.io/v1/convai/twilio/register-call", {
+          method: "POST",
+          headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agent_id: elevenlabsAgentId,
+            from_number: from,
+            to_number: to,
+            direction: "inbound",
+            conversation_initiation_client_data: {
+              dynamic_variables: { ...callerCtx, twilio_call_sid: callSid },
+              ...(dynamicFirstMessage ? { conversation_config_override: { agent: { first_message: dynamicFirstMessage } } } : {}),
+            },
+          }),
+        });
+        if (reg.ok) {
+          const text = await reg.text();
+          if (text.trim().startsWith("<")) {
+            twilioXml = text;
+          } else {
+            const result = JSON.parse(text || "{}");
+            twilioXml = result?.twiml || result?.TwiML || result?.xml;
+          }
         } else {
-          const result = JSON.parse(text || "{}");
-          twilioXml = result?.twiml || result?.TwiML || result?.xml;
+          console.error("[twilio-voice-webhook] register-call non-200", reg.status, await reg.text());
         }
-      } else {
-        console.error("[twilio-voice-webhook] register-call non-200", reg.status, await reg.text());
+      } catch (e) {
+        console.error("[twilio-voice-webhook] register-call error", e);
       }
-    } catch (e) {
-      console.error("[twilio-voice-webhook] register-call error", e);
     }
     if (!twilioXml) {
       return twiml(`<Say>Sorry, our A I host is unavailable right now. Please try again shortly.</Say><Hangup/>`);

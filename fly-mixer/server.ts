@@ -6,6 +6,16 @@ import { AMBIENCE_ULAW_BASE64 } from "./ambience-data.ts";
 
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY")!;
 const PORT = Number(Deno.env.get("PORT") ?? 8080);
+const DEBUG_URL = Deno.env.get("DEBUG_URL") ?? "https://ifqizzldcgkttwlltdbo.supabase.co/functions/v1/mixer-debug-log";
+
+function dbg(kind: string, message: string, extra: Record<string, unknown> = {}) {
+  console.log(`[mixer:${kind}] ${message}`, extra);
+  fetch(DEBUG_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, message, ...extra, ts: new Date().toISOString() }),
+  }).catch(() => {});
+}
 
 // Decode looped ambience once at startup (μ-law 8kHz mono).
 const AMBIENCE = Uint8Array.from(atob(AMBIENCE_ULAW_BASE64), (c) => c.charCodeAt(0));

@@ -16,10 +16,13 @@ const cors = {
 async function patchAgent(id: string) {
   const body = {
     conversation_config: {
-      turn: { turn_timeout: 1, mode: "turn" },
+      turn: { turn_timeout: 1, mode: "turn", turn_eagerness: "eager" },
       tts: {
         model_id: "eleven_flash_v2",
         optimize_streaming_latency: 4,
+      },
+      agent: {
+        prompt: { llm: "gemini-2.0-flash-lite" },
       },
     },
   };

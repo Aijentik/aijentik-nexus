@@ -19,7 +19,7 @@ function dbg(kind: string, message: string, extra: Record<string, unknown> = {})
 
 // Decode looped ambience once at startup (μ-law 8kHz mono).
 const AMBIENCE = Uint8Array.from(atob(AMBIENCE_ULAW_BASE64), (c) => c.charCodeAt(0));
-const AMBIENCE_GAIN = 0.18; // ~18% — soft pub murmur under the agent
+const AMBIENCE_GAIN = 0.04; // very soft venue murmur — must stay well under agent voice
 
 // μ-law <-> linear PCM conversion (G.711)
 function ulawToLinear(u: number): number {

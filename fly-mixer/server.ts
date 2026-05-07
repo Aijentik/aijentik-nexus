@@ -86,7 +86,23 @@ Deno.serve({ port: PORT }, async (req) => {
   let firstAgentAudioAt: number | null = null;
   let mediaFromTwilio = 0;
   let audioToTwilio = 0;
+  let lastAgentFrameAt = 0;
   const openedAt = Date.now();
+
+  // Continuous ambience: emit a 20ms ambience-only frame whenever agent isn't speaking,
+  // so the restaurant murmur is always audible to the caller.
+  const ambienceTimer = setInterval(() => {
+    if (!streamSid || twilioWs.readyState !== WebSocket.OPEN) return;
+    if (Date.now() - lastAgentFrameAt < 40) return; // agent is currently speaking; skip
+    const silent = new Uint8Array(160).fill(0xff); // μ-law silence
+    const { mixed, nextOffset } = mixFrame(silent, ambienceOffset);
+    ambienceOffset = nextOffset;
+    let bin = "";
+    for (let k = 0; k < mixed.length; k++) bin += String.fromCharCode(mixed[k]);
+    try {
+      twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: btoa(bin) } }));
+    } catch {}
+  }, 20);
 
   twilioWs.onopen = () => dbg("ws-open", "twilio ws open");
 

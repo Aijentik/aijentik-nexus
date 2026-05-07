@@ -123,15 +123,36 @@ Deno.serve({ port: PORT }, async (req) => {
           if (m.type === "audio") {
             const b64 = m.audio_event?.audio_base_64 || m.audio?.chunk;
             if (!b64 || !streamSid) return;
+            const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
             if (firstAgentAudioAt === null) {
               firstAgentAudioAt = Date.now();
-              dbg("first-audio", `first agent audio after ${firstAgentAudioAt - openedAt}ms`);
+              dbg("first-audio", `first agent audio after ${firstAgentAudioAt - openedAt}ms`, {
+                rawLen: raw.length,
+                firstBytes: Array.from(raw.slice(0, 8)),
+              });
             }
-            // TEMPORARY: bypass mixer entirely — forward agent audio unchanged.
-            // The previous mix was corrupting voice into static.
+            // ElevenLabs default output is PCM 16-bit LE @ 16kHz.
+            // Twilio expects μ-law @ 8kHz in 160-byte (20ms) frames.
+            // Downsample 2:1 by averaging pairs, convert to μ-law, chunk to 160 bytes.
+            const sampleCount = raw.length >> 1; // int16 samples
+            const outSamples = sampleCount >> 1; // 16k -> 8k
+            const ulaw = new Uint8Array(outSamples);
+            const dv = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+            for (let i = 0, j = 0; j < outSamples; i += 2, j++) {
+              const s1 = dv.getInt16(i * 2, true);
+              const s2 = dv.getInt16(i * 2 + 2, true);
+              ulaw[j] = linearToUlaw((s1 + s2) >> 1);
+            }
+            // Send in 160-byte frames (20ms @ 8kHz)
+            for (let off = 0; off < ulaw.length; off += 160) {
+              const frame = ulaw.subarray(off, Math.min(off + 160, ulaw.length));
+              let bin = "";
+              for (let k = 0; k < frame.length; k++) bin += String.fromCharCode(frame[k]);
+              const payload = btoa(bin);
+              twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload } }));
+              audioToTwilio++;
+            }
             void mixFrame; void ambienceOffset;
-            twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: b64 } }));
-            audioToTwilio++;
           } else if (m.type === "ping") {
             elWs!.send(JSON.stringify({ type: "pong", event_id: m.ping_event?.event_id }));
           } else if (m.type === "interruption") {

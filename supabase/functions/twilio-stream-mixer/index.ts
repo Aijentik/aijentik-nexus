@@ -75,7 +75,20 @@ Deno.serve((req) => {
   const agentId = url.searchParams.get("agent_id");
   if (!agentId) return new Response("missing agent_id", { status: 400 });
 
-  const { socket: twilioWs, response } = Deno.upgradeWebSocket(req);
+  console.log("[mixer] upgrade request", {
+    agent_id: agentId,
+    sec_proto: req.headers.get("sec-websocket-protocol"),
+    sec_ver: req.headers.get("sec-websocket-version"),
+    ua: req.headers.get("user-agent"),
+  });
+
+  // Twilio offers a subprotocol on its Media Streams handshake. If we don't
+  // echo one back, some intermediaries (Cloudflare in front of Supabase) will
+  // 502 the upgrade. Honor whatever the client sent.
+  const offered = (req.headers.get("sec-websocket-protocol") || "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  const upgradeOpts = offered.length ? { protocol: offered[0] } : undefined;
+  const { socket: twilioWs, response } = Deno.upgradeWebSocket(req, upgradeOpts);
 
   let elWs: WebSocket | null = null;
   let streamSid: string | null = null;

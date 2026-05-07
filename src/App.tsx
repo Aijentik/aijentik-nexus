@@ -42,6 +42,7 @@ const App = () => (
               <Route index element={<Dashboard />} />
               <Route path="voice" element={<VoiceLive />} />
               <Route path="brain" element={<LiveBrain />} />
+              <Route path="flow" element={<FlowStudio />} />
               <Route path="diary" element={<Diary />} />
               <Route path="floor" element={<FloorPlan />} />
               <Route path="floor/new" element={<NewFloorPlan />} />

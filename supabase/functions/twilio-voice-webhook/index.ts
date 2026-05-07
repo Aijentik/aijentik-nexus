@@ -117,7 +117,9 @@ Deno.serve(async (req) => {
     const venueRow = (await sb.from("venues").select("name").eq("id", agent.venue_id).single()).data;
     const venueName = venueRow?.name || "us";
 
-    const wsUrl = `wss://${SUPABASE_URL.replace(/^https?:\/\//, "")}/functions/v1/twilio-stream-mixer?agent_id=${encodeURIComponent(elevenlabsAgentId)}`;
+    // Supabase's WebSocket gateway requires an apikey query param even when verify_jwt=false.
+    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const wsUrl = `wss://${SUPABASE_URL.replace(/^https?:\/\//, "")}/functions/v1/twilio-stream-mixer?agent_id=${encodeURIComponent(elevenlabsAgentId)}&apikey=${encodeURIComponent(ANON_KEY)}`;
     const streamParams = [
       ["caller_first_name", callerCtx.caller_first_name || ""],
       ["caller_known", callerCtx.caller_known || "no"],

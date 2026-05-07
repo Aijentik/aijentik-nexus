@@ -127,13 +127,21 @@ Deno.serve(async (req) => {
 
     if (MIXER_HOST) {
       const wsUrl = `wss://${MIXER_HOST}/`;
-      const streamParams = [
-        ["agent_id", String(elevenlabsAgentId)],
-        ["caller_first_name", String(callerCtx.caller_first_name || "")],
-        ["caller_known", String(callerCtx.caller_known || "no")],
-        ["venue_name", venueName],
-        ["call_sid", callSid],
-      ]
+      // Forward ALL caller-context dynamic variables to the mixer so it can
+      // pass them straight to ElevenLabs as dynamic_variables. Without this
+      // the agent only sees first name / known flag and the rest of the
+      // {{caller_*}} / {{today_*}} tokens render blank in the prompt.
+      const allParams: Record<string, string> = {
+        agent_id: String(elevenlabsAgentId),
+        venue_name: venueName,
+        twilio_call_sid: callSid,
+        call_sid: callSid,
+      };
+      for (const [k, v] of Object.entries(callerCtx)) {
+        allParams[k] = v == null ? "" : String(v);
+      }
+      if (dynamicFirstMessage) allParams.first_message_override = dynamicFirstMessage;
+      const streamParams = Object.entries(allParams)
         .map(([k, v]) => `<Parameter name="${escapeXml(k)}" value="${escapeXml(v)}"/>`)
         .join("");
       twilioXml = `<Connect><Stream url="${escapeXml(wsUrl)}">${streamParams}</Stream></Connect>`;

@@ -13,6 +13,7 @@ import VoiceLive from "./pages/VoiceLive";
 import FloorPlan from "./pages/FloorPlan";
 import NewFloorPlan from "./pages/NewFloorPlan";
 import LiveBrain from "./pages/LiveBrain";
+import FlowStudio from "./pages/FlowStudio";
 import Diary from "./pages/Diary";
 import Calls from "./pages/Calls";
 import Agents from "./pages/Agents";

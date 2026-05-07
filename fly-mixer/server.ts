@@ -127,11 +127,10 @@ Deno.serve({ port: PORT }, async (req) => {
               firstAgentAudioAt = Date.now();
               dbg("first-audio", `first agent audio after ${firstAgentAudioAt - openedAt}ms`);
             }
-            const agentBytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-            const { mixed, nextOffset } = mixFrame(agentBytes, ambienceOffset);
-            ambienceOffset = nextOffset;
-            const mixedB64 = btoa(String.fromCharCode(...mixed));
-            twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: mixedB64 } }));
+            // TEMPORARY: bypass mixer entirely — forward agent audio unchanged.
+            // The previous mix was corrupting voice into static.
+            void mixFrame; void ambienceOffset;
+            twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: b64 } }));
             audioToTwilio++;
           } else if (m.type === "ping") {
             elWs!.send(JSON.stringify({ type: "pong", event_id: m.ping_event?.event_id }));

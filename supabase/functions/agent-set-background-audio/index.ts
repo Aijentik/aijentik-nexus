@@ -5,7 +5,7 @@
 // If agent_id is omitted we attach to every agent in the `agents` table that
 // has elevenlabs_agent_id set.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
-import { encode as b64encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { encodeBase64 as b64encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;

@@ -75,9 +75,8 @@ Deno.serve({ port: PORT }, async (req) => {
     return new Response("venue-mixer up", { status: 200 });
   }
 
-  const agentId = url.searchParams.get("agent_id");
-  dbg("ws-upgrade", `incoming ws agent_id=${agentId}`, { url: url.toString() });
-  if (!agentId) return new Response("agent_id required", { status: 400 });
+  const urlAgentId = url.searchParams.get("agent_id");
+  dbg("ws-upgrade", `incoming ws urlAgentId=${urlAgentId}`, { url: url.toString() });
 
   const { socket: twilioWs, response } = Deno.upgradeWebSocket(req);
   let elWs: WebSocket | null = null;
@@ -100,7 +99,13 @@ Deno.serve({ port: PORT }, async (req) => {
     } else if (msg.event === "start") {
       streamSid = msg.start?.streamSid;
       customParams = msg.start?.customParameters || {};
-      dbg("twilio-start", `streamSid=${streamSid}`, { customParams, mediaFormat: msg.start?.mediaFormat });
+      const agentId = customParams.agent_id || urlAgentId;
+      dbg("twilio-start", `streamSid=${streamSid} agentId=${agentId}`, { customParams, mediaFormat: msg.start?.mediaFormat });
+      if (!agentId) {
+        dbg("no-agent-id", "no agent_id in url or customParameters; closing");
+        try { twilioWs.close(); } catch {}
+        return;
+      }
       try {
         const signedUrl = await getSignedUrl(agentId);
         dbg("el-signed-url", "got signed url");

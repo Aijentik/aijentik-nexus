@@ -3,5 +3,3 @@ project_id = "ifqizzldcgkttwlltdbo"
 [functions.twilio-voice-webhook]
 verify_jwt = false
 
-[functions.twilio-stream-mixer]
-verify_jwt = false

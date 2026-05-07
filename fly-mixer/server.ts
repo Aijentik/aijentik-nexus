@@ -19,7 +19,7 @@ function dbg(kind: string, message: string, extra: Record<string, unknown> = {})
 
 // Decode looped ambience once at startup (μ-law 8kHz mono).
 const AMBIENCE = Uint8Array.from(atob(AMBIENCE_ULAW_BASE64), (c) => c.charCodeAt(0));
-const AMBIENCE_GAIN = 0.04; // very soft venue murmur — must stay well under agent voice
+const AMBIENCE_GAIN = 0.12; // soft restaurant murmur — kept low so agent voice stays clear
 
 // μ-law <-> linear PCM conversion (G.711)
 function ulawToLinear(u: number): number {
@@ -86,7 +86,23 @@ Deno.serve({ port: PORT }, async (req) => {
   let firstAgentAudioAt: number | null = null;
   let mediaFromTwilio = 0;
   let audioToTwilio = 0;
+  let lastAgentFrameAt = 0;
   const openedAt = Date.now();
+
+  // Continuous ambience: emit a 20ms ambience-only frame whenever agent isn't speaking,
+  // so the restaurant murmur is always audible to the caller.
+  const ambienceTimer = setInterval(() => {
+    if (!streamSid || twilioWs.readyState !== WebSocket.OPEN) return;
+    if (Date.now() - lastAgentFrameAt < 40) return; // agent is currently speaking; skip
+    const silent = new Uint8Array(160).fill(0xff); // μ-law silence
+    const { mixed, nextOffset } = mixFrame(silent, ambienceOffset);
+    ambienceOffset = nextOffset;
+    let bin = "";
+    for (let k = 0; k < mixed.length; k++) bin += String.fromCharCode(mixed[k]);
+    try {
+      twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: btoa(bin) } }));
+    } catch {}
+  }, 20);
 
   twilioWs.onopen = () => dbg("ws-open", "twilio ws open");
 
@@ -143,14 +159,17 @@ Deno.serve({ port: PORT }, async (req) => {
             // Pass through unchanged but chunk to 160-byte (20ms) frames so Twilio
             // paces the audio correctly.
             const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-            void mixFrame; void ambienceOffset;
+            // Mix in restaurant ambience and chunk to 20ms (160-byte) frames.
             for (let off = 0; off < raw.length; off += 160) {
               const frame = raw.subarray(off, Math.min(off + 160, raw.length));
+              const { mixed, nextOffset } = mixFrame(frame, ambienceOffset);
+              ambienceOffset = nextOffset;
               let bin = "";
-              for (let k = 0; k < frame.length; k++) bin += String.fromCharCode(frame[k]);
+              for (let k = 0; k < mixed.length; k++) bin += String.fromCharCode(mixed[k]);
               twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: btoa(bin) } }));
               audioToTwilio++;
             }
+            lastAgentFrameAt = Date.now();
           } else if (m.type === "ping") {
             elWs!.send(JSON.stringify({ type: "pong", event_id: m.ping_event?.event_id }));
           } else if (m.type === "interruption") {
@@ -181,6 +200,7 @@ Deno.serve({ port: PORT }, async (req) => {
   };
 
   twilioWs.onclose = (e) => {
+    clearInterval(ambienceTimer);
     dbg("twilio-close", `twilio ws closed code=${e.code}`, { reason: e.reason, mediaFromTwilio, audioToTwilio, durationMs: Date.now() - openedAt });
     try { elWs?.close(); } catch {}
   };

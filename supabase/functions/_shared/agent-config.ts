@@ -372,11 +372,12 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         first_message: firstMessage,
         language: cfg?.language || "en",
       },
-      asr: { quality: "high", user_input_audio_format: "pcm_16000" },
+      asr: { quality: "high", user_input_audio_format: "ulaw_8000" },
       turn: { turn_timeout: 7, silence_end_call_timeout: 30, mode: "turn" },
       tts: {
         voice_id: voiceId,
         model_id: "eleven_turbo_v2",
+        agent_output_audio_format: "ulaw_8000",
         stability: typeof cfg?.stability === "number" ? cfg.stability : 0.4,
         similarity_boost: typeof cfg?.similarity_boost === "number" ? cfg.similarity_boost : 0.75,
         style: typeof cfg?.style === "number" ? cfg.style : 0.05,

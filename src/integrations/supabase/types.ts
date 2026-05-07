@@ -437,6 +437,30 @@ export type Database = {
           },
         ]
       }
+      mixer_debug_log: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string | null
+          message: string | null
+          meta: Json | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: string | null
+          message?: string | null
+          meta?: Json | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string | null
+          message?: string | null
+          meta?: Json | null
+        }
+        Relationships: []
+      }
       onboarding_runs: {
         Row: {
           completed_at: string | null

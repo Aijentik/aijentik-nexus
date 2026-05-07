@@ -1,6 +1,6 @@
 // One-shot: lower latency on all linked ElevenLabs agents.
 // - turn.turn_timeout = 1s (was 7s) — agent responds ~as soon as you stop talking
-// - tts.model_id = eleven_flash_v2_5 (fastest, ~75ms)
+// - tts.model_id = eleven_flash_v2 (fastest, ~75ms)
 // - tts.optimize_streaming_latency = 4 (max)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 
@@ -18,7 +18,7 @@ async function patchAgent(id: string) {
     conversation_config: {
       turn: { turn_timeout: 1, mode: "turn" },
       tts: {
-        model_id: "eleven_flash_v2_5",
+        model_id: "eleven_flash_v2",
         optimize_streaming_latency: 4,
       },
     },

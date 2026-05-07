@@ -112,10 +112,22 @@ Deno.serve({ port: PORT }, async (req) => {
         elWs = new WebSocket(signedUrl);
         elWs.onopen = () => {
           dbg("el-open", "el ws open, sending init");
-          elWs!.send(JSON.stringify({
+          // Strip routing-only params; pass the rest as dynamic variables.
+          const dyn: Record<string, string> = {};
+          for (const [k, v] of Object.entries(customParams)) {
+            if (k === "agent_id" || k === "first_message_override") continue;
+            dyn[k] = v;
+          }
+          const init: any = {
             type: "conversation_initiation_client_data",
-            dynamic_variables: customParams,
-          }));
+            dynamic_variables: dyn,
+          };
+          const fm = customParams.first_message_override;
+          if (fm) {
+            init.conversation_config_override = { agent: { first_message: fm } };
+          }
+          dbg("el-init", "sending init", { dynKeys: Object.keys(dyn), hasFirstMessageOverride: !!fm });
+          elWs!.send(JSON.stringify(init));
         };
         elWs.onmessage = (e) => {
           let m: any;

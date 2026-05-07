@@ -110,18 +110,32 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Phone-call ambience via a self-hosted Twilio <Stream> mixer is currently
-    // not viable: Supabase Edge Functions sit behind Cloudflare, which 502s
-    // Twilio Media Streams' WebSocket upgrade before it ever reaches our
-    // function. Verified in logs: every call shows GET … 502 with no
-    // matching upgrade-request log inside twilio-stream-mixer. Browser test
-    // calls already loop ambience client-side; for phone calls we fall back
-    // to ElevenLabs' register-call bridge so the line works.
+    // Phone-call audio path:
+    //  • If MIXER_HOST is set, point Twilio at our self-hosted Fly mixer which
+    //    bridges to ElevenLabs and mixes the venue ambience under the agent.
+    //  • Otherwise fall back to ElevenLabs' default register-call bridge
+    //    (no ambience, but the line works).
     const callerCtx = await buildCallerContext(sb, agent.venue_id, from);
     const venueName = (await sb.from("venues").select("name").eq("id", agent.venue_id).single()).data?.name || "us";
     let dynamicFirstMessage: string | undefined;
     if (callerCtx.caller_known === "yes" && callerCtx.caller_first_name) {
       dynamicFirstMessage = `Hi ${callerCtx.caller_first_name}, welcome back to ${venueName}. How can I help today?`;
+    }
+
+    const MIXER_HOST = Deno.env.get("MIXER_HOST"); // e.g. "venue-mixer.fly.dev"
+    let twilioXml: string | undefined;
+
+    if (MIXER_HOST) {
+      const wsUrl = `wss://${MIXER_HOST}/?agent_id=${encodeURIComponent(elevenlabsAgentId)}`;
+      const streamParams = [
+        ["caller_first_name", String(callerCtx.caller_first_name || "")],
+        ["caller_known", String(callerCtx.caller_known || "no")],
+        ["venue_name", venueName],
+        ["call_sid", callSid],
+      ]
+        .map(([k, v]) => `<Parameter name="${escapeXml(k)}" value="${escapeXml(v)}"/>`)
+        .join("");
+      twilioXml = `<Connect><Stream url="${escapeXml(wsUrl)}">${streamParams}</Stream></Connect>`;
     }
     let twilioXml: string | undefined;
     try {

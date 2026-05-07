@@ -169,6 +169,7 @@ Deno.serve({ port: PORT }, async (req) => {
               twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: btoa(bin) } }));
               audioToTwilio++;
             }
+            lastAgentFrameAt = Date.now();
           } else if (m.type === "ping") {
             elWs!.send(JSON.stringify({ type: "pong", event_id: m.ping_event?.event_id }));
           } else if (m.type === "interruption") {

@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard, Phone, CalendarDays, BookOpen, Bot, BarChart3,
-  Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map
+  Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map, Workflow
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

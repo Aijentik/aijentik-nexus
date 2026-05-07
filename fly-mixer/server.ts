@@ -6,6 +6,16 @@ import { AMBIENCE_ULAW_BASE64 } from "./ambience-data.ts";
 
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY")!;
 const PORT = Number(Deno.env.get("PORT") ?? 8080);
+const DEBUG_URL = Deno.env.get("DEBUG_URL") ?? "https://ifqizzldcgkttwlltdbo.supabase.co/functions/v1/mixer-debug-log";
+
+function dbg(kind: string, message: string, extra: Record<string, unknown> = {}) {
+  console.log(`[mixer:${kind}] ${message}`, extra);
+  fetch(DEBUG_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, message, ...extra, ts: new Date().toISOString() }),
+  }).catch(() => {});
+}
 
 // Decode looped ambience once at startup (μ-law 8kHz mono).
 const AMBIENCE = Uint8Array.from(atob(AMBIENCE_ULAW_BASE64), (c) => c.charCodeAt(0));
@@ -61,10 +71,12 @@ Deno.serve({ port: PORT }, async (req) => {
   const url = new URL(req.url);
   if (url.pathname === "/health") return new Response("ok");
   if (req.headers.get("upgrade") !== "websocket") {
+    dbg("http", `non-ws hit ${url.pathname}`, { ua: req.headers.get("user-agent") });
     return new Response("venue-mixer up", { status: 200 });
   }
 
   const agentId = url.searchParams.get("agent_id");
+  dbg("ws-upgrade", `incoming ws agent_id=${agentId}`, { url: url.toString() });
   if (!agentId) return new Response("agent_id required", { status: 400 });
 
   const { socket: twilioWs, response } = Deno.upgradeWebSocket(req);
@@ -72,19 +84,29 @@ Deno.serve({ port: PORT }, async (req) => {
   let streamSid: string | null = null;
   let ambienceOffset = 0;
   let customParams: Record<string, string> = {};
+  let firstAgentAudioAt: number | null = null;
+  let mediaFromTwilio = 0;
+  let audioToTwilio = 0;
+  const openedAt = Date.now();
+
+  twilioWs.onopen = () => dbg("ws-open", "twilio ws open");
 
   twilioWs.onmessage = async (ev) => {
     let msg: any;
     try { msg = JSON.parse(ev.data); } catch { return; }
 
-    if (msg.event === "start") {
+    if (msg.event === "connected") {
+      dbg("twilio-connected", "twilio sent connected", { protocol: msg.protocol, version: msg.version });
+    } else if (msg.event === "start") {
       streamSid = msg.start?.streamSid;
       customParams = msg.start?.customParameters || {};
-      console.log("[mixer] twilio start", { streamSid, customParams });
+      dbg("twilio-start", `streamSid=${streamSid}`, { customParams, mediaFormat: msg.start?.mediaFormat });
       try {
         const signedUrl = await getSignedUrl(agentId);
+        dbg("el-signed-url", "got signed url");
         elWs = new WebSocket(signedUrl);
         elWs.onopen = () => {
+          dbg("el-open", "el ws open, sending init");
           elWs!.send(JSON.stringify({
             type: "conversation_initiation_client_data",
             dynamic_variables: customParams,
@@ -96,34 +118,50 @@ Deno.serve({ port: PORT }, async (req) => {
           if (m.type === "audio") {
             const b64 = m.audio_event?.audio_base_64 || m.audio?.chunk;
             if (!b64 || !streamSid) return;
+            if (firstAgentAudioAt === null) {
+              firstAgentAudioAt = Date.now();
+              dbg("first-audio", `first agent audio after ${firstAgentAudioAt - openedAt}ms`);
+            }
             const agentBytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
             const { mixed, nextOffset } = mixFrame(agentBytes, ambienceOffset);
             ambienceOffset = nextOffset;
             const mixedB64 = btoa(String.fromCharCode(...mixed));
             twilioWs.send(JSON.stringify({ event: "media", streamSid, media: { payload: mixedB64 } }));
+            audioToTwilio++;
           } else if (m.type === "ping") {
             elWs!.send(JSON.stringify({ type: "pong", event_id: m.ping_event?.event_id }));
           } else if (m.type === "interruption") {
             if (streamSid) twilioWs.send(JSON.stringify({ event: "clear", streamSid }));
+          } else if (m.type === "conversation_initiation_metadata") {
+            dbg("el-init-meta", "el init metadata received");
           }
         };
-        elWs.onerror = (e) => console.error("[mixer] el error", e);
-        elWs.onclose = () => { try { twilioWs.close(); } catch {} };
+        elWs.onerror = (e) => dbg("el-error", "el ws error", { err: String((e as any)?.message || e) });
+        elWs.onclose = (e) => {
+          dbg("el-close", `el closed code=${e.code}`, { reason: e.reason, mediaFromTwilio, audioToTwilio });
+          try { twilioWs.close(); } catch {}
+        };
       } catch (e) {
-        console.error("[mixer] el connect failed", e);
+        dbg("el-connect-failed", String(e));
         try { twilioWs.close(); } catch {}
       }
     } else if (msg.event === "media") {
+      mediaFromTwilio++;
+      if (mediaFromTwilio === 1) dbg("first-twilio-media", "got first media frame from twilio");
       if (elWs?.readyState === WebSocket.OPEN) {
         elWs.send(JSON.stringify({ user_audio_chunk: msg.media.payload }));
       }
     } else if (msg.event === "stop") {
+      dbg("twilio-stop", "twilio sent stop", { mediaFromTwilio, audioToTwilio });
       try { elWs?.close(); } catch {}
     }
   };
 
-  twilioWs.onclose = () => { try { elWs?.close(); } catch {} };
-  twilioWs.onerror = (e) => console.error("[mixer] twilio error", e);
+  twilioWs.onclose = (e) => {
+    dbg("twilio-close", `twilio ws closed code=${e.code}`, { reason: e.reason, mediaFromTwilio, audioToTwilio, durationMs: Date.now() - openedAt });
+    try { elWs?.close(); } catch {}
+  };
+  twilioWs.onerror = (e) => dbg("twilio-error", "twilio ws error", { err: String((e as any)?.message || e) });
 
   return response;
 });

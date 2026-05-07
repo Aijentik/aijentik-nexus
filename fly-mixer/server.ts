@@ -200,6 +200,7 @@ Deno.serve({ port: PORT }, async (req) => {
   };
 
   twilioWs.onclose = (e) => {
+    clearInterval(ambienceTimer);
     dbg("twilio-close", `twilio ws closed code=${e.code}`, { reason: e.reason, mediaFromTwilio, audioToTwilio, durationMs: Date.now() - openedAt });
     try { elWs?.close(); } catch {}
   };

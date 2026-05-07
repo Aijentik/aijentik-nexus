@@ -126,8 +126,9 @@ Deno.serve(async (req) => {
     let twilioXml: string | undefined;
 
     if (MIXER_HOST) {
-      const wsUrl = `wss://${MIXER_HOST}/?agent_id=${encodeURIComponent(elevenlabsAgentId)}`;
+      const wsUrl = `wss://${MIXER_HOST}/`;
       const streamParams = [
+        ["agent_id", String(elevenlabsAgentId)],
         ["caller_first_name", String(callerCtx.caller_first_name || "")],
         ["caller_known", String(callerCtx.caller_known || "no")],
         ["venue_name", venueName],

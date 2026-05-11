@@ -51,16 +51,19 @@ export default function Dashboard() {
         title={`Hello, ${venue?.name}`}
         subtitle="Your operating layer is awake. Bookings, calls, agents and revenue are flowing in real time."
         actions={
-          <Link to="/app/voice">
-            <Button size="lg" className="relative overflow-hidden bg-gradient-to-r from-primary via-primary to-accent text-primary-foreground
-              shadow-[0_12px_40px_-12px_hsl(var(--primary)/0.7),0_1px_0_hsl(36_100%_90%_/_0.25)_inset]
-              hover:shadow-[0_16px_50px_-12px_hsl(var(--primary)/0.85),0_1px_0_hsl(36_100%_90%_/_0.3)_inset]
-              transition-all duration-300 border border-primary/40 px-5 h-11 font-medium">
-              <span className="absolute inset-0 stream-line" />
-              <Mic className="h-4 w-4 mr-2 relative" />
-              <span className="relative">Talk to your agent</span>
-            </Button>
-          </Link>
+          <div data-demo="overview-hero" className="flex items-center gap-3">
+            <LaunchDemoButton />
+            <Link to="/app/voice">
+              <Button size="lg" className="relative overflow-hidden bg-gradient-to-r from-primary via-primary to-accent text-primary-foreground
+                shadow-[0_12px_40px_-12px_hsl(var(--primary)/0.7),0_1px_0_hsl(36_100%_90%_/_0.25)_inset]
+                hover:shadow-[0_16px_50px_-12px_hsl(var(--primary)/0.85),0_1px_0_hsl(36_100%_90%_/_0.3)_inset]
+                transition-all duration-300 border border-primary/40 px-5 h-11 font-medium">
+                <span className="absolute inset-0 stream-line" />
+                <Mic className="h-4 w-4 mr-2 relative" />
+                <span className="relative">Talk to your agent</span>
+              </Button>
+            </Link>
+          </div>
         }
       />
 

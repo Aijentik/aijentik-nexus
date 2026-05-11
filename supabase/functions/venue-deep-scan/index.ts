@@ -127,8 +127,8 @@ async function extractWithAI(payload: any) {
     body: JSON.stringify({
       model: "google/gemini-2.5-flash",
       messages: [
-        { role: "system", content: "You are a hospitality intelligence engine. Extract a complete operational profile from raw website text. Be precise. Do not invent facts — leave fields empty if not present. Always reply via the build_venue_profile tool." },
-        { role: "user", content: `Build a structured profile for this venue.\n\nDETECTED PLATFORMS: ${JSON.stringify(payload.platforms)}\n\nPAGES:\n${payload.pages.map((p: any) => `--- ${p.kind.toUpperCase()} (${p.url}) ---\n${p.text}`).join("\n\n").slice(0, 28000)}` },
+        { role: "system", content: "You are a hospitality intelligence engine. Extract a complete operational profile from raw website text. Be precise. Do not invent facts — leave fields empty if not present. For menu_items, extract every distinct dish/drink you can find with name, short description, and price exactly as written. When IMAGE_CANDIDATES are provided, match the most relevant image url to each item by comparing the dish name to the image alt text and surrounding text — set image_url only when confident. Always reply via the build_venue_profile tool." },
+        { role: "user", content: `Build a structured profile for this venue.\n\nDETECTED PLATFORMS: ${JSON.stringify(payload.platforms)}\n\nIMAGE_CANDIDATES (use to attach photos to menu_items):\n${JSON.stringify(payload.images || []).slice(0, 6000)}\n\nPAGES:\n${payload.pages.map((p: any) => `--- ${p.kind.toUpperCase()} (${p.url}) ---\n${p.text}`).join("\n\n").slice(0, 26000)}` },
       ],
       tools: [{
         type: "function",

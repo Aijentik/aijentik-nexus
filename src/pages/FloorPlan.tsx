@@ -142,14 +142,14 @@ export default function FloorPlan() {
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
           onClick={(e) => e.target === e.currentTarget && setSelected(null)}
-          className="relative glass rounded-2xl min-h-[640px] overflow-hidden grid-bg cursor-default"
+          className="relative card-cine min-h-[640px] overflow-hidden grid-bg cursor-default"
         >
           <div className="absolute top-3 left-3 text-[11px] uppercase tracking-wider text-muted-foreground bg-background/70 backdrop-blur px-2.5 py-1 rounded-full border border-white/10">
             {tables.length} tables · {totalSeats} seats
           </div>
           {tables.length === 0 && (
             <div className="absolute inset-0 grid place-items-center">
-              <div className="text-center max-w-sm glass-strong rounded-2xl p-8">
+              <div className="text-center max-w-sm card-cine p-8">
                 <Sparkles className="h-8 w-8 text-primary mx-auto mb-3" />
                 <div className="font-medium mb-1">No tables yet</div>
                 <div className="text-sm text-muted-foreground mb-4">Drop in a demo layout to see your AI seating engine in action.</div>
@@ -181,7 +181,7 @@ export default function FloorPlan() {
           ))}
         </div>
 
-        <div className="glass rounded-2xl p-5 space-y-4 h-fit sticky top-4">
+        <div className="card-cine p-5 space-y-4 h-fit sticky top-4">
           {sel ? (
             <>
               <div className="text-xs uppercase tracking-wider text-muted-foreground">Editing</div>

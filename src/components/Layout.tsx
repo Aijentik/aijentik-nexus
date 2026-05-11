@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Sidebar } from "./Sidebar";
 import { FloatingBrain } from "./FloatingBrain";
 import { StaffCopilot } from "./StaffCopilot";
+import { VenueClock } from "./VenueClock";
 import { motion } from "framer-motion";
 
 export function ProtectedLayout() {
@@ -33,17 +34,23 @@ export function ProtectedLayout() {
 }
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+  const { venue } = useAuth();
   return (
-    <div className="flex items-end justify-between gap-4 mb-8">
-      <div className="space-y-2">
+    <div className="mb-8 space-y-5">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
           <span className="pulse-amber" />
           <span className="label-micro">Aijentik · Live</span>
         </div>
-        <h1 className="text-3xl md:text-[42px] font-semibold tracking-tight leading-[1.05]">{title}</h1>
-        {subtitle && <p className="text-[15px] text-muted-foreground max-w-2xl">{subtitle}</p>}
+        <VenueClock venueName={venue?.name} />
       </div>
-      {actions && <div className="shrink-0">{actions}</div>}
+      <div className="flex items-end justify-between gap-4">
+        <div className="space-y-2">
+          <h1 className="text-3xl md:text-[42px] font-semibold tracking-tight leading-[1.05]">{title}</h1>
+          {subtitle && <p className="text-[15px] text-muted-foreground max-w-2xl">{subtitle}</p>}
+        </div>
+        {actions && <div className="shrink-0">{actions}</div>}
+      </div>
     </div>
   );
 }

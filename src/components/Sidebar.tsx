@@ -3,12 +3,13 @@ import { useAuth } from "@/lib/auth";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard, Phone, CalendarDays, BookOpen, Bot, BarChart3,
-  Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map, Workflow, ChevronDown
+  Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map, Workflow, ChevronDown, Radio
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { to: "/app", label: "Overview", icon: LayoutDashboard },
+  { to: "/app/live", label: "Venue Live", icon: Radio },
   { to: "/app/voice", label: "Live Voice", icon: Mic },
   { to: "/app/brain", label: "Live Brain", icon: Brain },
   { to: "/app/flow", label: "Flow Studio", icon: Workflow },

@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import VoiceLive from "./pages/VoiceLive";
+import VenueLive from "./pages/VenueLive";
 import FloorPlan from "./pages/FloorPlan";
 import NewFloorPlan from "./pages/NewFloorPlan";
 import LiveBrain from "./pages/LiveBrain";
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/app" element={<ProtectedLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="voice" element={<VoiceLive />} />
+              <Route path="live" element={<VenueLive />} />
               <Route path="brain" element={<LiveBrain />} />
               <Route path="flow" element={<FlowStudio />} />
               <Route path="diary" element={<Diary />} />

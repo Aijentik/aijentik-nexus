@@ -396,6 +396,54 @@ export type Database = {
           },
         ]
       }
+      menu_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          image_source: string | null
+          image_url: string | null
+          name: string
+          position: number
+          price: string | null
+          section: string
+          source_url: string | null
+          tags: string[] | null
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_source?: string | null
+          image_url?: string | null
+          name: string
+          position?: number
+          price?: string | null
+          section?: string
+          source_url?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_source?: string | null
+          image_url?: string | null
+          name?: string
+          position?: number
+          price?: string | null
+          section?: string
+          source_url?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           body: string

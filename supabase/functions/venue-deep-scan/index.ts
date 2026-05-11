@@ -99,6 +99,27 @@ async function fetchPage(url: string, timeoutMs = 12000): Promise<{ html: string
   } catch { return null; }
 }
 
+// Extract <img> tags + nearby text from raw HTML so the AI can pair dishes with photos.
+function extractImageCandidates(html: string, base: string): { url: string; alt: string; nearby: string }[] {
+  const out: { url: string; alt: string; nearby: string }[] = [];
+  const re = /<img[^>]+>/gi;
+  let m;
+  while ((m = re.exec(html)) && out.length < 60) {
+    const tag = m[0];
+    const srcM = tag.match(/(?:data-src|src)=["']([^"']+)["']/i);
+    if (!srcM) continue;
+    const abs = absolutize(srcM[1], base);
+    if (!abs) continue;
+    if (/sprite|icon|logo|favicon|pixel|spacer|placeholder|\.svg(\?|$)/i.test(abs)) continue;
+    const altM = tag.match(/alt=["']([^"']+)["']/i);
+    const start = Math.max(0, m.index - 240);
+    const end = Math.min(html.length, m.index + tag.length + 240);
+    const nearby = strip(html.slice(start, end)).slice(0, 280);
+    out.push({ url: abs, alt: altM?.[1] || "", nearby });
+  }
+  return out;
+}
+
 async function extractWithAI(payload: any) {
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -106,8 +127,8 @@ async function extractWithAI(payload: any) {
     body: JSON.stringify({
       model: "google/gemini-2.5-flash",
       messages: [
-        { role: "system", content: "You are a hospitality intelligence engine. Extract a complete operational profile from raw website text. Be precise. Do not invent facts — leave fields empty if not present. Always reply via the build_venue_profile tool." },
-        { role: "user", content: `Build a structured profile for this venue.\n\nDETECTED PLATFORMS: ${JSON.stringify(payload.platforms)}\n\nPAGES:\n${payload.pages.map((p: any) => `--- ${p.kind.toUpperCase()} (${p.url}) ---\n${p.text}`).join("\n\n").slice(0, 28000)}` },
+        { role: "system", content: "You are a hospitality intelligence engine. Extract a complete operational profile from raw website text. Be precise. Do not invent facts — leave fields empty if not present. For menu_items, extract every distinct dish/drink you can find with name, short description, and price exactly as written. When IMAGE_CANDIDATES are provided, match the most relevant image url to each item by comparing the dish name to the image alt text and surrounding text — set image_url only when confident. Always reply via the build_venue_profile tool." },
+        { role: "user", content: `Build a structured profile for this venue.\n\nDETECTED PLATFORMS: ${JSON.stringify(payload.platforms)}\n\nIMAGE_CANDIDATES (use to attach photos to menu_items):\n${JSON.stringify(payload.images || []).slice(0, 6000)}\n\nPAGES:\n${payload.pages.map((p: any) => `--- ${p.kind.toUpperCase()} (${p.url}) ---\n${p.text}`).join("\n\n").slice(0, 26000)}` },
       ],
       tools: [{
         type: "function",
@@ -139,6 +160,22 @@ async function extractWithAI(payload: any) {
                 },
               },
               signature_dishes: { type: "array", items: { type: "string" } },
+              menu_items: {
+                type: "array",
+                description: "Every distinct menu item discovered on the menu/food/drinks pages. Include dishes AND drinks. Up to 80.",
+                items: {
+                  type: "object",
+                  required: ["name", "section"],
+                  properties: {
+                    name: { type: "string" },
+                    description: { type: "string", description: "1-line description as written or summarised" },
+                    price: { type: "string", description: "Price exactly as written, e.g. £14.50 or $22" },
+                    section: { type: "string", description: "Menu section: starters, mains, desserts, sides, drinks, cocktails, wine, beer, brunch, kids, specials" },
+                    image_url: { type: "string", description: "Absolute URL of a matching photo from IMAGE_CANDIDATES — only if confident" },
+                    tags: { type: "array", items: { type: "string" }, description: "vegan, gf, spicy, signature, etc" },
+                  },
+                },
+              },
               dress_code: { type: "string" },
               dietary_options: { type: "array", items: { type: "string" } },
               policies: {
@@ -245,6 +282,7 @@ Deno.serve(async (req) => {
         const pages: { url: string; kind: string; text: string }[] = [
           { url: startUrl, kind: "home", text: strip(home.html).slice(0, 6000) },
         ];
+        const images: { url: string; alt: string; nearby: string }[] = [];
 
         for (const [kind, link] of buckets) {
           send({ stage: "page", message: `Reading ${kind} page…`, kind, url: link });
@@ -254,7 +292,14 @@ Deno.serve(async (req) => {
             pages.push({ url: link, kind, text });
             const more = detectPlatforms(p.html);
             for (const m of more) if (!platforms.find((x) => x.id === m.id)) platforms.push(m);
-            send({ stage: "page", message: `${kind} captured (${text.length} chars).`, kind, url: link, ok: true });
+            // Harvest image candidates from menu/food pages so AI can pair photos to dishes
+            if (kind === "menu") {
+              const cands = extractImageCandidates(p.html, link);
+              for (const c of cands) images.push(c);
+              send({ stage: "page", message: `Found ${cands.length} dish photos on menu.`, kind, url: link, ok: true });
+            } else {
+              send({ stage: "page", message: `${kind} captured (${text.length} chars).`, kind, url: link, ok: true });
+            }
           } else {
             send({ stage: "page", message: `${kind} page unreachable.`, kind, url: link, ok: false });
           }
@@ -263,9 +308,11 @@ Deno.serve(async (req) => {
         if (platforms.length) send({ stage: "platforms", message: "Platform scan complete.", platforms });
 
         send({ stage: "ai", message: "Extracting brand voice, menu, policies & gaps…" });
-        const profile = await extractWithAI({ pages, platforms });
+        const profile = await extractWithAI({ pages, platforms, images: images.slice(0, 50) });
         profile.source_url = startUrl;
         profile.detected_platforms = platforms;
+        const mi = (profile.menu_items || []).length;
+        if (mi) send({ stage: "menu", message: `Imported ${mi} menu items.`, count: mi });
         send({ stage: "ai", message: "Profile compiled.", ok: true });
         send({ stage: "complete", message: "Scan complete.", profile });
       } catch (e) {

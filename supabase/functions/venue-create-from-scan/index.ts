@@ -56,6 +56,23 @@ Deno.serve(async (req) => {
     }));
     if (polEntries.length) await sb.from("knowledge_base").insert(polEntries);
 
+    // Persist menu items
+    const items = (profile.menu_items || []) as any[];
+    if (items.length) {
+      await sb.from("menu_items").insert(items.slice(0, 120).map((m, i) => ({
+        venue_id: venue.id,
+        name: m.name,
+        description: m.description || null,
+        price: m.price || null,
+        section: (m.section || "mains").toLowerCase(),
+        image_url: m.image_url || null,
+        image_source: m.image_url ? "scraped" : null,
+        source_url: profile.source_url || null,
+        tags: Array.isArray(m.tags) ? m.tags : [],
+        position: i,
+      })));
+    }
+
     await sb.from("agents").insert([
       { venue_id: venue.id, kind: "voice", name: "Voice Host", status: "active", prompt: `Primary phone-answering host for ${venue.name}. Tone: ${profile.brand_voice || "warm and professional"}.` },
       { venue_id: venue.id, kind: "booking", name: "Booking Concierge", status: "active", prompt: "Handles reservation logic & diary." },

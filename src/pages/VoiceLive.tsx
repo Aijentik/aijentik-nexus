@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Loader2, Phone, PhoneOff, ExternalLink, AlertTriangle } from "lucide-react";
+import { Mic, MicOff, Loader2, Phone, PhoneOff, ExternalLink, AlertTriangle, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 

@@ -282,6 +282,7 @@ Deno.serve(async (req) => {
         const pages: { url: string; kind: string; text: string }[] = [
           { url: startUrl, kind: "home", text: strip(home.html).slice(0, 6000) },
         ];
+        const images: { url: string; alt: string; nearby: string }[] = [];
 
         for (const [kind, link] of buckets) {
           send({ stage: "page", message: `Reading ${kind} page…`, kind, url: link });
@@ -291,7 +292,14 @@ Deno.serve(async (req) => {
             pages.push({ url: link, kind, text });
             const more = detectPlatforms(p.html);
             for (const m of more) if (!platforms.find((x) => x.id === m.id)) platforms.push(m);
-            send({ stage: "page", message: `${kind} captured (${text.length} chars).`, kind, url: link, ok: true });
+            // Harvest image candidates from menu/food pages so AI can pair photos to dishes
+            if (kind === "menu") {
+              const cands = extractImageCandidates(p.html, link);
+              for (const c of cands) images.push(c);
+              send({ stage: "page", message: `Found ${cands.length} dish photos on menu.`, kind, url: link, ok: true });
+            } else {
+              send({ stage: "page", message: `${kind} captured (${text.length} chars).`, kind, url: link, ok: true });
+            }
           } else {
             send({ stage: "page", message: `${kind} page unreachable.`, kind, url: link, ok: false });
           }
@@ -300,9 +308,11 @@ Deno.serve(async (req) => {
         if (platforms.length) send({ stage: "platforms", message: "Platform scan complete.", platforms });
 
         send({ stage: "ai", message: "Extracting brand voice, menu, policies & gaps…" });
-        const profile = await extractWithAI({ pages, platforms });
+        const profile = await extractWithAI({ pages, platforms, images: images.slice(0, 50) });
         profile.source_url = startUrl;
         profile.detected_platforms = platforms;
+        const mi = (profile.menu_items || []).length;
+        if (mi) send({ stage: "menu", message: `Imported ${mi} menu items.`, count: mi });
         send({ stage: "ai", message: "Profile compiled.", ok: true });
         send({ stage: "complete", message: "Scan complete.", profile });
       } catch (e) {

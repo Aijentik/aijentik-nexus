@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Sidebar } from "./Sidebar";
 import { FloatingBrain } from "./FloatingBrain";
 import { StaffCopilot } from "./StaffCopilot";
+import { VenueClock } from "./VenueClock";
 import { motion } from "framer-motion";
 
 export function ProtectedLayout() {

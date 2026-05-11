@@ -6,3 +6,6 @@ verify_jwt = false
 [functions.mixer-debug-log]
 verify_jwt = false
 
+[functions.venue-deep-scan]
+verify_jwt = false
+

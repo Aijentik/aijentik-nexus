@@ -37,30 +37,33 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="/app" element={<ProtectedLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="voice" element={<VoiceLive />} />
-              <Route path="live" element={<VenueLive />} />
-              <Route path="brain" element={<LiveBrain />} />
-              <Route path="flow" element={<FlowStudio />} />
-              <Route path="diary" element={<Diary />} />
-              <Route path="floor" element={<FloorPlan />} />
-              <Route path="floor/new" element={<NewFloorPlan />} />
-              <Route path="calls" element={<Calls />} />
-              <Route path="agents" element={<Agents />} />
-              <Route path="knowledge" element={<Knowledge />} />
-              <Route path="messages" element={<Messages />} />
-              <Route path="insights" element={<Insights />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="integrations" element={<Integrations />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <DemoTourProvider>
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/app" element={<ProtectedLayout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="voice" element={<VoiceLive />} />
+                <Route path="live" element={<VenueLive />} />
+                <Route path="brain" element={<LiveBrain />} />
+                <Route path="flow" element={<FlowStudio />} />
+                <Route path="diary" element={<Diary />} />
+                <Route path="floor" element={<FloorPlan />} />
+                <Route path="floor/new" element={<NewFloorPlan />} />
+                <Route path="calls" element={<Calls />} />
+                <Route path="agents" element={<Agents />} />
+                <Route path="knowledge" element={<Knowledge />} />
+                <Route path="messages" element={<Messages />} />
+                <Route path="insights" element={<Insights />} />
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="integrations" element={<Integrations />} />
+                <Route path="settings" element={<Settings />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <DemoController />
+          </DemoTourProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

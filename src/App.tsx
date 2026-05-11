@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import VoiceLive from "./pages/VoiceLive";
+import VenueLive from "./pages/VenueLive";
 import FloorPlan from "./pages/FloorPlan";
 import NewFloorPlan from "./pages/NewFloorPlan";
 import LiveBrain from "./pages/LiveBrain";

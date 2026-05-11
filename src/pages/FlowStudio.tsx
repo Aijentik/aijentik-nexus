@@ -358,7 +358,7 @@ export default function FlowStudio() {
   return (
     <div className="fixed inset-0 left-64 flex flex-col bg-background text-foreground z-10">
       {/* TOP BAR */}
-      <header className="h-14 shrink-0 glass-strong border-b border-white/5 flex items-center gap-3 px-4 z-20">
+      <header className="h-14 shrink-0 bg-[hsl(28_18%_6%/0.85)] backdrop-blur-2xl border-b border-white/[0.05] flex items-center gap-3 px-4 z-20">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent grid place-items-center">
             <WorkflowIcon className="h-4 w-4 text-primary-foreground" />
@@ -408,7 +408,7 @@ export default function FlowStudio() {
 
       <div className="flex-1 flex min-h-0">
         {/* LEFT PANEL */}
-        <aside className="w-72 shrink-0 glass border-r border-white/5 flex flex-col">
+        <aside className="w-72 shrink-0 bg-[hsl(28_22%_4%/0.7)] backdrop-blur-xl border-r border-white/[0.05] flex flex-col">
           <div className="p-3 border-b border-white/5">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -516,7 +516,7 @@ export default function FlowStudio() {
 
           {/* Live event trail */}
           {eventLog.length > 0 && (
-            <div className="absolute bottom-4 left-4 z-10 w-80 max-h-64 overflow-y-auto glass-strong rounded-xl border border-white/10 p-3">
+            <div className="absolute bottom-4 left-4 z-10 w-80 max-h-64 overflow-y-auto card-cine border border-white/10 p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground flex items-center gap-1.5">
                   <Zap className="h-3 w-3 text-amber-400" /> Live event trail
@@ -545,7 +545,7 @@ export default function FlowStudio() {
         </main>
 
         {/* RIGHT CONFIG PANEL */}
-        <aside className="w-80 shrink-0 glass border-l border-white/5 overflow-y-auto">
+        <aside className="w-80 shrink-0 bg-[hsl(28_22%_4%/0.7)] backdrop-blur-xl border-l border-white/[0.05] overflow-y-auto">
           {!selected ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
               <div className="h-12 w-12 mx-auto mb-3 rounded-2xl bg-secondary/40 grid place-items-center">

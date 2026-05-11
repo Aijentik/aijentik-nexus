@@ -164,7 +164,7 @@ export default function Knowledge() {
 
       {tab === "knowledge" && (
         <>
-          <div className="glass rounded-2xl p-4 mb-6 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+          <div className="card-cine p-4 mb-6 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
             <Globe className="h-4 w-4 text-primary shrink-0 ml-1" />
             <Input value={scrapeUrl} onChange={e => setScrapeUrl(e.target.value)} placeholder="https://your-venue.com — auto-import menu, hours, FAQs" className="flex-1" />
             <Button onClick={scrape} disabled={scraping || !scrapeUrl} className="bg-primary text-primary-foreground">
@@ -179,7 +179,7 @@ export default function Knowledge() {
             {Object.entries(grouped).map(([cat, ks]: any) => (
               <div key={cat}>
                 <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{cat}</div>
-                <div className="glass rounded-2xl divide-y divide-white/5">
+                <div className="card-cine divide-y divide-white/5">
                   {ks.map((k: any) => (
                     <div key={k.id} className="p-4 flex items-start gap-3 hover:bg-secondary/30">
                       <div className="flex-1 min-w-0">
@@ -192,7 +192,7 @@ export default function Knowledge() {
                 </div>
               </div>
             ))}
-            {items.length === 0 && <div className="glass rounded-2xl p-12 text-center text-muted-foreground">No knowledge yet.</div>}
+            {items.length === 0 && <div className="card-cine p-12 text-center text-muted-foreground">No knowledge yet.</div>}
           </div>
         </>
       )}
@@ -200,7 +200,7 @@ export default function Knowledge() {
       {tab === "menu" && (
         <div className="space-y-8">
           {menu.length === 0 && (
-            <div className="glass rounded-2xl p-12 text-center">
+            <div className="card-cine p-12 text-center">
               <UtensilsCrossed className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
               <div className="font-medium mb-1">No menu items yet</div>
               <div className="text-sm text-muted-foreground">Items appear here automatically when a venue is scanned, or add them manually.</div>

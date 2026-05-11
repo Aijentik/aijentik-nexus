@@ -99,6 +99,27 @@ async function fetchPage(url: string, timeoutMs = 12000): Promise<{ html: string
   } catch { return null; }
 }
 
+// Extract <img> tags + nearby text from raw HTML so the AI can pair dishes with photos.
+function extractImageCandidates(html: string, base: string): { url: string; alt: string; nearby: string }[] {
+  const out: { url: string; alt: string; nearby: string }[] = [];
+  const re = /<img[^>]+>/gi;
+  let m;
+  while ((m = re.exec(html)) && out.length < 60) {
+    const tag = m[0];
+    const srcM = tag.match(/(?:data-src|src)=["']([^"']+)["']/i);
+    if (!srcM) continue;
+    const abs = absolutize(srcM[1], base);
+    if (!abs) continue;
+    if (/sprite|icon|logo|favicon|pixel|spacer|placeholder|\.svg(\?|$)/i.test(abs)) continue;
+    const altM = tag.match(/alt=["']([^"']+)["']/i);
+    const start = Math.max(0, m.index - 240);
+    const end = Math.min(html.length, m.index + tag.length + 240);
+    const nearby = strip(html.slice(start, end)).slice(0, 280);
+    out.push({ url: abs, alt: altM?.[1] || "", nearby });
+  }
+  return out;
+}
+
 async function extractWithAI(payload: any) {
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",

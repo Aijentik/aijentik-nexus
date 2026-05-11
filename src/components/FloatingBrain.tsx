@@ -84,7 +84,7 @@ export function FloatingBrain() {
         onClick={() => setOpen(o => !o)}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.94 }}
-        className="fixed top-5 right-5 z-50 h-14 w-14 rounded-full grid place-items-center group"
+        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full grid place-items-center group"
         style={{
           background: "radial-gradient(circle at 35% 30%, hsl(38 100% 78%), hsl(32 96% 58%) 50%, hsl(22 88% 42%))",
           boxShadow: "0 0 50px hsl(var(--primary) / 0.6), 0 1px 0 hsl(36 100% 95% / 0.4) inset, 0 12px 32px -8px hsl(0 0% 0% / 0.6)",

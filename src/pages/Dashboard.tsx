@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Phone, CalendarDays, Users, Sparkles, ArrowUpRight, Mic, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { LaunchDemoButton } from "@/components/demo/LaunchDemoButton";
 import { format } from "date-fns";
 
 export default function Dashboard() {

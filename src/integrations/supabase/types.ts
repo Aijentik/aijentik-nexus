@@ -320,29 +320,94 @@ export type Database = {
           },
         ]
       }
-      integrations: {
+      integration_events: {
         Row: {
-          config: Json | null
-          connected: boolean | null
           created_at: string
           id: string
+          integration_id: string | null
+          message: string | null
+          payload: Json
           provider: string
+          status: string
+          type: string
           venue_id: string
         }
         Insert: {
-          config?: Json | null
-          connected?: boolean | null
           created_at?: string
           id?: string
+          integration_id?: string | null
+          message?: string | null
+          payload?: Json
           provider: string
+          status?: string
+          type: string
           venue_id: string
         }
         Update: {
+          created_at?: string
+          id?: string
+          integration_id?: string | null
+          message?: string | null
+          payload?: Json
+          provider?: string
+          status?: string
+          type?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_events_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integrations: {
+        Row: {
+          auth_type: string | null
+          config: Json | null
+          connected: boolean | null
+          created_at: string
+          enabled_modules: Json
+          error_message: string | null
+          id: string
+          last_sync_at: string | null
+          provider: string
+          status: string
+          sync_health: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          auth_type?: string | null
           config?: Json | null
           connected?: boolean | null
           created_at?: string
+          enabled_modules?: Json
+          error_message?: string | null
           id?: string
+          last_sync_at?: string | null
+          provider: string
+          status?: string
+          sync_health?: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          auth_type?: string | null
+          config?: Json | null
+          connected?: boolean | null
+          created_at?: string
+          enabled_modules?: Json
+          error_message?: string | null
+          id?: string
+          last_sync_at?: string | null
           provider?: string
+          status?: string
+          sync_health?: string
+          updated_at?: string
           venue_id?: string
         }
         Relationships: [
@@ -571,6 +636,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      sync_logs: {
+        Row: {
+          created_at: string
+          direction: string
+          id: string
+          integration_id: string | null
+          message: string | null
+          provider: string
+          records_count: number
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          direction?: string
+          id?: string
+          integration_id?: string | null
+          message?: string | null
+          provider: string
+          records_count?: number
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          id?: string
+          integration_id?: string | null
+          message?: string | null
+          provider?: string
+          records_count?: number
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_logs_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tables: {
         Row: {

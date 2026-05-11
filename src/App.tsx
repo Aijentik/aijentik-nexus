@@ -25,6 +25,8 @@ import Analytics from "./pages/Analytics";
 import Integrations from "./pages/Integrations";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import { DemoTourProvider } from "@/lib/demo/DemoTourProvider";
+import { DemoController } from "@/components/demo/DemoController";
 
 const queryClient = new QueryClient();
 

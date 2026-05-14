@@ -124,7 +124,7 @@ function PhoneCallUI() {
       <div style={{ width: 14, height: 14, borderRadius: 20, background: C.green, boxShadow: "0 0 26px rgba(67,209,139,.82)", transform: `scale(${1 + Math.max(0, ring) / 18})` }} />
     </div>
     <div style={{ padding: 26, borderRadius: 34, background: "rgba(255,255,255,.045)", border: "1px solid rgba(255,255,255,.08)" }}>
-      <div style={{ fontFamily: display, fontSize: 56, color: C.cream, fontWeight: 900, lineHeight: 1 }}>Sarah M.</div>
+      <div style={{ fontFamily: display, fontSize: 56, color: C.cream, fontWeight: 900, lineHeight: 1 }}>Sarah Mitchell</div>
       <div style={{ fontFamily: body, color: C.amber, fontSize: 22, marginTop: 8, fontWeight: 700 }}>Anniversary dinner · Party of 4</div>
       <div style={{ marginTop: 24, height: 12, borderRadius: 20, background: "rgba(255,255,255,.08)", overflow: "hidden" }}>
         <div style={{ height: "100%", width: `${interpolate(frame, [30, 170], [8, 98], clamp)}%`, background: `linear-gradient(90deg, ${C.copper}, ${C.amber})`, borderRadius: 20 }} />
@@ -255,7 +255,8 @@ function HookScene() {
 
 function VoiceScene() {
   return <AbsoluteFill>
-    <Footage src="footage/phone-reservation-action.mp4" zoom={1.08} />
+    <Footage src="footage/restaurant-energy.mp4" zoom={1.14} opacity={0.55} />
+    <AbsoluteFill style={{ background: "linear-gradient(90deg, rgba(7,5,3,0.78), rgba(7,5,3,0.55) 55%, rgba(7,5,3,0.85))" }} />
     <div style={{ position: "absolute", left: 108, top: 142, width: 720 }}>
       <div style={{ fontFamily: body, color: C.amber, fontSize: 22, fontWeight: 900, letterSpacing: 4, textTransform: "uppercase", opacity: useIn(4, 12) }}>Live voice agent</div>
       <div style={{ fontFamily: display, color: C.cream, fontSize: 105, fontWeight: 900, lineHeight: 0.92, marginTop: 16, opacity: useIn(10, 16), transform: `translateY(${(1-useIn(10,16))*48}px)` }}>Answers instantly. Acts instantly.</div>
@@ -275,21 +276,20 @@ function BookingScene() {
 function ConnectedScene() {
   const frame = useCurrentFrame();
   const lines = [
-    { a: "Voice", b: "understands intent", x: 220, y: 220 },
-    { a: "Bookings", b: "finds the table", x: 1220, y: 210 },
-    { a: "Messages", b: "confirms instantly", x: 250, y: 730 },
-    { a: "Payments", b: "collects deposits", x: 1230, y: 742 },
-    { a: "Ops Brain", b: "updates the floor", x: 740, y: 475 },
+    { a: "Voice", b: "understands intent", x: 140, y: 360 },
+    { a: "Bookings", b: "finds the table", x: 1462, y: 360 },
+    { a: "Messages", b: "confirms instantly", x: 140, y: 720 },
+    { a: "Payments", b: "collects deposits", x: 1462, y: 720 },
   ];
   return <AbsoluteFill>
     <CinematicBase />
     <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-      {lines.slice(0, 4).map((n, i) => {
+      {lines.map((n, i) => {
         const p = interpolate(frame, [35 + i*10, 75 + i*10], [0, 1], clamp);
-        return <line key={i} x1={960} y1={540} x2={n.x + 125} y2={n.y + 46} stroke={C.amber} strokeWidth="3" strokeOpacity={0.25 * p} strokeDasharray="12 18" />
+        return <line key={i} x1={960} y1={540} x2={n.x + 159} y2={n.y + 46} stroke={C.amber} strokeWidth="3" strokeOpacity={0.25 * p} strokeDasharray="12 18" />
       })}
     </svg>
-    <div style={{ position: "absolute", left: 690, top: 312, width: 540, height: 460, borderRadius: 999, background: "radial-gradient(circle, rgba(255,195,107,.25), rgba(232,139,53,.08) 48%, transparent 70%)", display: "grid", placeItems: "center", transform: `scale(${0.92 + Math.sin(frame/24)*0.025})`, boxShadow: "0 0 110px rgba(232,139,53,.18)" }}>
+    <div style={{ position: "absolute", left: 760, top: 380, width: 400, height: 320, borderRadius: 999, background: "radial-gradient(circle, rgba(255,195,107,.25), rgba(232,139,53,.08) 48%, transparent 70%)", display: "grid", placeItems: "center", transform: `scale(${0.92 + Math.sin(frame/24)*0.025})`, boxShadow: "0 0 110px rgba(232,139,53,.18)" }}>
       <LogoLockup />
     </div>
     {lines.map((n, i) => {
@@ -299,7 +299,7 @@ function ConnectedScene() {
         <div style={{ fontFamily: body, color: C.amber, fontSize: 20, fontWeight: 750, marginTop: 4 }}>{n.b}</div>
       </div>
     })}
-    <div style={{ position: "absolute", left: 128, top: 72, width: 1000, fontFamily: display, color: C.cream, fontSize: 88, fontWeight: 900, lineHeight: .92, opacity: useIn(0, 16) }}>Not five tools. One living operating system.</div>
+    <div style={{ position: "absolute", left: 0, right: 0, top: 130, textAlign: "center", fontFamily: display, color: C.cream, fontSize: 64, fontWeight: 900, lineHeight: .96, opacity: useIn(0, 16), padding: "0 160px" }}>Not five tools. One living operating system.</div>
   </AbsoluteFill>;
 }
 

@@ -124,7 +124,7 @@ function PhoneCallUI() {
       <div style={{ width: 14, height: 14, borderRadius: 20, background: C.green, boxShadow: "0 0 26px rgba(67,209,139,.82)", transform: `scale(${1 + Math.max(0, ring) / 18})` }} />
     </div>
     <div style={{ padding: 26, borderRadius: 34, background: "rgba(255,255,255,.045)", border: "1px solid rgba(255,255,255,.08)" }}>
-      <div style={{ fontFamily: display, fontSize: 56, color: C.cream, fontWeight: 900, lineHeight: 1 }}>Sarah M.</div>
+      <div style={{ fontFamily: display, fontSize: 56, color: C.cream, fontWeight: 900, lineHeight: 1 }}>Sarah Mitchell</div>
       <div style={{ fontFamily: body, color: C.amber, fontSize: 22, marginTop: 8, fontWeight: 700 }}>Anniversary dinner · Party of 4</div>
       <div style={{ marginTop: 24, height: 12, borderRadius: 20, background: "rgba(255,255,255,.08)", overflow: "hidden" }}>
         <div style={{ height: "100%", width: `${interpolate(frame, [30, 170], [8, 98], clamp)}%`, background: `linear-gradient(90deg, ${C.copper}, ${C.amber})`, borderRadius: 20 }} />

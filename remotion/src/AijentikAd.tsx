@@ -255,7 +255,8 @@ function HookScene() {
 
 function VoiceScene() {
   return <AbsoluteFill>
-    <Footage src="footage/phone-reservation-action.mp4" zoom={1.08} />
+    <Footage src="footage/restaurant-energy.mp4" zoom={1.14} opacity={0.55} />
+    <AbsoluteFill style={{ background: "linear-gradient(90deg, rgba(7,5,3,0.78), rgba(7,5,3,0.55) 55%, rgba(7,5,3,0.85))" }} />
     <div style={{ position: "absolute", left: 108, top: 142, width: 720 }}>
       <div style={{ fontFamily: body, color: C.amber, fontSize: 22, fontWeight: 900, letterSpacing: 4, textTransform: "uppercase", opacity: useIn(4, 12) }}>Live voice agent</div>
       <div style={{ fontFamily: display, color: C.cream, fontSize: 105, fontWeight: 900, lineHeight: 0.92, marginTop: 16, opacity: useIn(10, 16), transform: `translateY(${(1-useIn(10,16))*48}px)` }}>Answers instantly. Acts instantly.</div>

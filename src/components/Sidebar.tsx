@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Phone, CalendarDays, BookOpen, Bot, BarChart3,
   Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map, Workflow,
-  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight, Mail, Headphones, TrendingUp, ShoppingBag,
+  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight, Mail, Headphones, TrendingUp, ShoppingBag, Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -36,6 +36,7 @@ const SECTIONS: { id: string; title: string; items: Item[] }[] = [
       { to: "/app/floor", label: "Floor Plan", icon: Map },
       { to: "/app/orders", label: "Ordering", icon: ShoppingBag, hero: true, live: true, featureFlag: "ordering" },
       { to: "/app/calls", label: "Calls", icon: Phone },
+      { to: "/app/channels", label: "Channels", icon: Network, hero: true },
       { to: "/app/messages", label: "Messages", icon: MessagesSquare },
       { to: "/app/email", label: "Email AI", icon: Mail, hero: true },
     ],

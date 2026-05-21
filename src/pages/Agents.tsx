@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
-import { Bot, Mic, Calendar, Megaphone, Sparkles, Phone, Copy, Check, Loader2, Settings2, Activity } from "lucide-react";
+import { Bot, Mic, Calendar, Megaphone, Sparkles, Phone, Copy, Check, Loader2, Settings2, Activity, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { AgentConfigDialog } from "@/components/AgentConfigDialog";
+import { AddAgentDialog } from "@/components/AddAgentDialog";
 
 const meta: any = {
   voice:    { icon: Mic,      tag: "Voice Host",    color: "hsl(32 96% 58%)",  desc: "Answers calls, takes bookings" },
@@ -28,6 +29,7 @@ export default function Agents() {
   const [copied, setCopied] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [configAgent, setConfigAgent] = useState<any | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const load = async () => {
     if (!venue) return;
@@ -81,7 +83,12 @@ export default function Agents() {
     <>
       <PageHeader
         title="Your AI workforce"
-        subtitle="Five intelligent agents working in concert. Monitor, configure and route real phone numbers."
+        subtitle="Intelligent agents working in concert. Hire new ones, monitor live activity, route real phone numbers."
+        actions={
+          <Button onClick={() => setAddOpen(true)} className="bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40 shadow-[0_4px_16px_-4px_hsl(var(--primary)/0.5)]">
+            <Plus className="h-4 w-4 mr-1.5" /> Add Agent
+          </Button>
+        }
       />
 
       <div className="card-cine p-5 mb-6">
@@ -200,6 +207,7 @@ export default function Agents() {
       </div>
 
       <AgentConfigDialog agent={configAgent} open={!!configAgent} onOpenChange={(o) => !o && setConfigAgent(null)} onSaved={load} />
+      <AddAgentDialog open={addOpen} onOpenChange={setAddOpen} existingKinds={agents.map(a => a.kind)} onAdded={load} />
     </>
   );
 }

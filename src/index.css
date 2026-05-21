@@ -433,3 +433,14 @@
   100% { transform: scale(1.7); opacity: 0; }
 }
 .animate-ring-out { animation: ring-out 2.4s ease-out infinite; }
+
+/* Print: clean run sheet output */
+@media print {
+  body { background: white !important; color: black !important; }
+  body::before, body::after { display: none !important; }
+  aside, nav, header, [data-sidebar], .print\:hidden { display: none !important; }
+  main, [role="dialog"] { box-shadow: none !important; background: white !important; }
+  [data-radix-popper-content-wrapper] { position: static !important; }
+  .card-cine { border: 1px solid #ddd !important; background: white !important; box-shadow: none !important; }
+  * { color: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

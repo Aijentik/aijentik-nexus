@@ -1,11 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { useDemoTour } from "@/lib/demo/DemoTourProvider";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export function LaunchDemoButton() {
-  const { isEligible, isRunning, start } = useDemoTour();
-  if (!isEligible || isRunning) return null;
+  const { isRunning, seeding, start } = useDemoTour();
+  if (isRunning) return null;
 
   return (
     <motion.div
@@ -27,7 +27,8 @@ export function LaunchDemoButton() {
         }}
       />
       <Button
-        onClick={start}
+        onClick={() => start()}
+        disabled={seeding}
         size="lg"
         variant="outline"
         className="relative h-11 px-5 border-primary/40 bg-background/60 backdrop-blur-md
@@ -35,10 +36,14 @@ export function LaunchDemoButton() {
           shadow-[0_10px_30px_-12px_hsl(var(--primary)/0.55),0_1px_0_hsl(36_100%_90%_/_0.18)_inset]
           transition-all duration-300 group"
       >
-        <Sparkles className="h-4 w-4 mr-2 text-primary group-hover:rotate-12 transition-transform" />
-        <span className="font-medium">Launch Full Demo</span>
+        {seeding ? (
+          <Loader2 className="h-4 w-4 mr-2 text-primary animate-spin" />
+        ) : (
+          <Sparkles className="h-4 w-4 mr-2 text-primary group-hover:rotate-12 transition-transform" />
+        )}
+        <span className="font-medium">{seeding ? "Loading demo venue…" : "Enter Demo Venue"}</span>
         <span className="ml-2 hidden sm:inline text-[11px] tracking-wide text-muted-foreground">
-          Guided product tour
+          {seeding ? "Seeding cinematic data" : "Cinematic sample data + guided tour"}
         </span>
       </Button>
     </motion.div>

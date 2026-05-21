@@ -5,6 +5,7 @@ import { Sidebar } from "./Sidebar";
 import { FloatingBrain } from "./FloatingBrain";
 import { StaffCopilot } from "./StaffCopilot";
 import { AICommandCenter } from "./AICommandCenter";
+import { DemoModeBanner } from "./demo/DemoModeBanner";
 import { VenueClock } from "./VenueClock";
 import { motion } from "framer-motion";
 
@@ -19,6 +20,7 @@ export function ProtectedLayout() {
       <div className="ambient-room" aria-hidden />
       <Sidebar />
       <main className="flex-1 min-w-0 relative z-10">
+        <DemoModeBanner />
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

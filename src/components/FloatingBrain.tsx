@@ -25,6 +25,12 @@ export function FloatingBrain() {
   const [explanations, setExplanations] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("aijentik:open-brain", onOpen);
+    return () => window.removeEventListener("aijentik:open-brain", onOpen);
+  }, []);
+
+  useEffect(() => {
     if (!venue) return;
     let active = true;
     supabase.from("brain_events").select("*").eq("venue_id", venue.id)
@@ -38,9 +44,16 @@ export function FloatingBrain() {
           setEvents(e => [p.new as Event, ...e].slice(0, 60));
           setPulse(true);
           setTimeout(() => setPulse(false), 2500);
+          window.dispatchEvent(new CustomEvent("aijentik:brain-pulse", { detail: { count: 1 } }));
         }).subscribe();
     return () => { active = false; supabase.removeChannel(ch); };
   }, [venue?.id]);
+
+  // Broadcast event count so the unified command center can show a badge.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("aijentik:brain-count", { detail: { count: events.length } }));
+  }, [events.length]);
+
 
   const explain = useCallback(async (ev: Event) => {
     if (explanations[ev.id]) return;

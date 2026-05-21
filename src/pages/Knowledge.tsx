@@ -225,15 +225,28 @@ export default function Knowledge() {
               <div key={cat}>
                 <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{cat}</div>
                 <div className="card-cine divide-y divide-white/5">
-                  {ks.map((k: any) => (
-                    <div key={k.id} className="p-4 flex items-start gap-3 hover:bg-secondary/30">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">{k.title}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{k.content}</div>
+                  {ks.map((k: any) => {
+                    const conf = confidenceFor(k);
+                    return (
+                      <div key={k.id} className="p-4 flex items-start gap-3 hover:bg-secondary/30">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="text-sm font-medium">{k.title}</div>
+                            <span
+                              title={`Confidence ${conf.score}%`}
+                              className="text-[9.5px] uppercase tracking-wider px-1.5 py-0.5 rounded-full border inline-flex items-center gap-1"
+                              style={{ borderColor: `${conf.tone}50`, background: `${conf.tone}15`, color: conf.tone }}
+                            >
+                              <span className="h-1 w-1 rounded-full" style={{ background: conf.tone }} />
+                              {conf.label} · {conf.score}%
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">{k.content}</div>
+                        </div>
+                        <button onClick={() => del(k.id)} className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
                       </div>
-                      <button onClick={() => del(k.id)} className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}

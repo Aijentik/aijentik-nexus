@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshVenues = async () => {
     const { data: { user: u } } = await supabase.auth.getUser();
     if (!u) { setVenues([]); setVenue(null); return; }
-    const { data: vs } = await supabase.from("venues").select("id,name,venue_type,status").order("created_at", { ascending: true });
+    const { data: vs } = await supabase.from("venues").select("id,name,venue_type,status,features").order("created_at", { ascending: true });
     setVenues(vs || []);
     const { data: prof } = await supabase.from("profiles").select("current_venue_id").eq("user_id", u.id).maybeSingle();
     const active = (vs || []).find(v => v.id === prof?.current_venue_id) || (vs || [])[0] || null;

@@ -221,14 +221,23 @@ function VoiceLiveInner() {
     }
   }, [conversation, prepareSession, venue]);
 
-  const stop = async () => {
-    try { await conversation.endSession(); } catch (e) { console.error(e); }
-  };
+  const stop = useCallback(async () => {
+    try {
+      await conversation.endSession();
+    } catch (e) {
+      console.error(e);
+    }
+    stopAmbience();
+    setCallStartedAt(null);
+  }, [conversation, stopAmbience]);
 
   const status = conversation.status;
   const isOn = status === "connected";
+  const isConnecting = status === "connecting" || busy || preparing;
+  const callActive = isOn || status === "connecting";
   const isSpeaking = conversation.isSpeaking;
   const openInNewTab = () => window.open(window.location.href, "_blank", "noopener");
+
 
   return (
     <>

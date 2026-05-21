@@ -9,3 +9,11 @@ verify_jwt = false
 [functions.venue-deep-scan]
 verify_jwt = false
 
+[functions.email-inbound]
+verify_jwt = false
+
+[functions.email-analyze]
+verify_jwt = false
+
+[functions.email-action]
+verify_jwt = false

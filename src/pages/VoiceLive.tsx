@@ -430,6 +430,35 @@ function VoiceLiveInner() {
           </div>
         </div>
       </div>
+
+      {/* Always-visible floating End-call control while a call is live */}
+      <AnimatePresence>
+        {callActive && (
+          <motion.div
+            initial={{ y: 24, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 24, opacity: 0 }}
+            transition={{ type: "spring", damping: 22, stiffness: 260 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50"
+          >
+            <Button
+              size="lg"
+              variant="destructive"
+              onClick={stop}
+              className="h-12 px-5 rounded-full shadow-[0_18px_60px_-12px_hsl(var(--destructive)/0.7)] border border-destructive/40 backdrop-blur-xl"
+            >
+              <PhoneOff className="h-4 w-4 mr-2" />
+              {status === "connecting" ? "Cancel call" : "End call"}
+              {isOn && (
+                <span className="ml-2 inline-flex items-center gap-1 text-[11px] uppercase tracking-wider opacity-90">
+                  <span className="pulse-dot !h-1.5 !w-1.5" /> Live
+                </span>
+              )}
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
+
 }

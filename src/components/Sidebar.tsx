@@ -92,11 +92,12 @@ export function Sidebar() {
 
   // Auto-open the group containing the active route
   const activeSectionId = useMemo(() => {
+    const features = (venue?.features || {}) as Record<string, any>;
     for (const s of SECTIONS) {
-      if (s.items.some(i => isActive(i.to))) return s.id;
+      if (s.items.some(i => (!i.featureFlag || features[i.featureFlag]) && isActive(i.to))) return s.id;
     }
     return null;
-  }, [loc.pathname]);
+  }, [loc.pathname, venue?.features]);
 
   useEffect(() => {
     if (activeSectionId && !openGroups[activeSectionId]) {

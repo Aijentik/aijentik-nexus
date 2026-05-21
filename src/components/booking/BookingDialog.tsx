@@ -145,6 +145,65 @@ export function BookingDialog({ open, onOpenChange, mode = "create", initial, on
   const time = form.watch("time");
   const partySize = form.watch("party_size");
 
+  // Conflict detection — table double-book + venue capacity stress
+  const [conflict, setConflict] = useState<{
+    table: { guest: string; time: string } | null;
+    capacity: { covers: number; cap: number } | null;
+  }>({ table: null, capacity: null });
+  const [overrideConflict, setOverrideConflict] = useState(false);
+
+  useEffect(() => {
+    if (!venue || !date || !time) return;
+    const [h, m] = time.split(":").map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return;
+    const when = set(date, { hours: h, minutes: m, seconds: 0, milliseconds: 0 });
+    const winMs = 90 * 60 * 1000;
+    const fromIso = new Date(when.getTime() - winMs).toISOString();
+    const toIso = new Date(when.getTime() + winMs).toISOString();
+    const t = window.setTimeout(async () => {
+      let q = supabase
+        .from("bookings")
+        .select("id,guest_name,booking_time,party_size,table_id,status")
+        .eq("venue_id", venue.id)
+        .gte("booking_time", fromIso)
+        .lte("booking_time", toIso)
+        .not("status", "in", "(cancelled,no_show)");
+      if (initial?.id) q = q.neq("id", initial.id);
+      const { data } = await q;
+      const rows = data || [];
+
+      let tableConflict: { guest: string; time: string } | null = null;
+      if (pickedTableId) {
+        const clash = rows.find((r: any) => r.table_id === pickedTableId);
+        if (clash) {
+          tableConflict = {
+            guest: clash.guest_name,
+            time: format(new Date(clash.booking_time), "HH:mm"),
+          };
+        }
+      }
+
+      let capacityWarn: { covers: number; cap: number } | null = null;
+      const cap = (venue as any)?.capacity ?? 0;
+      if (cap > 0) {
+        const hourMs = 30 * 60 * 1000;
+        const fromH = when.getTime() - hourMs;
+        const toH = when.getTime() + hourMs;
+        const covers = rows
+          .filter((r: any) => {
+            const tt = new Date(r.booking_time).getTime();
+            return tt >= fromH && tt <= toH;
+          })
+          .reduce((s: number, r: any) => s + (r.party_size || 0), 0);
+        const projected = covers + (partySize || 0);
+        if (projected > cap) capacityWarn = { covers: projected, cap };
+      }
+      setConflict({ table: tableConflict, capacity: capacityWarn });
+      if (!tableConflict) setOverrideConflict(false);
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [venue, date, time, partySize, pickedTableId, initial?.id]);
+
   const onSubmit = form.handleSubmit(async (values) => {
     if (!venue) return;
     setSubmitting(true);

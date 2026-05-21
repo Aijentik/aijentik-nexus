@@ -46,6 +46,7 @@ export default function Diary() {
   const [dialogMode, setDialogMode] = useState<BookingDialogMode>("create");
   const [dialogInitial, setDialogInitial] = useState<any | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [runSheetOpen, setRunSheetOpen] = useState(false);
 
   const load = async () => {
     if (!venue) return;

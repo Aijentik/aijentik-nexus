@@ -55,7 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        setLoading(true);
         setTimeout(() => { refreshVenues().finally(() => setLoading(false)); }, 0);
       } else {
         setVenues([]); setVenue(null); setLoading(false);

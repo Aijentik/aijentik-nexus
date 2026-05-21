@@ -362,11 +362,40 @@ export function Sidebar() {
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end" className="w-56 glass-strong">
-            <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              {user?.email}
+          <DropdownMenuContent side="top" align="end" className="w-64 glass-strong">
+            <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+              <span className="truncate">{user?.email}</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-[9px] font-semibold tracking-[0.18em]">OWNER</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {venues.length > 1 && (
+              <>
+                <DropdownMenuLabel className="text-[9.5px] uppercase tracking-[0.22em] text-muted-foreground/70 font-medium pt-2 flex items-center justify-between">
+                  <span>Switch venue</span>
+                  <span className="text-foreground/70 tabular-nums">{venues.length}</span>
+                </DropdownMenuLabel>
+                <div className="max-h-44 overflow-y-auto scrollbar-thin">
+                  {venues.map(v => (
+                    <DropdownMenuItem
+                      key={v.id}
+                      onClick={() => setActiveVenue(v.id)}
+                      className={cn(
+                        "flex items-center gap-2",
+                        v.id === venue?.id && "bg-primary/10 text-primary"
+                      )}
+                    >
+                      <span className={cn(
+                        "h-1.5 w-1.5 rounded-full shrink-0",
+                        v.id === venue?.id ? "bg-primary shadow-[0_0_6px_hsl(var(--primary))]" : "bg-muted-foreground/40"
+                      )} />
+                      <span className="truncate flex-1">{v.name}</span>
+                      {v.id === venue?.id && <span className="text-[9px] uppercase tracking-wider text-primary/80">Active</span>}
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem onClick={() => nav2("/app/settings")}>
               <User className="h-4 w-4 mr-2" /> Profile & account
             </DropdownMenuItem>
@@ -375,6 +404,9 @@ export function Sidebar() {
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => nav2("/app/integrations")}>
               <Plug className="h-4 w-4 mr-2" /> Integrations
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => nav2("/onboarding")}>
+              <Sparkles className="h-4 w-4 mr-2" /> Add another venue
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

@@ -85,7 +85,7 @@ export default function Landing() {
       </section>
 
       <footer className="border-t border-white/5 py-10 text-center text-xs text-muted-foreground">
-        © Aijentik Hospitality · The operating layer that runs your venue.
+        © {new Date().getFullYear()} Aijentik Hospitality · The operating layer that runs your venue.
       </footer>
     </div>
   );

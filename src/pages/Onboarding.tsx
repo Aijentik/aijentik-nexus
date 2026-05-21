@@ -5,7 +5,9 @@ import { useAuth } from "@/lib/auth";
 import {
   Brain, Sparkles, Loader2, CheckCircle2, ArrowRight, Globe, Search, Wand2,
   AlertTriangle, Plus, Plug, Zap, ChevronRight, Edit3,
+  CalendarCheck, Users, PartyPopper, Crown, ShoppingBag, Bike, ChefHat, Heart,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,6 +94,16 @@ export default function Onboarding() {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Launch failed");
+
+      // Persist services/features onto the freshly created venue
+      const features = profile.features || {};
+      if (Object.keys(features).length) {
+        const newVenueId = j?.venue_id || j?.venue?.id;
+        if (newVenueId) {
+          await supabase.from("venues").update({ features }).eq("id", newVenueId);
+        }
+      }
+
       await refreshVenues();
       toast.success("Welcome aboard.");
       nav("/app");
@@ -257,6 +269,9 @@ function ReviewStep({ profile, setProfile, appliedGaps, applyGap, launch, busy }
           </div>
         </div>
       </Section>
+
+      {/* Venue services */}
+      <ServicesSection profile={profile} setProfile={setProfile} />
 
       {/* Gaps */}
       {openGaps.length > 0 && (
@@ -428,5 +443,100 @@ function FeedRow({ ev }: { ev: Event }) {
         )}
       </div>
     </motion.div>
+  );
+}
+
+/* ---------- Venue Services ---------- */
+
+const SERVICES: { key: string; label: string; hint: string; icon: any; color: string }[] = [
+  { key: "reservations",  label: "Reservations",   hint: "Diary, deposits, reminders",            icon: CalendarCheck, color: "hsl(32 96% 58%)"  },
+  { key: "walkins",       label: "Walk-ins",       hint: "Queue, wait list, table turn",          icon: Users,         color: "hsl(38 100% 70%)" },
+  { key: "events",        label: "Events",         hint: "Enquiries, proposals, holds",           icon: PartyPopper,   color: "hsl(214 89% 56%)" },
+  { key: "vip",           label: "VIP Experiences",hint: "Recognise regulars, surprise & delight",icon: Crown,         color: "hsl(38 100% 78%)" },
+  { key: "takeaway",      label: "Takeaway",       hint: "AI takes orders by voice and chat",     icon: ShoppingBag,   color: "hsl(150 70% 50%)" },
+  { key: "delivery",      label: "Delivery",       hint: "Live drivers, ETAs, status updates",    icon: Bike,          color: "hsl(195 85% 55%)" },
+  { key: "catering",      label: "Catering",       hint: "Group orders, lead time, quotes",       icon: ChefHat,       color: "hsl(22 88% 52%)"  },
+  { key: "loyalty",       label: "Membership",     hint: "Loyalty, perks, repeat-guest memory",   icon: Heart,         color: "hsl(322 75% 56%)" },
+];
+
+function ServicesSection({ profile, setProfile }: any) {
+  const features = profile.features || {};
+  const toggle = (k: string) => {
+    const next = { ...features, [k]: !features[k] };
+    // Auto-enable ordering capability when takeaway/delivery selected
+    next.ordering = !!(next.takeaway || next.delivery || next.catering);
+    setProfile({ ...profile, features: next });
+  };
+  const orderingActive = !!(features.takeaway || features.delivery || features.catering);
+
+  return (
+    <Section title="Venue services" icon={<Sparkles className="h-4 w-4 text-primary" />}>
+      <div className="text-xs text-muted-foreground mb-3">Pick what your venue offers. Your AI workforce adapts — extra tabs and agents only appear when relevant.</div>
+      <div className="grid grid-cols-2 gap-2.5">
+        {SERVICES.map((s) => {
+          const I = s.icon;
+          const on = !!features[s.key];
+          return (
+            <button
+              type="button"
+              key={s.key}
+              onClick={() => toggle(s.key)}
+              className={`relative text-left p-3 rounded-xl border transition-all overflow-hidden group ${
+                on
+                  ? "bg-gradient-to-br from-primary/10 to-accent/5 border-primary/40 shadow-[0_0_0_1px_hsl(var(--primary)/0.2)_inset,0_8px_24px_-12px_hsl(var(--primary)/0.5)]"
+                  : "bg-black/30 border-white/[0.06] hover:border-white/15"
+              }`}
+            >
+              {on && (
+                <div className="absolute -top-10 -right-10 w-28 h-28 rounded-full blur-2xl opacity-40 pointer-events-none" style={{ background: s.color }} />
+              )}
+              <div className="relative flex items-start gap-2.5">
+                <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/10 grid place-items-center shrink-0"
+                  style={on ? { boxShadow: `0 0 16px ${s.color}40 inset` } : {}}>
+                  <I className="h-4 w-4" style={{ color: s.color }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <div className="text-[13px] font-medium">{s.label}</div>
+                    {on && <CheckCircle2 className="h-3 w-3 text-[hsl(var(--success))]" />}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{s.hint}</div>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <AnimatePresence>
+        {orderingActive && (
+          <motion.div
+            initial={{ opacity: 0, y: 8, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -4, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="mt-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/8 to-accent/4 p-4 flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent grid place-items-center shrink-0 shadow-[0_0_20px_hsl(var(--primary)/0.5)]">
+                <ShoppingBag className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium">Have your AI workforce handle orders?</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">We'll provision the Ordering Agent, the live order kanban, and POS / payment setup prompts after launch.</div>
+              </div>
+              <label className="flex items-center gap-2 text-[11px] shrink-0">
+                <input
+                  type="checkbox"
+                  checked={features.ordering !== false}
+                  onChange={(e) => setProfile({ ...profile, features: { ...features, ordering: e.target.checked } })}
+                  className="accent-[hsl(var(--primary))] h-4 w-4"
+                />
+                Enable
+              </label>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Section>
   );
 }

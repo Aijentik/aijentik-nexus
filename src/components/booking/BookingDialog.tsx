@@ -145,8 +145,71 @@ export function BookingDialog({ open, onOpenChange, mode = "create", initial, on
   const time = form.watch("time");
   const partySize = form.watch("party_size");
 
+  // Conflict detection — table double-book + venue capacity stress
+  const [conflict, setConflict] = useState<{
+    table: { guest: string; time: string } | null;
+    capacity: { covers: number; cap: number } | null;
+  }>({ table: null, capacity: null });
+  const [overrideConflict, setOverrideConflict] = useState(false);
+
+  useEffect(() => {
+    if (!venue || !date || !time) return;
+    const [h, m] = time.split(":").map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return;
+    const when = set(date, { hours: h, minutes: m, seconds: 0, milliseconds: 0 });
+    const winMs = 90 * 60 * 1000;
+    const fromIso = new Date(when.getTime() - winMs).toISOString();
+    const toIso = new Date(when.getTime() + winMs).toISOString();
+    const t = window.setTimeout(async () => {
+      let q = supabase
+        .from("bookings")
+        .select("id,guest_name,booking_time,party_size,table_id,status")
+        .eq("venue_id", venue.id)
+        .gte("booking_time", fromIso)
+        .lte("booking_time", toIso)
+        .not("status", "in", "(cancelled,no_show)");
+      if (initial?.id) q = q.neq("id", initial.id);
+      const { data } = await q;
+      const rows = data || [];
+
+      let tableConflict: { guest: string; time: string } | null = null;
+      if (pickedTableId) {
+        const clash = rows.find((r: any) => r.table_id === pickedTableId);
+        if (clash) {
+          tableConflict = {
+            guest: clash.guest_name,
+            time: format(new Date(clash.booking_time), "HH:mm"),
+          };
+        }
+      }
+
+      let capacityWarn: { covers: number; cap: number } | null = null;
+      const cap = (venue as any)?.capacity ?? 0;
+      if (cap > 0) {
+        const hourMs = 30 * 60 * 1000;
+        const fromH = when.getTime() - hourMs;
+        const toH = when.getTime() + hourMs;
+        const covers = rows
+          .filter((r: any) => {
+            const tt = new Date(r.booking_time).getTime();
+            return tt >= fromH && tt <= toH;
+          })
+          .reduce((s: number, r: any) => s + (r.party_size || 0), 0);
+        const projected = covers + (partySize || 0);
+        if (projected > cap) capacityWarn = { covers: projected, cap };
+      }
+      setConflict({ table: tableConflict, capacity: capacityWarn });
+      if (!tableConflict) setOverrideConflict(false);
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [venue, date, time, partySize, pickedTableId, initial?.id]);
+
   const onSubmit = form.handleSubmit(async (values) => {
     if (!venue) return;
+    if (conflict.table && !overrideConflict) {
+      toast.error("Table conflict", { description: `Already booked for ${conflict.table.guest} at ${conflict.table.time}. Tick the override to save anyway.` });
+      return;
+    }
     setSubmitting(true);
     try {
       const [h, m] = values.time.split(":").map(Number);
@@ -443,6 +506,57 @@ export function BookingDialog({ open, onOpenChange, mode = "create", initial, on
               </div>
             )}
           </div>
+
+          {/* Conflict / capacity warnings */}
+          <AnimatePresence>
+            {(conflict.table || conflict.capacity) && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className={cn(
+                  "rounded-xl border p-3 space-y-2",
+                  conflict.table
+                    ? "border-destructive/40 bg-destructive/10"
+                    : "border-warn/40 bg-warn/10"
+                )}
+              >
+                {conflict.table && (
+                  <div className="flex items-start gap-2 text-[12px]">
+                    <span className="mt-0.5 h-2 w-2 rounded-full bg-destructive shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-medium text-destructive">Table conflict</div>
+                      <div className="text-muted-foreground">
+                        Already booked for <span className="text-foreground">{conflict.table.guest}</span> at {conflict.table.time} (±90min seating).
+                      </div>
+                      <label className="mt-1.5 inline-flex items-center gap-1.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={overrideConflict}
+                          onChange={(e) => setOverrideConflict(e.target.checked)}
+                          className="h-3 w-3 rounded border-border accent-destructive"
+                        />
+                        <span className="text-[11px] text-muted-foreground">Override and save anyway</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+                {conflict.capacity && (
+                  <div className="flex items-start gap-2 text-[12px]">
+                    <span className="mt-0.5 h-2 w-2 rounded-full bg-warn shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-medium" style={{ color: "hsl(var(--warn))" }}>Capacity stress</div>
+                      <div className="text-muted-foreground">
+                        Projected {conflict.capacity.covers} covers in this hour vs venue capacity of {conflict.capacity.cap}.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+
 
           {/* Phone + email */}
           <div className="grid grid-cols-2 gap-4">

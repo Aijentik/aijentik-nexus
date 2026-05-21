@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Phone, CalendarDays, BookOpen, Bot, BarChart3,
   Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map, Workflow,
-  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight, Mail, Headphones, TrendingUp, ShoppingBag,
+  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight, Mail, Headphones, TrendingUp, ShoppingBag, Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {

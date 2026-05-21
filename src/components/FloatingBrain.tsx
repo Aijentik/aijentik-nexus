@@ -83,7 +83,7 @@ export function FloatingBrain() {
     }
   }, [venue?.id]);
 
-  const recent = events.length;
+  // recent count exposed via window event; no inline badge here anymore.
   const sevColor = (s: string) =>
     s === "success" ? "hsl(var(--success))" :
     s === "warn" ? "hsl(var(--warn))" :

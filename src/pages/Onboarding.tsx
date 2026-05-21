@@ -270,6 +270,9 @@ function ReviewStep({ profile, setProfile, appliedGaps, applyGap, launch, busy }
         </div>
       </Section>
 
+      {/* Venue services */}
+      <ServicesSection profile={profile} setProfile={setProfile} />
+
       {/* Gaps */}
       {openGaps.length > 0 && (
         <Section title="Gaps & one-click fixes" icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}>

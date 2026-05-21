@@ -224,13 +224,14 @@
   .card-cine:hover::after { opacity: 1; }
   .card-cine > * { position: relative; z-index: 2; }
 
-  /* Ambient room — soft moving gradients behind the app */
+  /* Ambient room — static soft gradients behind the app (no animation = no per-frame backdrop-blur recompute) */
   .ambient-room {
     position: fixed;
     inset: 0;
     pointer-events: none;
     z-index: 0;
     overflow: hidden;
+    contain: strict;
   }
   .ambient-room::before,
   .ambient-room::after {
@@ -238,21 +239,19 @@
     position: absolute;
     border-radius: 50%;
     filter: blur(120px);
-    opacity: 0.55;
-    will-change: transform;
+    opacity: 0.5;
   }
   .ambient-room::before {
     width: 720px; height: 720px;
     left: -180px; top: -220px;
     background: radial-gradient(circle, hsl(32 96% 58% / 0.35), transparent 65%);
-    animation: drift-a 26s ease-in-out infinite alternate;
   }
   .ambient-room::after {
     width: 800px; height: 800px;
     right: -220px; top: 30%;
     background: radial-gradient(circle, hsl(22 88% 50% / 0.28), transparent 65%);
-    animation: drift-b 32s ease-in-out infinite alternate;
   }
+
 
   /* Editorial hero number */
   .num-cine {

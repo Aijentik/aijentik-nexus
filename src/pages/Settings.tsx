@@ -191,6 +191,16 @@ export default function Settings() {
           <div className="text-[11px] text-muted-foreground italic">e.g. "warm and conspiratorial, like a head waiter who's seen everything"</div>
         </Section>
 
+        <Section icon={Sparkles} title="Capabilities" hint="Turn on modules as you need them. Saved when you hit Save changes.">
+          <FeatureToggle
+            label="Ordering"
+            hint="Live order kanban across WhatsApp, Instagram, SMS, phone and web."
+            enabled={!!v.features?.ordering}
+            onToggle={() => toggleFeature("ordering")}
+          />
+        </Section>
+
+
         <Section
           icon={Users}
           title="Team & roles"

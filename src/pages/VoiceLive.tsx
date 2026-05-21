@@ -221,14 +221,23 @@ function VoiceLiveInner() {
     }
   }, [conversation, prepareSession, venue]);
 
-  const stop = async () => {
-    try { await conversation.endSession(); } catch (e) { console.error(e); }
-  };
+  const stop = useCallback(async () => {
+    try {
+      await conversation.endSession();
+    } catch (e) {
+      console.error(e);
+    }
+    stopAmbience();
+    setCallStartedAt(null);
+  }, [conversation, stopAmbience]);
 
   const status = conversation.status;
   const isOn = status === "connected";
+  const isConnecting = status === "connecting" || busy || preparing;
+  const callActive = isOn || status === "connecting";
   const isSpeaking = conversation.isSpeaking;
   const openInNewTab = () => window.open(window.location.href, "_blank", "noopener");
+
 
   return (
     <>
@@ -341,31 +350,38 @@ function VoiceLiveInner() {
           </div>
 
           <div className="relative mt-7 flex gap-2.5">
-            {!isOn ? (
+            {!callActive ? (
               <Button
                 size="lg"
                 onClick={start}
-                disabled={busy || preparing || status === "connecting"}
+                disabled={isConnecting}
                 className="relative overflow-hidden bg-gradient-to-r from-primary via-primary to-accent text-primary-foreground
                   shadow-[0_16px_50px_-12px_hsl(var(--primary)/0.7),0_1px_0_hsl(36_100%_90%_/_0.3)_inset]
                   hover:shadow-[0_20px_60px_-12px_hsl(var(--primary)/0.85)]
                   border border-primary/40 px-6 h-12 font-medium transition-all duration-300"
               >
                 <span className="absolute inset-0 stream-line opacity-60" />
-                {busy || preparing || status === "connecting"
+                {isConnecting
                   ? <Loader2 className="h-4 w-4 animate-spin mr-2 relative" />
                   : <Phone className="h-4 w-4 mr-2 relative" />}
-                <span className="relative">{preparing ? "Preparing" : status === "connecting" ? "Connecting" : "Start call"}</span>
+                <span className="relative">{preparing ? "Preparing" : "Start call"}</span>
               </Button>
             ) : (
-              <Button size="lg" variant="destructive" onClick={stop} className="h-12 px-6">
-                <PhoneOff className="h-4 w-4 mr-2" /> End call
+              <Button
+                size="lg"
+                variant="destructive"
+                onClick={stop}
+                className="h-12 px-6 shadow-[0_16px_50px_-12px_hsl(var(--destructive)/0.7)]"
+              >
+                <PhoneOff className="h-4 w-4 mr-2" />
+                {status === "connecting" ? "Cancel call" : "End call"}
               </Button>
             )}
             <Button size="lg" variant="outline" onClick={openInNewTab} className="h-12 w-12 p-0" title="Open in new tab">
               <ExternalLink className="h-4 w-4" />
             </Button>
           </div>
+
           <div className="relative mt-5 text-[11px] text-muted-foreground text-center max-w-xs">
             Tip: if mic access is blocked in the embedded preview, open this page in a new tab.
           </div>
@@ -414,6 +430,35 @@ function VoiceLiveInner() {
           </div>
         </div>
       </div>
+
+      {/* Always-visible floating End-call control while a call is live */}
+      <AnimatePresence>
+        {callActive && (
+          <motion.div
+            initial={{ y: 24, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 24, opacity: 0 }}
+            transition={{ type: "spring", damping: 22, stiffness: 260 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50"
+          >
+            <Button
+              size="lg"
+              variant="destructive"
+              onClick={stop}
+              className="h-12 px-5 rounded-full shadow-[0_18px_60px_-12px_hsl(var(--destructive)/0.7)] border border-destructive/40 backdrop-blur-xl"
+            >
+              <PhoneOff className="h-4 w-4 mr-2" />
+              {status === "connecting" ? "Cancel call" : "End call"}
+              {isOn && (
+                <span className="ml-2 inline-flex items-center gap-1 text-[11px] uppercase tracking-wider opacity-90">
+                  <span className="pulse-dot !h-1.5 !w-1.5" /> Live
+                </span>
+              )}
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
+
 }

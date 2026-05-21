@@ -74,6 +74,9 @@ export function BookingDialog({ open, onOpenChange, mode = "create", initial, on
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [matchedGuest, setMatchedGuest] = useState<any | null>(null);
+  const [seatLoading, setSeatLoading] = useState(false);
+  const [seatSuggestion, setSeatSuggestion] = useState<{ table: any; reason: string } | null>(null);
+  const [pickedTableId, setPickedTableId] = useState<string | null>(initial?.table_id ?? null);
 
   const defaultDate = useMemo(() => {
     if (initial?.booking_time) {

@@ -32,7 +32,7 @@ import { Badge } from "@/components/ui/badge";
 const schema = z.object({
   guest_name: z.string().trim().min(2, "Name must be at least 2 characters").max(80, "Name is too long"),
   party_size: z.coerce.number().int().min(1, "Min 1 guest").max(40, "Max 40 guests"),
-  date: z.date({ required_error: "Pick a date" }),
+  date: z.date({ error: "Pick a date" }),
   time: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/u, "Use HH:MM"),
@@ -147,7 +147,7 @@ export function BookingDialog({ open, onOpenChange, mode = "create", initial, on
       const [h, m] = values.time.split(":").map(Number);
       const when = set(values.date, { hours: h, minutes: m, seconds: 0, milliseconds: 0 });
 
-      const payload: Record<string, unknown> = {
+      const payload: any = {
         venue_id: venue.id,
         guest_name: values.guest_name,
         party_size: values.party_size,

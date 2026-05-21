@@ -55,12 +55,19 @@ export default function Settings() {
     setSaving(true);
     const { error } = await supabase.from("venues").update({
       name: v.name, phone: v.phone, website: v.website, address: v.address, city: v.city,
-      brand_voice: v.brand_voice, description: v.description, capacity: v.capacity, forwarded_number: v.forwarded_number,
+      brand_voice: v.brand_voice, description: v.description, capacity: v.capacity,
+      forwarded_number: v.forwarded_number, features: v.features || {},
     }).eq("id", v.id);
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Saved");
     refreshVenues();
+  };
+
+  const toggleFeature = (key: string) => {
+    const features = { ...(v.features || {}) };
+    features[key] = !features[key];
+    setV({ ...v, features });
   };
 
   const changeRole = async (id: string, role: string) => {
@@ -184,6 +191,16 @@ export default function Settings() {
           <div className="text-[11px] text-muted-foreground italic">e.g. "warm and conspiratorial, like a head waiter who's seen everything"</div>
         </Section>
 
+        <Section icon={Sparkles} title="Capabilities" hint="Turn on modules as you need them. Saved when you hit Save changes.">
+          <FeatureToggle
+            label="Ordering"
+            hint="Live order kanban across WhatsApp, Instagram, SMS, phone and web."
+            enabled={!!v.features?.ordering}
+            onToggle={() => toggleFeature("ordering")}
+          />
+        </Section>
+
+
         <Section
           icon={Users}
           title="Team & roles"
@@ -260,3 +277,23 @@ export default function Settings() {
     </>
   );
 }
+
+function FeatureToggle({ label, hint, enabled, onToggle }: { label: string; hint: string; enabled: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`w-full flex items-center gap-4 p-3 rounded-xl border text-left transition-colors ${
+        enabled ? "border-primary/40 bg-primary/[0.06]" : "border-white/[0.06] bg-black/30 hover:border-white/[0.12]"
+      }`}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="text-[13.5px] font-medium">{label}</div>
+        <div className="text-[11.5px] text-muted-foreground mt-0.5">{hint}</div>
+      </div>
+      <div className={`relative h-6 w-11 rounded-full transition-colors shrink-0 ${enabled ? "bg-primary" : "bg-white/10"}`}>
+        <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-all ${enabled ? "left-[22px]" : "left-0.5"}`} />
+      </div>
+    </button>
+  );
+}
+

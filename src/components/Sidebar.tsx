@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Phone, CalendarDays, BookOpen, Bot, BarChart3,
   Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map, Workflow,
-  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight, Mail, Headphones, TrendingUp,
+  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight, Mail, Headphones, TrendingUp, ShoppingBag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -13,7 +13,7 @@ import {
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-type Item = { to: string; label: string; icon: any; hero?: boolean; live?: boolean };
+type Item = { to: string; label: string; icon: any; hero?: boolean; live?: boolean; featureFlag?: string };
 
 const SECTIONS: { id: string; title: string; items: Item[] }[] = [
   {
@@ -34,6 +34,7 @@ const SECTIONS: { id: string; title: string; items: Item[] }[] = [
     items: [
       { to: "/app/diary", label: "Diary", icon: CalendarDays },
       { to: "/app/floor", label: "Floor Plan", icon: Map },
+      { to: "/app/orders", label: "Ordering", icon: ShoppingBag, hero: true, live: true, featureFlag: "ordering" },
       { to: "/app/calls", label: "Calls", icon: Phone },
       { to: "/app/messages", label: "Messages", icon: MessagesSquare },
       { to: "/app/email", label: "Email AI", icon: Mail, hero: true },
@@ -91,11 +92,12 @@ export function Sidebar() {
 
   // Auto-open the group containing the active route
   const activeSectionId = useMemo(() => {
+    const features = (venue?.features || {}) as Record<string, any>;
     for (const s of SECTIONS) {
-      if (s.items.some(i => isActive(i.to))) return s.id;
+      if (s.items.some(i => (!i.featureFlag || features[i.featureFlag]) && isActive(i.to))) return s.id;
     }
     return null;
-  }, [loc.pathname]);
+  }, [loc.pathname, venue?.features]);
 
   useEffect(() => {
     if (activeSectionId && !openGroups[activeSectionId]) {
@@ -200,8 +202,11 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="relative flex-1 overflow-y-auto px-3 py-4 space-y-3 scrollbar-thin">
         {SECTIONS.map((section) => {
+          const features = (venue?.features || {}) as Record<string, any>;
+          const visibleItems = section.items.filter(i => !i.featureFlag || features[i.featureFlag]);
+          if (visibleItems.length === 0) return null;
           const isOpen = collapsed ? true : (openGroups[section.id] ?? true);
-          const hasActive = section.items.some(i => isActive(i.to));
+          const hasActive = visibleItems.some(i => isActive(i.to));
           return (
             <div key={section.id}>
               {!collapsed ? (
@@ -229,7 +234,7 @@ export function Sidebar() {
                     className="overflow-hidden"
                   >
                     <div className="space-y-0.5">
-                      {section.items.map((item) => {
+                      {visibleItems.map((item) => {
                         const active = isActive(item.to);
                         const Icon = item.icon;
                         return (

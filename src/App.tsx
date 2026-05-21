@@ -28,6 +28,7 @@ import NotFound from "./pages/NotFound";
 import EmailOps from "./pages/EmailOps";
 import ManagerEarpiece from "./pages/ManagerEarpiece";
 import Forecast from "./pages/Forecast";
+import Orders from "./pages/Orders";
 import { DemoTourProvider } from "@/lib/demo/DemoTourProvider";
 import { DemoController } from "@/components/demo/DemoController";
 
@@ -59,6 +60,7 @@ const App = () => (
                 <Route path="knowledge" element={<Knowledge />} />
                 <Route path="messages" element={<Messages />} />
                 <Route path="email" element={<EmailOps />} />
+                <Route path="orders" element={<Orders />} />
                 <Route path="earpiece" element={<ManagerEarpiece />} />
                 <Route path="forecast" element={<Forecast />} />
                 <Route path="insights" element={<Insights />} />

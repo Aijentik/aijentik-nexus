@@ -55,12 +55,19 @@ export default function Settings() {
     setSaving(true);
     const { error } = await supabase.from("venues").update({
       name: v.name, phone: v.phone, website: v.website, address: v.address, city: v.city,
-      brand_voice: v.brand_voice, description: v.description, capacity: v.capacity, forwarded_number: v.forwarded_number,
+      brand_voice: v.brand_voice, description: v.description, capacity: v.capacity,
+      forwarded_number: v.forwarded_number, features: v.features || {},
     }).eq("id", v.id);
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Saved");
     refreshVenues();
+  };
+
+  const toggleFeature = (key: string) => {
+    const features = { ...(v.features || {}) };
+    features[key] = !features[key];
+    setV({ ...v, features });
   };
 
   const changeRole = async (id: string, role: string) => {

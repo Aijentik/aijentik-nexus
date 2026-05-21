@@ -83,7 +83,12 @@ export default function Agents() {
     <>
       <PageHeader
         title="Your AI workforce"
-        subtitle="Five intelligent agents working in concert. Monitor, configure and route real phone numbers."
+        subtitle="Intelligent agents working in concert. Hire new ones, monitor live activity, route real phone numbers."
+        actions={
+          <Button onClick={() => setAddOpen(true)} className="bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40 shadow-[0_4px_16px_-4px_hsl(var(--primary)/0.5)]">
+            <Plus className="h-4 w-4 mr-1.5" /> Add Agent
+          </Button>
+        }
       />
 
       <div className="card-cine p-5 mb-6">

@@ -237,6 +237,282 @@ export type Database = {
           },
         ]
       }
+      email_ai_actions: {
+        Row: {
+          confidence: number
+          created_at: string
+          executed_at: string | null
+          executed_by: string | null
+          id: string
+          kind: Database["public"]["Enums"]["email_action_kind"]
+          payload: Json
+          reasoning: string | null
+          result: Json | null
+          reverted_at: string | null
+          status: Database["public"]["Enums"]["email_action_status"]
+          thread_id: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          executed_at?: string | null
+          executed_by?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["email_action_kind"]
+          payload?: Json
+          reasoning?: string | null
+          result?: Json | null
+          reverted_at?: string | null
+          status?: Database["public"]["Enums"]["email_action_status"]
+          thread_id: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          executed_at?: string | null
+          executed_by?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["email_action_kind"]
+          payload?: Json
+          reasoning?: string | null
+          result?: Json | null
+          reverted_at?: string | null
+          status?: Database["public"]["Enums"]["email_action_status"]
+          thread_id?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_ai_actions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "email_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_drafts: {
+        Row: {
+          action_id: string | null
+          body_text: string
+          confidence: number
+          created_at: string
+          edited_by: string | null
+          id: string
+          reasoning: string | null
+          subject: string | null
+          thread_id: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          action_id?: string | null
+          body_text: string
+          confidence?: number
+          created_at?: string
+          edited_by?: string | null
+          id?: string
+          reasoning?: string | null
+          subject?: string | null
+          thread_id: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          action_id?: string | null
+          body_text?: string
+          confidence?: number
+          created_at?: string
+          edited_by?: string | null
+          id?: string
+          reasoning?: string | null
+          subject?: string | null
+          thread_id?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_drafts_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "email_ai_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_drafts_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "email_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_inboxes: {
+        Row: {
+          auto_send_threshold: number
+          created_at: string
+          enabled: boolean
+          forwarding_address: string
+          id: string
+          provider: string
+          reply_from_address: string | null
+          reply_from_name: string | null
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          auto_send_threshold?: number
+          created_at?: string
+          enabled?: boolean
+          forwarding_address: string
+          id?: string
+          provider?: string
+          reply_from_address?: string | null
+          reply_from_name?: string | null
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          auto_send_threshold?: number
+          created_at?: string
+          enabled?: boolean
+          forwarding_address?: string
+          id?: string
+          provider?: string
+          reply_from_address?: string | null
+          reply_from_name?: string | null
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: []
+      }
+      email_messages: {
+        Row: {
+          ai_generated: boolean
+          body_html: string | null
+          body_text: string | null
+          created_at: string
+          direction: string
+          from_address: string
+          id: string
+          in_reply_to: string | null
+          message_provider_id: string | null
+          sent_by: string | null
+          subject: string | null
+          thread_id: string
+          to_address: string
+          venue_id: string
+        }
+        Insert: {
+          ai_generated?: boolean
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string
+          direction: string
+          from_address: string
+          id?: string
+          in_reply_to?: string | null
+          message_provider_id?: string | null
+          sent_by?: string | null
+          subject?: string | null
+          thread_id: string
+          to_address: string
+          venue_id: string
+        }
+        Update: {
+          ai_generated?: boolean
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string
+          direction?: string
+          from_address?: string
+          id?: string
+          in_reply_to?: string | null
+          message_provider_id?: string | null
+          sent_by?: string | null
+          subject?: string | null
+          thread_id?: string
+          to_address?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "email_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_threads: {
+        Row: {
+          ai_takeover: boolean
+          created_at: string
+          guest_email: string
+          guest_name: string | null
+          id: string
+          inbox_id: string | null
+          intent: Database["public"]["Enums"]["email_intent"] | null
+          last_message_at: string
+          message_count: number
+          status: Database["public"]["Enums"]["email_thread_status"]
+          subject: string | null
+          unread: boolean
+          updated_at: string
+          venue_id: string
+          vip: boolean
+        }
+        Insert: {
+          ai_takeover?: boolean
+          created_at?: string
+          guest_email: string
+          guest_name?: string | null
+          id?: string
+          inbox_id?: string | null
+          intent?: Database["public"]["Enums"]["email_intent"] | null
+          last_message_at?: string
+          message_count?: number
+          status?: Database["public"]["Enums"]["email_thread_status"]
+          subject?: string | null
+          unread?: boolean
+          updated_at?: string
+          venue_id: string
+          vip?: boolean
+        }
+        Update: {
+          ai_takeover?: boolean
+          created_at?: string
+          guest_email?: string
+          guest_name?: string | null
+          id?: string
+          inbox_id?: string | null
+          intent?: Database["public"]["Enums"]["email_intent"] | null
+          last_message_at?: string
+          message_count?: number
+          status?: Database["public"]["Enums"]["email_thread_status"]
+          subject?: string | null
+          unread?: boolean
+          updated_at?: string
+          venue_id?: string
+          vip?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_threads_inbox_id_fkey"
+            columns: ["inbox_id"]
+            isOneToOne: false
+            referencedRelation: "email_inboxes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       guests: {
         Row: {
           created_at: string
@@ -906,6 +1182,40 @@ export type Database = {
         | "transfer"
         | "voicemail"
         | "other"
+      email_action_kind:
+        | "reply"
+        | "create_booking"
+        | "update_booking"
+        | "cancel_booking"
+        | "flag_vip"
+        | "tag_dietary"
+        | "escalate"
+        | "no_action"
+      email_action_status:
+        | "proposed"
+        | "pending_approval"
+        | "approved"
+        | "executed"
+        | "rejected"
+        | "undone"
+        | "failed"
+      email_intent:
+        | "new_booking"
+        | "modify_booking"
+        | "cancel_booking"
+        | "dietary"
+        | "vip_request"
+        | "event_enquiry"
+        | "function_enquiry"
+        | "general_question"
+        | "spam"
+        | "other"
+      email_thread_status:
+        | "open"
+        | "awaiting_guest"
+        | "awaiting_staff"
+        | "resolved"
+        | "archived"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1052,6 +1362,44 @@ export const Constants = {
         "transfer",
         "voicemail",
         "other",
+      ],
+      email_action_kind: [
+        "reply",
+        "create_booking",
+        "update_booking",
+        "cancel_booking",
+        "flag_vip",
+        "tag_dietary",
+        "escalate",
+        "no_action",
+      ],
+      email_action_status: [
+        "proposed",
+        "pending_approval",
+        "approved",
+        "executed",
+        "rejected",
+        "undone",
+        "failed",
+      ],
+      email_intent: [
+        "new_booking",
+        "modify_booking",
+        "cancel_booking",
+        "dietary",
+        "vip_request",
+        "event_enquiry",
+        "function_enquiry",
+        "general_question",
+        "spam",
+        "other",
+      ],
+      email_thread_status: [
+        "open",
+        "awaiting_guest",
+        "awaiting_staff",
+        "resolved",
+        "archived",
       ],
     },
   },

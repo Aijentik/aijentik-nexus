@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Phone, CalendarDays, BookOpen, Bot, BarChart3,
   Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map, Workflow,
-  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight,
+  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight, Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -35,6 +35,7 @@ const SECTIONS: { id: string; title: string; items: Item[] }[] = [
       { to: "/app/floor", label: "Floor Plan", icon: Map },
       { to: "/app/calls", label: "Calls", icon: Phone },
       { to: "/app/messages", label: "Messages", icon: MessagesSquare },
+      { to: "/app/email", label: "Email AI", icon: Mail, hero: true },
     ],
   },
   {

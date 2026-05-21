@@ -207,6 +207,7 @@ export default function Agents() {
       </div>
 
       <AgentConfigDialog agent={configAgent} open={!!configAgent} onOpenChange={(o) => !o && setConfigAgent(null)} onSaved={load} />
+      <AddAgentDialog open={addOpen} onOpenChange={setAddOpen} existingKinds={agents.map(a => a.kind)} onAdded={load} />
     </>
   );
 }

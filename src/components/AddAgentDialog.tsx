@@ -50,7 +50,7 @@ export function AddAgentDialog({
       if (!exists) {
         const { error } = await supabase.from("agents").insert({
           venue_id: venue.id,
-          kind: def.kind,
+          kind: def.kind as any,
           name: def.name,
           status: "active",
           prompt: def.desc,

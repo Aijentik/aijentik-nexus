@@ -113,6 +113,7 @@ export default function Onboarding() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-[1fr_520px]">
+      <AnimatePresence>{busy && <LaunchOverlay venueName={profile?.name} />}</AnimatePresence>
       {/* LEFT */}
       <div className="p-6 md:p-12 flex flex-col">
         <div className="flex items-center gap-2.5 mb-10">
@@ -124,7 +125,7 @@ export default function Onboarding() {
 
         <AnimatePresence mode="wait">
           {stage === "url" && <UrlStep key="url" url={url} setUrl={setUrl} onSubmit={startScan} onManual={() => setStage("manual")} />}
-          {stage === "manual" && <ManualStep key="manual" onBack={() => setStage("url")} session={session} refreshVenues={refreshVenues} nav={nav} />}
+          {stage === "manual" && <ManualStep key="manual" onBack={() => setStage("url")} session={session} refreshVenues={refreshVenues} nav={nav} setBusyParent={setBusy} />}
           {stage === "scanning" && <ScanningStep key="scanning" url={url} />}
           {stage === "review" && profile && (
             <ReviewStep key="review" profile={profile} setProfile={setProfile} appliedGaps={appliedGaps} applyGap={applyGap} launch={launch} busy={busy} />
@@ -166,6 +167,66 @@ export default function Onboarding() {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ---------- Launch overlay ---------- */
+function LaunchOverlay({ venueName }: { venueName?: string }) {
+  const steps = [
+    "Provisioning workspace",
+    "Embedding knowledge base",
+    "Bringing agents online",
+    "Calibrating Live Brain",
+    "Opening the doors",
+  ];
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((x) => Math.min(x + 1, steps.length - 1)), 850);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] grid place-items-center bg-background/92 backdrop-blur-xl"
+    >
+      <div className="absolute inset-0 grid-bg opacity-20" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[520px] w-[520px] rounded-full bg-primary/20 blur-[120px] animate-pulse" />
+      <div className="relative text-center max-w-md px-6">
+        <motion.div
+          initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 180, damping: 18 }}
+          className="mx-auto mb-8 relative h-24 w-24"
+        >
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary to-accent shadow-[0_0_60px_hsl(var(--primary)/0.6)]" />
+          <div className="absolute inset-0 rounded-3xl border border-primary/40 animate-ping" />
+          <div className="absolute inset-0 grid place-items-center">
+            <Brain className="h-11 w-11 text-primary-foreground" />
+          </div>
+        </motion.div>
+        <div className="text-[10px] uppercase tracking-[0.32em] text-primary mb-2">Launching</div>
+        <h2 className="text-3xl font-semibold tracking-tight mb-1">{venueName || "Your venue"}</h2>
+        <p className="text-sm text-muted-foreground mb-8">Assembling your AI hospitality workforce.</p>
+        <div className="space-y-2.5 text-left">
+          {steps.map((s, idx) => (
+            <motion.div
+              key={s}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: idx <= i ? 1 : 0.35, x: 0 }}
+              className="flex items-center gap-3 text-sm"
+            >
+              {idx < i ? (
+                <CheckCircle2 className="h-4 w-4 text-[hsl(var(--success))]" />
+              ) : idx === i ? (
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              ) : (
+                <div className="h-4 w-4 rounded-full border border-white/15" />
+              )}
+              <span className={idx <= i ? "text-foreground" : "text-muted-foreground"}>{s}</span>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
   );
 }
 

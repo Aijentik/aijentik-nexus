@@ -29,6 +29,7 @@ import EmailOps from "./pages/EmailOps";
 import ManagerEarpiece from "./pages/ManagerEarpiece";
 import Forecast from "./pages/Forecast";
 import Orders from "./pages/Orders";
+import Channels from "./pages/Channels";
 import { DemoTourProvider } from "@/lib/demo/DemoTourProvider";
 import { DemoController } from "@/components/demo/DemoController";
 

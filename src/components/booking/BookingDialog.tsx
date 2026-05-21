@@ -206,6 +206,10 @@ export function BookingDialog({ open, onOpenChange, mode = "create", initial, on
 
   const onSubmit = form.handleSubmit(async (values) => {
     if (!venue) return;
+    if (conflict.table && !overrideConflict) {
+      toast.error("Table conflict", { description: `Already booked for ${conflict.table.guest} at ${conflict.table.time}. Tick the override to save anyway.` });
+      return;
+    }
     setSubmitting(true);
     try {
       const [h, m] = values.time.split(":").map(Number);

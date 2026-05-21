@@ -3,11 +3,12 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, CalendarDays, Users, Pencil, Copy, MoveRight, X, Crown, Repeat, MoreHorizontal } from "lucide-react";
+import { Plus, Trash2, CalendarDays, Users, Pencil, Copy, MoveRight, X, Crown, Repeat, MoreHorizontal, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookingDialog, type BookingDialogMode } from "@/components/booking/BookingDialog";
+import { RunSheetDialog } from "@/components/RunSheetDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +46,7 @@ export default function Diary() {
   const [dialogMode, setDialogMode] = useState<BookingDialogMode>("create");
   const [dialogInitial, setDialogInitial] = useState<any | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [runSheetOpen, setRunSheetOpen] = useState(false);
 
   const load = async () => {
     if (!venue) return;
@@ -142,13 +144,23 @@ export default function Diary() {
         title="Diary"
         subtitle="Your living booking diary. Updates the moment your AI confirms a table — voice, web or SMS."
         actions={
-          <Button
-            size="lg"
-            onClick={openCreate}
-            className="bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40 shadow-[0_12px_40px_-12px_hsl(var(--primary)/0.7)] px-5 h-11"
-          >
-            <Plus className="h-4 w-4 mr-2" /> New booking
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => setRunSheetOpen(true)}
+              className="h-11 border-primary/30 hover:border-primary/60 hover:bg-primary/5"
+            >
+              <Sparkles className="h-4 w-4 mr-2 text-primary" /> Generate run sheet
+            </Button>
+            <Button
+              size="lg"
+              onClick={openCreate}
+              className="bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40 shadow-[0_12px_40px_-12px_hsl(var(--primary)/0.7)] px-5 h-11"
+            >
+              <Plus className="h-4 w-4 mr-2" /> New booking
+            </Button>
+          </div>
         }
       />
 
@@ -288,6 +300,8 @@ export default function Diary() {
         initial={dialogInitial}
         onSaved={load}
       />
+
+      <RunSheetDialog open={runSheetOpen} onOpenChange={setRunSheetOpen} />
 
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent className="glass-strong border-white/10">

@@ -107,7 +107,7 @@
 
 @layer components {
   .glass {
-    @apply bg-card/40 backdrop-blur-xl;
+    @apply bg-card/60 backdrop-blur-md;
     border: 1px solid hsl(36 30% 96% / 0.06);
     box-shadow:
       var(--shadow-card),
@@ -115,7 +115,7 @@
       0 -1px 0 hsl(0 0% 0% / 0.3) inset;
   }
   .glass-strong {
-    @apply bg-card/65 backdrop-blur-2xl;
+    @apply bg-card/80 backdrop-blur-lg;
     border: 1px solid hsl(36 30% 96% / 0.08);
     box-shadow:
       var(--shadow-float),

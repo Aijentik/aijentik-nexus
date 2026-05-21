@@ -507,6 +507,57 @@ export function BookingDialog({ open, onOpenChange, mode = "create", initial, on
             )}
           </div>
 
+          {/* Conflict / capacity warnings */}
+          <AnimatePresence>
+            {(conflict.table || conflict.capacity) && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className={cn(
+                  "rounded-xl border p-3 space-y-2",
+                  conflict.table
+                    ? "border-destructive/40 bg-destructive/10"
+                    : "border-warn/40 bg-warn/10"
+                )}
+              >
+                {conflict.table && (
+                  <div className="flex items-start gap-2 text-[12px]">
+                    <span className="mt-0.5 h-2 w-2 rounded-full bg-destructive shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-medium text-destructive">Table conflict</div>
+                      <div className="text-muted-foreground">
+                        Already booked for <span className="text-foreground">{conflict.table.guest}</span> at {conflict.table.time} (±90min seating).
+                      </div>
+                      <label className="mt-1.5 inline-flex items-center gap-1.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={overrideConflict}
+                          onChange={(e) => setOverrideConflict(e.target.checked)}
+                          className="h-3 w-3 rounded border-border accent-destructive"
+                        />
+                        <span className="text-[11px] text-muted-foreground">Override and save anyway</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+                {conflict.capacity && (
+                  <div className="flex items-start gap-2 text-[12px]">
+                    <span className="mt-0.5 h-2 w-2 rounded-full bg-warn shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-medium" style={{ color: "hsl(var(--warn))" }}>Capacity stress</div>
+                      <div className="text-muted-foreground">
+                        Projected {conflict.capacity.covers} covers in this hour vs venue capacity of {conflict.capacity.cap}.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+
+
           {/* Phone + email */}
           <div className="grid grid-cols-2 gap-4">
             <div>

@@ -883,6 +883,119 @@ export type Database = {
         }
         Relationships: []
       }
+      order_items: {
+        Row: {
+          created_at: string
+          id: string
+          menu_item_id: string | null
+          modifiers: Json
+          name: string
+          notes: string | null
+          order_id: string
+          qty: number
+          unit_price_cents: number
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          menu_item_id?: string | null
+          modifiers?: Json
+          name: string
+          notes?: string | null
+          order_id: string
+          qty?: number
+          unit_price_cents?: number
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          menu_item_id?: string | null
+          modifiers?: Json
+          name?: string
+          notes?: string | null
+          order_id?: string
+          qty?: number
+          unit_price_cents?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          ai_confidence: number
+          channel: Database["public"]["Enums"]["order_channel"]
+          created_at: string
+          currency: string
+          delivery_address: string | null
+          fulfillment: Database["public"]["Enums"]["order_fulfillment"]
+          guest_email: string | null
+          guest_id: string | null
+          guest_name: string
+          guest_phone: string | null
+          id: string
+          notes: string | null
+          payment_status: Database["public"]["Enums"]["payment_status"]
+          pickup_time: string | null
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal_cents: number
+          total_cents: number
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          ai_confidence?: number
+          channel?: Database["public"]["Enums"]["order_channel"]
+          created_at?: string
+          currency?: string
+          delivery_address?: string | null
+          fulfillment?: Database["public"]["Enums"]["order_fulfillment"]
+          guest_email?: string | null
+          guest_id?: string | null
+          guest_name: string
+          guest_phone?: string | null
+          id?: string
+          notes?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"]
+          pickup_time?: string | null
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal_cents?: number
+          total_cents?: number
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          ai_confidence?: number
+          channel?: Database["public"]["Enums"]["order_channel"]
+          created_at?: string
+          currency?: string
+          delivery_address?: string | null
+          fulfillment?: Database["public"]["Enums"]["order_fulfillment"]
+          guest_email?: string | null
+          guest_id?: string | null
+          guest_name?: string
+          guest_phone?: string | null
+          id?: string
+          notes?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"]
+          pickup_time?: string | null
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal_cents?: number
+          total_cents?: number
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1056,6 +1169,7 @@ export type Database = {
           created_at: string
           cuisine: string | null
           description: string | null
+          features: Json
           forwarded_number: string | null
           hours: Json | null
           id: string
@@ -1078,6 +1192,7 @@ export type Database = {
           created_at?: string
           cuisine?: string | null
           description?: string | null
+          features?: Json
           forwarded_number?: string | null
           hours?: Json | null
           id?: string
@@ -1100,6 +1215,7 @@ export type Database = {
           created_at?: string
           cuisine?: string | null
           description?: string | null
+          features?: Json
           forwarded_number?: string | null
           hours?: Json | null
           id?: string
@@ -1216,6 +1332,24 @@ export type Database = {
         | "awaiting_staff"
         | "resolved"
         | "archived"
+      order_channel:
+        | "web"
+        | "whatsapp"
+        | "instagram"
+        | "messenger"
+        | "sms"
+        | "phone"
+        | "in_house"
+      order_fulfillment: "dine_in" | "takeaway" | "delivery"
+      order_status:
+        | "new"
+        | "confirmed"
+        | "in_kitchen"
+        | "ready"
+        | "out_for_delivery"
+        | "completed"
+        | "cancelled"
+      payment_status: "unpaid" | "authorized" | "paid" | "refunded" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1401,6 +1535,26 @@ export const Constants = {
         "resolved",
         "archived",
       ],
+      order_channel: [
+        "web",
+        "whatsapp",
+        "instagram",
+        "messenger",
+        "sms",
+        "phone",
+        "in_house",
+      ],
+      order_fulfillment: ["dine_in", "takeaway", "delivery"],
+      order_status: [
+        "new",
+        "confirmed",
+        "in_kitchen",
+        "ready",
+        "out_for_delivery",
+        "completed",
+        "cancelled",
+      ],
+      payment_status: ["unpaid", "authorized", "paid", "refunded", "failed"],
     },
   },
 } as const

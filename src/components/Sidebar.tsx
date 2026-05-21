@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Phone, CalendarDays, BookOpen, Bot, BarChart3,
   Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map, Workflow,
-  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight, Mail,
+  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight, Mail, Headphones,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -24,6 +24,7 @@ const SECTIONS: { id: string; title: string; items: Item[] }[] = [
       { to: "/app/live", label: "Venue Live", icon: Radio, hero: true, live: true },
       { to: "/app/voice", label: "Live Voice", icon: Mic, hero: true },
       { to: "/app/brain", label: "Live Brain", icon: Brain, hero: true },
+      { to: "/app/earpiece", label: "Ear-Piece", icon: Headphones, hero: true },
       { to: "/app/flow", label: "Flow Studio", icon: Workflow },
     ],
   },

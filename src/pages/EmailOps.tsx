@@ -195,7 +195,7 @@ export default function EmailOps() {
     <div>
       <PageHeader
         title="Email Operations"
-        description="Inbound bookings, modifications, and enquiries handled by your AI."
+        subtitle="Inbound bookings, modifications, and enquiries handled by your AI."
         actions={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setSimOpen(s => !s)}>

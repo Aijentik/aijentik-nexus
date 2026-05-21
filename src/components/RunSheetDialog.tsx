@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Sparkles, Calendar, Users, Crown, Cake, AlertTriangle, Activity,
-  Printer, Send, Copy, Loader2, X, Clock, Flame, ChefHat, Shield, Link as LinkIcon, Phone,
+  Printer, Send, Copy, Loader2, X, Clock, Flame, ChefHat, Shield,
 } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";

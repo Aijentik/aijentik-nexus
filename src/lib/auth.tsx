@@ -1,8 +1,8 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 
-type Venue = { id: string; name: string; venue_type?: string | null; status?: string | null; features?: any };
+type Venue = { id: string; name: string; venue_type?: string | null; status?: string | null; features?: unknown };
 
 type Ctx = {
   user: User | null;
@@ -15,10 +15,14 @@ type Ctx = {
   signOut: () => Promise<void>;
 };
 
-const AuthCtx = createContext<Ctx>(null as any);
+const AuthCtx = createContext<Ctx | null>(null);
 let venueRefreshPromise: Promise<void> | null = null;
 
-export const useAuth = () => useContext(AuthCtx);
+export const useAuth = () => {
+  const ctx = useContext(AuthCtx);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -26,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [venue, setVenue] = useState<Venue | null>(null);
+  const lastLoadedUserIdRef = useRef<string | null>(null);
 
   const refreshVenues = async () => {
     if (venueRefreshPromise) return venueRefreshPromise;
@@ -52,19 +57,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === "INITIAL_SESSION") return;
+      const nextUser = s?.user ?? null;
       setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        setLoading(true);
+      setUser(nextUser);
+      if (nextUser) {
+        if (event === "TOKEN_REFRESHED" || lastLoadedUserIdRef.current === nextUser.id) return;
+        lastLoadedUserIdRef.current = nextUser.id;
         setTimeout(() => { refreshVenues().finally(() => setLoading(false)); }, 0);
       } else {
+        lastLoadedUserIdRef.current = null;
         setVenues([]); setVenue(null); setLoading(false);
       }
     });
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) await refreshVenues();
+      if (s?.user) {
+        lastLoadedUserIdRef.current = s.user.id;
+        await refreshVenues();
+      }
       setLoading(false);
     });
     return () => sub.subscription.unsubscribe();

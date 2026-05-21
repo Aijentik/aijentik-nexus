@@ -301,6 +301,8 @@ export default function Diary() {
         onSaved={load}
       />
 
+      <RunSheetDialog open={runSheetOpen} onOpenChange={setRunSheetOpen} />
+
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent className="glass-strong border-white/10">
           <AlertDialogHeader>

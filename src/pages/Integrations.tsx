@@ -107,7 +107,29 @@ export default function Integrations() {
                 {i.name}
                 {i.highlight && <Sparkles className="h-3 w-3 text-primary" />}
               </div>
-              <div className="text-[13px] text-muted-foreground mt-1.5 mb-5 min-h-[2.5rem] leading-relaxed">{i.desc}</div>
+              <div className="text-[13px] text-muted-foreground mt-1.5 mb-3 min-h-[2.5rem] leading-relaxed">{i.desc}</div>
+
+              {/* Health row — sync status + last sync */}
+              {isConnected && (
+                <div className="flex items-center gap-2 mb-3 text-[10.5px] text-muted-foreground">
+                  <span
+                    className="h-1.5 w-1.5 rounded-full shrink-0"
+                    style={{
+                      background:
+                        conn?.sync_health === "ok" ? "hsl(var(--success))" :
+                        conn?.sync_health === "warn" ? "hsl(var(--warn))" :
+                        conn?.sync_health === "error" ? "hsl(var(--destructive))" : "hsl(var(--muted-foreground))",
+                      boxShadow: conn?.sync_health === "ok" ? "0 0 6px hsl(var(--success))" : undefined,
+                    }}
+                  />
+                  <span className="uppercase tracking-wider">
+                    {conn?.sync_health === "ok" ? "Healthy" : conn?.sync_health === "warn" ? "Degraded" : conn?.sync_health === "error" ? "Errors" : "Unknown"}
+                  </span>
+                  <span className="ml-auto tabular-nums">
+                    {conn?.last_sync_at ? `synced ${timeAgo(conn.last_sync_at)}` : "no sync yet"}
+                  </span>
+                </div>
+              )}
 
               <Button
                 variant="outline"

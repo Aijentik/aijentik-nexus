@@ -30,7 +30,9 @@ export function ProtectedLayout() {
       </main>
       <FloatingBrain />
       <StaffCopilot />
+      <AICommandCenter />
     </div>
+
   );
 }
 

@@ -277,3 +277,23 @@ export default function Settings() {
     </>
   );
 }
+
+function FeatureToggle({ label, hint, enabled, onToggle }: { label: string; hint: string; enabled: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`w-full flex items-center gap-4 p-3 rounded-xl border text-left transition-colors ${
+        enabled ? "border-primary/40 bg-primary/[0.06]" : "border-white/[0.06] bg-black/30 hover:border-white/[0.12]"
+      }`}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="text-[13.5px] font-medium">{label}</div>
+        <div className="text-[11.5px] text-muted-foreground mt-0.5">{hint}</div>
+      </div>
+      <div className={`relative h-6 w-11 rounded-full transition-colors shrink-0 ${enabled ? "bg-primary" : "bg-white/10"}`}>
+        <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-all ${enabled ? "left-[22px]" : "left-0.5"}`} />
+      </div>
+    </button>
+  );
+}
+

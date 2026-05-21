@@ -233,7 +233,7 @@ export function Sidebar() {
                     className="overflow-hidden"
                   >
                     <div className="space-y-0.5">
-                      {section.items.map((item) => {
+                      {visibleItems.map((item) => {
                         const active = isActive(item.to);
                         const Icon = item.icon;
                         return (

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { Sun, Sunrise, Sunset, Moon } from "lucide-react";
 
 function phaseFor(h: number) {
@@ -26,18 +25,16 @@ export function VenueClock({ venueName }: { venueName?: string }) {
 
   return (
     <div className="relative inline-flex items-center gap-3 pl-3 pr-4 py-2 rounded-full
-      bg-[hsl(28_18%_6%/0.7)] backdrop-blur-xl border border-white/[0.05]
+      bg-[hsl(28_18%_6%/0.9)] border border-white/[0.05]
       shadow-[0_8px_32px_-8px_hsl(0_0%_0%/0.6),0_1px_0_hsl(36_100%_85%/0.05)_inset]
       overflow-hidden">
       <div className={`absolute inset-0 -z-10 bg-gradient-to-r ${phase.tone} opacity-60`} />
-      <motion.div
-        animate={{ rotate: [0, 8, -6, 0] }}
-        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+      <div
         className="relative h-7 w-7 rounded-full grid place-items-center"
         style={{ background: `radial-gradient(circle at 30% 30%, ${phase.dot}, transparent 70%)` }}
       >
         <Icon className="h-4 w-4 text-foreground/90" strokeWidth={1.8} />
-      </motion.div>
+      </div>
       <div className="flex items-baseline gap-2">
         <span className="text-[13px] font-semibold tracking-tight tabular-nums">{time}</span>
         <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{phase.label}</span>

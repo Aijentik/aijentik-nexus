@@ -28,6 +28,7 @@ import NotFound from "./pages/NotFound";
 import EmailOps from "./pages/EmailOps";
 import ManagerEarpiece from "./pages/ManagerEarpiece";
 import Forecast from "./pages/Forecast";
+import Orders from "./pages/Orders";
 import { DemoTourProvider } from "@/lib/demo/DemoTourProvider";
 import { DemoController } from "@/components/demo/DemoController";
 

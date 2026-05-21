@@ -156,7 +156,7 @@ export function FloatingBrain() {
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setOpen(false)}
-              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+              className="fixed inset-0 z-40 bg-black/55"
             />
           )}
           <motion.aside
@@ -239,7 +239,7 @@ export function FloatingBrain() {
               <AnimatePresence initial={false}>
                 {grouped.map(group => (
                   <div key={group.label} className="space-y-2">
-                    <div className="sticky top-0 z-10 -mx-1 px-1 py-1 backdrop-blur-md bg-background/40 text-[9.5px] uppercase tracking-[0.22em] text-muted-foreground/70 font-medium">
+                    <div className="sticky top-0 z-10 -mx-1 px-1 py-1 bg-background/90 text-[9.5px] uppercase tracking-[0.22em] text-muted-foreground/70 font-medium">
                       {group.label}
                     </div>
                     {group.items.map(ev => (

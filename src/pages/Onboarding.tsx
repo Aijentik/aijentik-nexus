@@ -94,6 +94,16 @@ export default function Onboarding() {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Launch failed");
+
+      // Persist services/features onto the freshly created venue
+      const features = profile.features || {};
+      if (Object.keys(features).length) {
+        const newVenueId = j?.venue_id || j?.venue?.id;
+        if (newVenueId) {
+          await supabase.from("venues").update({ features }).eq("id", newVenueId);
+        }
+      }
+
       await refreshVenues();
       toast.success("Welcome aboard.");
       nav("/app");

@@ -13,7 +13,7 @@ import {
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-type Item = { to: string; label: string; icon: any; hero?: boolean; live?: boolean };
+type Item = { to: string; label: string; icon: any; hero?: boolean; live?: boolean; featureFlag?: string };
 
 const SECTIONS: { id: string; title: string; items: Item[] }[] = [
   {
@@ -34,6 +34,7 @@ const SECTIONS: { id: string; title: string; items: Item[] }[] = [
     items: [
       { to: "/app/diary", label: "Diary", icon: CalendarDays },
       { to: "/app/floor", label: "Floor Plan", icon: Map },
+      { to: "/app/orders", label: "Ordering", icon: ShoppingBag, hero: true, live: true, featureFlag: "ordering" },
       { to: "/app/calls", label: "Calls", icon: Phone },
       { to: "/app/messages", label: "Messages", icon: MessagesSquare },
       { to: "/app/email", label: "Email AI", icon: Mail, hero: true },

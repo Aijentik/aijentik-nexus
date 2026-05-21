@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
-import { Bot, Mic, Calendar, Megaphone, Sparkles, Phone, Copy, Check, Loader2, Settings2, Activity } from "lucide-react";
+import { Bot, Mic, Calendar, Megaphone, Sparkles, Phone, Copy, Check, Loader2, Settings2, Activity, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { AgentConfigDialog } from "@/components/AgentConfigDialog";
+import { AddAgentDialog } from "@/components/AddAgentDialog";
 
 const meta: any = {
   voice:    { icon: Mic,      tag: "Voice Host",    color: "hsl(32 96% 58%)",  desc: "Answers calls, takes bookings" },

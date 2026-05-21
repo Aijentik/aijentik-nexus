@@ -350,31 +350,38 @@ function VoiceLiveInner() {
           </div>
 
           <div className="relative mt-7 flex gap-2.5">
-            {!isOn ? (
+            {!callActive ? (
               <Button
                 size="lg"
                 onClick={start}
-                disabled={busy || preparing || status === "connecting"}
+                disabled={isConnecting}
                 className="relative overflow-hidden bg-gradient-to-r from-primary via-primary to-accent text-primary-foreground
                   shadow-[0_16px_50px_-12px_hsl(var(--primary)/0.7),0_1px_0_hsl(36_100%_90%_/_0.3)_inset]
                   hover:shadow-[0_20px_60px_-12px_hsl(var(--primary)/0.85)]
                   border border-primary/40 px-6 h-12 font-medium transition-all duration-300"
               >
                 <span className="absolute inset-0 stream-line opacity-60" />
-                {busy || preparing || status === "connecting"
+                {isConnecting
                   ? <Loader2 className="h-4 w-4 animate-spin mr-2 relative" />
                   : <Phone className="h-4 w-4 mr-2 relative" />}
-                <span className="relative">{preparing ? "Preparing" : status === "connecting" ? "Connecting" : "Start call"}</span>
+                <span className="relative">{preparing ? "Preparing" : "Start call"}</span>
               </Button>
             ) : (
-              <Button size="lg" variant="destructive" onClick={stop} className="h-12 px-6">
-                <PhoneOff className="h-4 w-4 mr-2" /> End call
+              <Button
+                size="lg"
+                variant="destructive"
+                onClick={stop}
+                className="h-12 px-6 shadow-[0_16px_50px_-12px_hsl(var(--destructive)/0.7)]"
+              >
+                <PhoneOff className="h-4 w-4 mr-2" />
+                {status === "connecting" ? "Cancel call" : "End call"}
               </Button>
             )}
             <Button size="lg" variant="outline" onClick={openInNewTab} className="h-12 w-12 p-0" title="Open in new tab">
               <ExternalLink className="h-4 w-4" />
             </Button>
           </div>
+
           <div className="relative mt-5 text-[11px] text-muted-foreground text-center max-w-xs">
             Tip: if mic access is blocked in the embedded preview, open this page in a new tab.
           </div>

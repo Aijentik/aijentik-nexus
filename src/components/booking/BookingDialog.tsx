@@ -160,6 +160,7 @@ export function BookingDialog({ open, onOpenChange, mode = "create", initial, on
         guest_phone: values.guest_phone || null,
         guest_email: values.guest_email || null,
         notes: values.notes || null,
+        table_id: pickedTableId || null,
       };
 
       if (mode === "create" || mode === "duplicate") {

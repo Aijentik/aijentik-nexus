@@ -407,14 +407,14 @@ function ReviewStep({ profile, setProfile, appliedGaps, applyGap, launch, busy }
   );
 }
 
-function ManualStep({ onBack, session, refreshVenues, nav }: any) {
+function ManualStep({ onBack, session, refreshVenues, nav, setBusyParent }: any) {
   const [form, setForm] = useState({ name: "", website: "", venue_type: "restaurant", cuisine: "", city: "", phone: "" });
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name) return toast.error("Venue name required");
-    setBusy(true);
+    setBusy(true); setBusyParent?.(true);
     try {
       const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/onboard-venue`, {
         method: "POST",
@@ -422,13 +422,12 @@ function ManualStep({ onBack, session, refreshVenues, nav }: any) {
         body: JSON.stringify(form),
       });
       if (!r.ok || !r.body) throw new Error(`Build failed: ${r.status}`);
-      // drain stream silently
       const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "";
       while (true) { const { done, value } = await reader.read(); if (done) break; buf += dec.decode(value, { stream: true }); }
       await refreshVenues();
       toast.success("Venue ready.");
       nav("/app");
-    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); setBusyParent?.(false); }
   };
 
   return (

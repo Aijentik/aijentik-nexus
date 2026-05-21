@@ -378,6 +378,72 @@ export function BookingDialog({ open, onOpenChange, mode = "create", initial, on
             <FieldError msg={errors.time?.message} />
           </div>
 
+          {/* AI Seater */}
+          <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.05] to-transparent p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground flex-1">AI Floor-Plan Seater</div>
+              <Button
+                type="button" size="sm" variant="outline" className="h-7 text-[11px]"
+                disabled={seatLoading || !partySize}
+                onClick={async () => {
+                  if (!venue) return;
+                  setSeatLoading(true);
+                  try {
+                    const [h, m] = (time || "19:00").split(":").map(Number);
+                    const when = set(date || new Date(), { hours: h, minutes: m, seconds: 0, milliseconds: 0 });
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/suggest-seating`, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${session?.access_token}`,
+                        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                      },
+                      body: JSON.stringify({
+                        venue_id: venue.id, party_size: partySize,
+                        booking_time: when.toISOString(),
+                        vip: !!matchedGuest?.vip,
+                        notes: form.getValues("notes") || "",
+                      }),
+                    });
+                    const j = await res.json();
+                    if (j.suggestion) {
+                      setSeatSuggestion({ table: j.suggestion, reason: j.reason });
+                    } else {
+                      toast.warning("No free table fits", { description: j.reason });
+                      setSeatSuggestion(null);
+                    }
+                  } catch (e: any) {
+                    toast.error("Seater failed", { description: e.message });
+                  } finally {
+                    setSeatLoading(false);
+                  }
+                }}
+              >
+                {seatLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                Suggest table
+              </Button>
+            </div>
+            {seatSuggestion ? (
+              <div className="flex items-center gap-2 text-[12px]">
+                <Badge className="bg-primary/15 text-primary border-primary/30">{seatSuggestion.table.label} · seats {seatSuggestion.table.capacity}</Badge>
+                <div className="flex-1 text-muted-foreground italic truncate">"{seatSuggestion.reason}"</div>
+                <Button
+                  type="button" size="sm" variant={pickedTableId === seatSuggestion.table.id ? "default" : "outline"}
+                  className="h-7 text-[11px]"
+                  onClick={() => setPickedTableId(seatSuggestion.table.id)}
+                >
+                  {pickedTableId === seatSuggestion.table.id ? <><Check className="h-3 w-3 mr-1" /> Assigned</> : "Assign"}
+                </Button>
+              </div>
+            ) : (
+              <div className="text-[11px] text-muted-foreground">
+                {pickedTableId ? "Table assigned manually." : "Let the AI pick the best free table for this party, time, and guest profile."}
+              </div>
+            )}
+          </div>
+
           {/* Phone + email */}
           <div className="grid grid-cols-2 gap-4">
             <div>

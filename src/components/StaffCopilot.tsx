@@ -96,7 +96,7 @@ export function StaffCopilot() {
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setOpen(false)}
-              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-md"
+              className="fixed inset-0 z-40 bg-black/55"
             />
             <motion.div
               initial={{ y: 30, opacity: 0, scale: 0.96 }}
@@ -104,7 +104,7 @@ export function StaffCopilot() {
               exit={{ y: 30, opacity: 0, scale: 0.96 }}
               transition={{ type: "spring", damping: 26, stiffness: 240 }}
               className="fixed bottom-6 right-6 z-50 w-full sm:w-[440px] h-[600px] flex flex-col
-                bg-[hsl(28_18%_6%_/_0.92)] backdrop-blur-2xl
+                bg-[hsl(28_18%_6%_/_0.97)]
                 rounded-3xl border border-white/10
                 shadow-[0_40px_100px_-20px_hsl(0_0%_0%_/_0.8),0_0_60px_-10px_hsl(var(--primary)/0.3),0_1px_0_hsl(36_100%_90%_/_0.06)_inset]
                 overflow-hidden"

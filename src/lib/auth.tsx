@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 
-type Venue = { id: string; name: string; venue_type?: string | null; status?: string | null; features?: any };
+type Venue = { id: string; name: string; venue_type?: string | null; status?: string | null; features?: Record<string, boolean> | null };
 
 type Ctx = {
   user: User | null;
@@ -15,10 +15,14 @@ type Ctx = {
   signOut: () => Promise<void>;
 };
 
-const AuthCtx = createContext<Ctx>(null as any);
+const AuthCtx = createContext<Ctx | null>(null);
 let venueRefreshPromise: Promise<void> | null = null;
 
-export const useAuth = () => useContext(AuthCtx);
+export const useAuth = () => {
+  const ctx = useContext(AuthCtx);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);

@@ -23,6 +23,13 @@ export function StaffCopilot() {
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("aijentik:open-copilot", onOpen);
+    return () => window.removeEventListener("aijentik:open-copilot", onOpen);
+  }, []);
+
+
   const send = async (text?: string) => {
     const value = (text ?? input).trim();
     if (!value || !venue) return;

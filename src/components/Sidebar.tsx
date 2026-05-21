@@ -110,12 +110,10 @@ export function Sidebar() {
   const initials = (user?.email?.[0] || "?").toUpperCase();
 
   return (
-    <motion.aside
-      initial={false}
-      animate={{ width: collapsed ? 76 : 260 }}
-      transition={{ duration: 0.45, ease: [0.2, 0.7, 0.2, 1] }}
+    <aside
+      style={{ width: collapsed ? 76 : 260 }}
       className="shrink-0 h-screen sticky top-0 z-20 flex flex-col relative
-        bg-[hsl(28_22%_3.5%/0.88)] backdrop-blur-2xl
+        bg-[hsl(28_22%_3.5%/0.96)] transition-[width] duration-300 ease-out
         border-r border-white/[0.04]
         shadow-[1px_0_0_0_hsl(36_100%_80%_/_0.03)_inset,_8px_0_40px_-12px_hsl(0_0%_0%_/_0.6)]"
     >
@@ -124,13 +122,7 @@ export function Sidebar() {
         className="absolute top-0 left-0 right-0 h-56 pointer-events-none opacity-60"
         style={{ background: "radial-gradient(circle at 30% 0%, hsl(32 96% 58% / 0.18), transparent 70%)" }}
       />
-      <motion.div
-        aria-hidden
-        className="absolute -bottom-20 -left-10 right-0 h-72 pointer-events-none opacity-40 blur-3xl"
-        animate={{ opacity: [0.25, 0.45, 0.25] }}
-        transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-        style={{ background: "radial-gradient(60% 60% at 50% 50%, hsl(22 88% 52% / 0.22), transparent 70%)" }}
-      />
+      <div aria-hidden className="absolute -bottom-20 -left-10 right-0 h-72 pointer-events-none opacity-35 blur-3xl" style={{ background: "radial-gradient(60% 60% at 50% 50%, hsl(22 88% 52% / 0.22), transparent 70%)" }} />
       <div className="absolute inset-y-0 right-0 w-px pointer-events-none
         bg-gradient-to-b from-transparent via-primary/15 to-transparent" />
 
@@ -427,6 +419,6 @@ export function Sidebar() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </motion.aside>
+    </aside>
   );
 }

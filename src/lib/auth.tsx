@@ -16,6 +16,7 @@ type Ctx = {
 };
 
 const AuthCtx = createContext<Ctx>(null as any);
+let venueRefreshPromise: Promise<void> | null = null;
 
 export const useAuth = () => useContext(AuthCtx);
 
@@ -27,6 +28,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [venue, setVenue] = useState<Venue | null>(null);
 
   const refreshVenues = async () => {
+    if (venueRefreshPromise) return venueRefreshPromise;
+    venueRefreshPromise = (async () => {
     const { data: { user: u } } = await supabase.auth.getUser();
     if (!u) { setVenues([]); setVenue(null); return; }
     const { data: vs } = await supabase.from("venues").select("id,name,venue_type,status,features").order("created_at", { ascending: true });
@@ -34,6 +37,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: prof } = await supabase.from("profiles").select("current_venue_id").eq("user_id", u.id).maybeSingle();
     const active = (vs || []).find(v => v.id === prof?.current_venue_id) || (vs || [])[0] || null;
     setVenue(active);
+    })().finally(() => { venueRefreshPromise = null; });
+    return venueRefreshPromise;
   };
 
   const setActiveVenue = async (id: string) => {
@@ -45,7 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === "INITIAL_SESSION") return;
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {

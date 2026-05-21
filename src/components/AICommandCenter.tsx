@@ -71,7 +71,7 @@ export function AICommandCenter() {
     >
       {/* Ambient outer aura — single source of glow */}
       <span
-        className="pointer-events-none absolute -inset-4 rounded-full blur-2xl opacity-50 -z-10 animate-aura"
+        className="pointer-events-none absolute -inset-4 rounded-full blur-2xl opacity-40 -z-10"
         style={{
           background:
             "radial-gradient(circle, hsl(var(--primary) / 0.45), transparent 70%)",
@@ -80,7 +80,7 @@ export function AICommandCenter() {
 
       <div
         className="relative flex items-center gap-2 sm:gap-2.5 h-12 sm:h-[52px] pl-1.5 pr-3 sm:pr-5 rounded-full
-          bg-[hsl(28_18%_5%_/_0.78)] backdrop-blur-xl
+          bg-[hsl(28_18%_5%_/_0.94)]
           border border-primary/30
           shadow-[0_18px_50px_-12px_hsl(0_0%_0%_/_0.65),0_0_28px_-6px_hsl(var(--primary)/0.45),0_1px_0_hsl(36_100%_90%_/_0.08)_inset]
           transition-[border-color,box-shadow] duration-300
@@ -116,13 +116,12 @@ export function AICommandCenter() {
               "0 0 24px hsl(var(--primary) / 0.5), 0 1px 0 hsl(36 100% 95% / 0.35) inset, 0 6px 18px -6px hsl(0 0% 0% / 0.6)",
           }}
         >
-          {/* Neural shimmer ring */}
+          {/* Static neural ring */}
           <span
-            className="absolute inset-0 rounded-full opacity-50"
+            className="absolute inset-0 rounded-full opacity-35"
             style={{
               background:
-                "conic-gradient(from 0deg, transparent 0deg, hsl(36 100% 90% / 0.25) 90deg, transparent 180deg, hsl(36 100% 90% / 0.18) 270deg, transparent 360deg)",
-              animation: "spin 6s linear infinite",
+                "conic-gradient(from 32deg, transparent 0deg, hsl(36 100% 90% / 0.22) 90deg, transparent 180deg, hsl(36 100% 90% / 0.16) 270deg, transparent 360deg)",
               maskImage:
                 "radial-gradient(circle, transparent 55%, black 60%, black 75%, transparent 80%)",
               WebkitMaskImage:
@@ -143,20 +142,12 @@ export function AICommandCenter() {
           {pulse && (
             <span className="absolute -inset-1 rounded-full border border-primary/70 animate-ring-out" />
           )}
-          <motion.span
-            animate={{ scale: pulse ? [1, 1.16, 1] : [1, 1.04, 1] }}
-            transition={{
-              duration: pulse ? 0.55 : 3.4,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="relative grid place-items-center"
-          >
+          <span className="relative grid place-items-center">
             <Brain
               className="h-[18px] w-[18px] sm:h-5 sm:w-5 text-primary-foreground drop-shadow"
               strokeWidth={2.4}
             />
-          </motion.span>
+          </span>
           {count > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-background text-[10px] font-bold text-primary border border-primary/50 grid place-items-center shadow-md">
               {count > 99 ? "99+" : count}

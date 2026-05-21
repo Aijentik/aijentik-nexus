@@ -50,9 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    let handledInitialSession = false;
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      if (!handledInitialSession) return;
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === "INITIAL_SESSION") return;
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
@@ -67,7 +66,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(s?.user ?? null);
       if (s?.user) await refreshVenues();
       setLoading(false);
-      handledInitialSession = true;
     });
     return () => sub.subscription.unsubscribe();
   }, []);

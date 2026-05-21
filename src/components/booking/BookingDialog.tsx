@@ -115,6 +115,8 @@ export function BookingDialog({ open, onOpenChange, mode = "create", initial, on
       });
       setSuccess(false);
       setMatchedGuest(null);
+      setSeatSuggestion(null);
+      setPickedTableId(initial?.table_id ?? null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial?.id]);

@@ -26,6 +26,7 @@ import Integrations from "./pages/Integrations";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import EmailOps from "./pages/EmailOps";
+import ManagerEarpiece from "./pages/ManagerEarpiece";
 import { DemoTourProvider } from "@/lib/demo/DemoTourProvider";
 import { DemoController } from "@/components/demo/DemoController";
 

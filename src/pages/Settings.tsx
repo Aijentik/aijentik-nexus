@@ -6,18 +6,49 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Building2, Phone, Sparkles, Loader2 } from "lucide-react";
+import { Building2, Phone, Sparkles, Loader2, Users, Plus, Trash2, ShieldCheck, Crown } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+
+type Member = { id: string; user_id: string; role: string; display_name?: string | null };
 
 export default function Settings() {
-  const { venue, refreshVenues } = useAuth();
+  const { user, venue, refreshVenues, setActiveVenue } = useAuth();
   const [v, setV] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [newVenueOpen, setNewVenueOpen] = useState(false);
+  const [newVenueName, setNewVenueName] = useState("");
+  const [creatingVenue, setCreatingVenue] = useState(false);
 
-  useEffect(() => {
+  const loadVenue = async () => {
     if (!venue) return;
-    supabase.from("venues").select("*").eq("id", venue.id).single().then(({data}) => setV(data));
-  }, [venue]);
+    const { data } = await supabase.from("venues").select("*").eq("id", venue.id).single();
+    setV(data);
+    setOwnerId(data?.owner_id ?? null);
+  };
+
+  const loadMembers = async () => {
+    if (!venue) return;
+    const { data: roles } = await supabase.from("user_roles").select("id, user_id, role").eq("venue_id", venue.id);
+    const ids = Array.from(new Set((roles || []).map(r => r.user_id)));
+    let profilesById: Record<string, string> = {};
+    if (ids.length) {
+      const { data: profs } = await supabase.from("profiles").select("user_id, display_name").in("user_id", ids);
+      profilesById = Object.fromEntries((profs || []).map(p => [p.user_id, p.display_name || ""]));
+    }
+    setMembers((roles || []).map(r => ({ ...r, display_name: profilesById[r.user_id] })));
+  };
+
+  useEffect(() => { loadVenue(); loadMembers(); }, [venue?.id]);
+
+  const isOwner = !!user && !!ownerId && user.id === ownerId;
 
   const save = async () => {
     if (!v) return;
@@ -32,18 +63,56 @@ export default function Settings() {
     refreshVenues();
   };
 
+  const changeRole = async (id: string, role: string) => {
+    const { error } = await supabase.from("user_roles").update({ role: role as any }).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Role updated");
+    loadMembers();
+  };
+
+  const removeMember = async (id: string, user_id: string) => {
+    if (user_id === ownerId) return toast.error("Cannot remove venue owner");
+    const { error } = await supabase.from("user_roles").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Member removed");
+    loadMembers();
+  };
+
+  const createVenue = async () => {
+    if (!user) return;
+    const name = newVenueName.trim();
+    if (!name) return toast.error("Venue name is required");
+    setCreatingVenue(true);
+    const { data, error } = await supabase
+      .from("venues")
+      .insert({ name, owner_id: user.id })
+      .select("id")
+      .single();
+    if (!error && data) {
+      await supabase.from("user_roles").insert({ user_id: user.id, venue_id: data.id, role: "owner" as any });
+    }
+    setCreatingVenue(false);
+    if (error) return toast.error(error.message);
+    toast.success("Venue created");
+    setNewVenueOpen(false);
+    setNewVenueName("");
+    await refreshVenues();
+    if (data?.id) await setActiveVenue(data.id);
+  };
+
   if (!v) return <PageHeader title="Settings" />;
 
-  const Section = ({ icon: Icon, title, hint, children }: any) => (
+  const Section = ({ icon: Icon, title, hint, actions, children }: any) => (
     <div className="card-cine p-6">
       <div className="flex items-start gap-3 mb-5">
         <div className="h-10 w-10 rounded-xl bg-primary/12 border border-primary/25 grid place-items-center">
           <Icon className="h-4 w-4 text-primary" />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="font-medium text-[15px]">{title}</div>
           <div className="text-xs text-muted-foreground mt-0.5">{hint}</div>
         </div>
+        {actions}
       </div>
       <div className="space-y-4">{children}</div>
     </div>
@@ -58,13 +127,40 @@ export default function Settings() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Venue profile, voice and call routing — the foundation your AI works from." />
+      <PageHeader
+        title="Settings"
+        subtitle="Venue profile, voice, routing and team — the foundation your AI works from."
+        actions={
+          <Dialog open={newVenueOpen} onOpenChange={setNewVenueOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="lg" className="h-11 border-white/[0.08]">
+                <Plus className="h-4 w-4 mr-2" /> New venue
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Create a new venue</DialogTitle></DialogHeader>
+              <div className="space-y-2 pt-2">
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Venue name</Label>
+                <Input value={newVenueName} onChange={e => setNewVenueName(e.target.value)} placeholder="e.g. The Wharf, Soho" />
+                <p className="text-xs text-muted-foreground pt-1">You'll be set as owner. The new venue starts empty — add team, integrations and floor plan from this page.</p>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setNewVenueOpen(false)}>Cancel</Button>
+                <Button onClick={createVenue} disabled={creatingVenue}>
+                  {creatingVenue ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Create venue
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
       <div className="grid lg:grid-cols-2 gap-5 max-w-5xl">
         <Section icon={Building2} title="Venue profile" hint="The basics your AI needs to introduce your brand.">
           <div className="grid sm:grid-cols-2 gap-4">
             <Field label="Venue name"><Input className="bg-black/30 border-white/[0.06]" value={v.name || ""} onChange={e => setV({...v, name: e.target.value})} /></Field>
-            <Field label="Capacity"><Input type="number" className="bg-black/30 border-white/[0.06]" value={v.capacity || 0} onChange={e => setV({...v, capacity: +e.target.value})} /></Field>
+            <Field label="Capacity"><Input type="number" min={0} className="bg-black/30 border-white/[0.06]" value={v.capacity || 0} onChange={e => setV({...v, capacity: +e.target.value})} /></Field>
             <Field label="Website"><Input className="bg-black/30 border-white/[0.06]" value={v.website || ""} onChange={e => setV({...v, website: e.target.value})} /></Field>
             <Field label="City"><Input className="bg-black/30 border-white/[0.06]" value={v.city || ""} onChange={e => setV({...v, city: e.target.value})} /></Field>
             <div className="sm:col-span-2">
@@ -86,6 +182,66 @@ export default function Settings() {
             <Input className="bg-black/30 border-white/[0.06]" placeholder="warm, professional, concise" value={v.brand_voice || ""} onChange={e => setV({...v, brand_voice: e.target.value})} />
           </Field>
           <div className="text-[11px] text-muted-foreground italic">e.g. "warm and conspiratorial, like a head waiter who's seen everything"</div>
+        </Section>
+
+        <Section
+          icon={Users}
+          title="Team & roles"
+          hint={isOwner ? "Owners and managers can edit; staff can view operations." : "Only the venue owner can change roles."}
+        >
+          {members.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No members yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {members.map(m => {
+                const isVenueOwner = m.user_id === ownerId;
+                const isSelf = m.user_id === user?.id;
+                return (
+                  <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl bg-black/30 border border-white/[0.05]">
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-accent grid place-items-center text-xs font-semibold text-primary-foreground border border-white/10 shrink-0">
+                      {(m.display_name?.[0] || "?").toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-medium truncate flex items-center gap-1.5">
+                        {m.display_name || m.user_id.slice(0, 8)}
+                        {isSelf && <span className="text-[10px] text-muted-foreground">(you)</span>}
+                        {isVenueOwner && <Crown className="h-3 w-3 text-primary" />}
+                      </div>
+                      <div className="text-[10.5px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                        <ShieldCheck className="h-2.5 w-2.5" /> {m.role}
+                      </div>
+                    </div>
+                    {isOwner && !isVenueOwner ? (
+                      <>
+                        <Select value={m.role} onValueChange={(r) => changeRole(m.id, r)}>
+                          <SelectTrigger className="h-8 w-32 bg-black/40 border-white/[0.06] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="manager">Manager</SelectItem>
+                            <SelectItem value="staff">Staff</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost" size="sm"
+                          onClick={() => removeMember(m.id, m.user_id)}
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                          title="Remove member"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {!isOwner && (
+            <div className="text-[11px] text-muted-foreground italic pt-1">
+              Ask the venue owner to invite new members or change roles.
+            </div>
+          )}
         </Section>
 
         <div className="lg:col-span-2 flex justify-end">

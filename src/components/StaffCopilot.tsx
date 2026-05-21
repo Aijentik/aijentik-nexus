@@ -23,6 +23,13 @@ export function StaffCopilot() {
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("aijentik:open-copilot", onOpen);
+    return () => window.removeEventListener("aijentik:open-copilot", onOpen);
+  }, []);
+
+
   const send = async (text?: string) => {
     const value = (text ?? input).trim();
     if (!value || !venue) return;
@@ -81,31 +88,7 @@ export function StaffCopilot() {
 
   return (
     <>
-      {/* Floating Jarvis trigger */}
-      <motion.button
-        onClick={() => setOpen(true)}
-        whileHover={{ scale: 1.04, y: -2 }}
-        whileTap={{ scale: 0.96 }}
-        className="fixed bottom-6 right-6 z-40 group"
-      >
-        <span className="absolute -inset-2 rounded-full blur-xl opacity-60 animate-aura"
-          style={{ background: "radial-gradient(circle, hsl(var(--primary) / 0.55), transparent 70%)" }} />
-        <span className="relative flex items-center gap-2.5 h-12 px-5 rounded-full
-          bg-[hsl(28_18%_5%_/_0.85)] backdrop-blur-xl
-          border border-primary/40
-          shadow-[0_12px_40px_-8px_hsl(0_0%_0%_/_0.6),0_0_30px_-4px_hsl(var(--primary)/0.5),0_1px_0_hsl(36_100%_90%_/_0.1)_inset]
-          group-hover:border-primary/70 transition-all">
-          <span className="relative flex h-6 w-6 rounded-full grid place-items-center"
-            style={{ background: "radial-gradient(circle at 35% 30%, hsl(38 100% 78%), hsl(32 96% 58%) 50%, hsl(22 88% 42%))" }}>
-            <Sparkles className="h-3 w-3 text-primary-foreground" strokeWidth={2.4} />
-            <span className="absolute inset-0 rounded-full border border-primary/40 animate-ring-out" />
-          </span>
-          <span className="text-sm font-medium tracking-tight">Ask Copilot</span>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground hidden sm:inline border-l border-white/10 pl-2.5">
-            ⌘K
-          </span>
-        </span>
-      </motion.button>
+
 
       <AnimatePresence>
         {open && (

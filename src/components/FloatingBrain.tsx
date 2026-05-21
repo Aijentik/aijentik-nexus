@@ -25,6 +25,12 @@ export function FloatingBrain() {
   const [explanations, setExplanations] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("aijentik:open-brain", onOpen);
+    return () => window.removeEventListener("aijentik:open-brain", onOpen);
+  }, []);
+
+  useEffect(() => {
     if (!venue) return;
     let active = true;
     supabase.from("brain_events").select("*").eq("venue_id", venue.id)
@@ -38,9 +44,16 @@ export function FloatingBrain() {
           setEvents(e => [p.new as Event, ...e].slice(0, 60));
           setPulse(true);
           setTimeout(() => setPulse(false), 2500);
+          window.dispatchEvent(new CustomEvent("aijentik:brain-pulse", { detail: { count: 1 } }));
         }).subscribe();
     return () => { active = false; supabase.removeChannel(ch); };
   }, [venue?.id]);
+
+  // Broadcast event count so the unified command center can show a badge.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("aijentik:brain-count", { detail: { count: events.length } }));
+  }, [events.length]);
+
 
   const explain = useCallback(async (ev: Event) => {
     if (explanations[ev.id]) return;
@@ -70,7 +83,7 @@ export function FloatingBrain() {
     }
   }, [venue?.id]);
 
-  const recent = events.length;
+  // recent count exposed via window event; no inline badge here anymore.
   const sevColor = (s: string) =>
     s === "success" ? "hsl(var(--success))" :
     s === "warn" ? "hsl(var(--warn))" :
@@ -80,40 +93,7 @@ export function FloatingBrain() {
 
   return (
     <>
-      <motion.button
-        onClick={() => setOpen(o => !o)}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.94 }}
-        className="fixed bottom-6 right-[210px] z-50 h-14 w-14 rounded-full grid place-items-center group"
-        style={{
-          background: "radial-gradient(circle at 35% 30%, hsl(38 100% 78%), hsl(32 96% 58%) 50%, hsl(22 88% 42%))",
-          boxShadow: "0 0 50px hsl(var(--primary) / 0.6), 0 1px 0 hsl(36 100% 95% / 0.4) inset, 0 12px 32px -8px hsl(0 0% 0% / 0.6)",
-          border: "1px solid hsl(var(--primary) / 0.5)",
-        }}
-        aria-label="Open Live Brain"
-      >
-        {/* Aura */}
-        <span className="absolute inset-0 rounded-full blur-xl opacity-70 -z-10 animate-aura"
-          style={{ background: "radial-gradient(circle, hsl(var(--primary) / 0.7), transparent 70%)" }} />
-        {/* Outer pulse */}
-        <span className="absolute -inset-1 rounded-full border border-primary/40 animate-ring-out" />
-        {pulse && <span className="absolute -inset-1 rounded-full border border-primary/60 animate-ring-out" />}
-        {/* Glossy top */}
-        <span className="absolute top-1.5 left-3 right-6 h-3 rounded-full opacity-60"
-          style={{ background: "radial-gradient(ellipse, hsl(0 0% 100% / 0.55), transparent 70%)" }} />
 
-        <motion.div
-          animate={{ scale: pulse ? [1, 1.18, 1] : [1, 1.05, 1] }}
-          transition={{ duration: pulse ? 0.55 : 3, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <Brain className="h-[22px] w-[22px] text-primary-foreground drop-shadow-md" strokeWidth={2.4} />
-        </motion.div>
-        {recent > 0 && (
-          <span className="absolute -bottom-1 -right-1 min-w-5 h-5 px-1.5 rounded-full bg-background text-[10px] font-bold text-primary border border-primary/50 grid place-items-center shadow-lg">
-            {recent > 99 ? "99+" : recent}
-          </span>
-        )}
-      </motion.button>
 
       <AnimatePresence>
         {open && (

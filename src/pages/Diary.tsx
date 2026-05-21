@@ -3,13 +3,28 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Plus, Trash2, CalendarDays, Users } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Plus, Trash2, CalendarDays, Users, Pencil, Copy, MoveRight, X, Crown, Repeat, MoreHorizontal } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { BookingDialog, type BookingDialogMode } from "@/components/booking/BookingDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const statusStyle = (s: string): { color: string; bg: string; border: string } => {
   switch (s) {
@@ -25,38 +40,92 @@ const statusStyle = (s: string): { color: string; bg: string; border: string } =
 export default function Diary() {
   const { venue } = useAuth();
   const [bookings, setBookings] = useState<any[]>([]);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ guest_name: "", party_size: 2, booking_time: "", guest_phone: "", notes: "" });
+  const [guests, setGuests] = useState<Record<string, any>>({});
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<BookingDialogMode>("create");
+  const [dialogInitial, setDialogInitial] = useState<any | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const load = async () => {
     if (!venue) return;
-    const { data } = await supabase.from("bookings").select("*").eq("venue_id", venue.id).order("booking_time", { ascending: true });
-    setBookings(data || []);
+    const [{ data: bks }, { data: gs }] = await Promise.all([
+      supabase.from("bookings").select("*").eq("venue_id", venue.id).order("booking_time", { ascending: true }),
+      supabase.from("guests").select("id,name,phone,vip,visit_count").eq("venue_id", venue.id),
+    ]);
+    setBookings(bks || []);
+    const byPhone: Record<string, any> = {};
+    (gs || []).forEach((g: any) => {
+      if (g.phone) byPhone[g.phone.replace(/\s/g, "")] = g;
+      if (g.name) byPhone["name:" + g.name.toLowerCase()] = g;
+    });
+    setGuests(byPhone);
   };
   useEffect(() => { load(); }, [venue]);
 
-  const create = async () => {
-    if (!venue || !form.guest_name || !form.booking_time) return;
-    const when = new Date(form.booking_time);
-    const { data: booking, error } = await supabase.from("bookings").insert({ venue_id: venue.id, ...form, booking_time: when.toISOString(), source: "manual", status: "confirmed" }).select().single();
-    if (error) return toast.error(error.message);
-    await supabase.from("brain_events").insert({ venue_id: venue.id, title: "Booking added manually", reason: `${form.guest_name} · party of ${form.party_size}`, severity: "info" });
-    if (form.guest_phone) {
-      supabase.functions.invoke("send-sms", { body: { venue_id: venue.id, to: form.guest_phone, booking_id: booking?.id, body: `Hi ${form.guest_name}, your table for ${form.party_size} at ${venue.name} on ${format(when, "EEE d MMM 'at' HH:mm")} is confirmed. Reply STOP to opt out.` } }).then(() => toast.success("Confirmation sent")).catch(() => {});
+  // Realtime: stream new/changed bookings in
+  useEffect(() => {
+    if (!venue) return;
+    const ch = supabase
+      .channel("diary:" + venue.id)
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings", filter: `venue_id=eq.${venue.id}` }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venue]);
+
+  const openCreate = () => { setDialogMode("create"); setDialogInitial(null); setDialogOpen(true); };
+  const openEdit = (b: any) => { setDialogMode("edit"); setDialogInitial(b); setDialogOpen(true); };
+  const openMove = (b: any) => { setDialogMode("move"); setDialogInitial(b); setDialogOpen(true); };
+  const openDuplicate = (b: any) => { setDialogMode("duplicate"); setDialogInitial(b); setDialogOpen(true); };
+
+  const cancelBooking = async (b: any) => {
+    // Optimistic
+    setBookings((prev) => prev.map((x) => (x.id === b.id ? { ...x, status: "cancelled" } : x)));
+    const { error } = await supabase.from("bookings").update({ status: "cancelled" }).eq("id", b.id);
+    if (error) {
+      toast.error("Couldn't cancel", { description: error.message });
+      load();
+    } else {
+      toast.success("Booking cancelled", { description: `${b.guest_name} · ${format(new Date(b.booking_time), "EEE d MMM HH:mm")}` });
+      await supabase.from("brain_events").insert({
+        venue_id: venue!.id,
+        title: "Booking cancelled",
+        reason: `${b.guest_name} · party of ${b.party_size}`,
+        severity: "warn",
+      });
     }
-    toast.success("Booking added");
-    setOpen(false); setForm({ guest_name: "", party_size: 2, booking_time: "", guest_phone: "", notes: "" });
-    load();
   };
 
   const remove = async (id: string) => {
-    await supabase.from("bookings").delete().eq("id", id);
-    load();
+    const b = bookings.find((x) => x.id === id);
+    setBookings((prev) => prev.filter((x) => x.id !== id));
+    const { error } = await supabase.from("bookings").delete().eq("id", id);
+    if (error) {
+      toast.error("Couldn't delete", { description: error.message });
+      load();
+    } else {
+      toast.success("Booking deleted");
+      if (b) await supabase.from("brain_events").insert({
+        venue_id: venue!.id,
+        title: "Booking deleted",
+        reason: `${b.guest_name} · ${format(new Date(b.booking_time), "EEE d MMM HH:mm")}`,
+        severity: "warn",
+      });
+    }
+    setDeleteId(null);
   };
 
   const setStatus = async (id: string, status: string) => {
-    await supabase.from("bookings").update({ status: status as any }).eq("id", id);
-    load();
+    setBookings((prev) => prev.map((x) => (x.id === id ? { ...x, status } : x)));
+    const { error } = await supabase.from("bookings").update({ status: status as any }).eq("id", id);
+    if (error) { toast.error("Couldn't update status"); load(); }
+  };
+
+  const guestFor = (b: any) => {
+    const k = (b.guest_phone || "").replace(/\s/g, "");
+    if (k && guests[k]) return guests[k];
+    if (b.guest_name && guests["name:" + b.guest_name.toLowerCase()]) return guests["name:" + b.guest_name.toLowerCase()];
+    return null;
   };
 
   const grouped = bookings.reduce((acc: any, b) => {
@@ -73,26 +142,13 @@ export default function Diary() {
         title="Diary"
         subtitle="Your living booking diary. Updates the moment your AI confirms a table — voice, web or SMS."
         actions={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="lg" className="bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40 shadow-[0_12px_40px_-12px_hsl(var(--primary)/0.7)] px-5 h-11">
-                <Plus className="h-4 w-4 mr-2" /> New booking
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="glass-strong border-white/10">
-              <DialogHeader><DialogTitle>New booking</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <div><Label>Guest name</Label><Input className="mt-1.5" value={form.guest_name} onChange={e => setForm({...form, guest_name: e.target.value})} /></div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Party size</Label><Input className="mt-1.5" type="number" min={1} value={form.party_size} onChange={e => setForm({...form, party_size: +e.target.value})} /></div>
-                  <div><Label>Time</Label><Input className="mt-1.5" type="datetime-local" value={form.booking_time} onChange={e => setForm({...form, booking_time: e.target.value})} /></div>
-                </div>
-                <div><Label>Phone</Label><Input className="mt-1.5" value={form.guest_phone} onChange={e => setForm({...form, guest_phone: e.target.value})} /></div>
-                <div><Label>Notes</Label><Input className="mt-1.5" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} /></div>
-                <Button onClick={create} className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground">Add booking</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button
+            size="lg"
+            onClick={openCreate}
+            className="bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40 shadow-[0_12px_40px_-12px_hsl(var(--primary)/0.7)] px-5 h-11"
+          >
+            <Plus className="h-4 w-4 mr-2" /> New booking
+          </Button>
         }
       />
 
@@ -123,53 +179,135 @@ export default function Diary() {
             <div className="text-sm text-muted-foreground max-w-md mx-auto">As your AI host takes calls and confirms bookings, they'll stream in here in real time.</div>
           </div>
         )}
-        {Object.entries(grouped).map(([day, items]: any, gi) => (
-          <motion.div
-            key={day}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: gi * 0.04 }}
-          >
-            <div className="flex items-center gap-3 mb-3 px-1">
-              <div className="label-micro">{day}</div>
-              <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
-              <div className="text-[11px] text-muted-foreground">
-                {items.length} bookings · {items.reduce((s: number, b: any) => s + (b.party_size || 0), 0)} covers
+        <AnimatePresence initial={false}>
+          {Object.entries(grouped).map(([day, items]: any, gi) => (
+            <motion.div
+              key={day}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ delay: gi * 0.04 }}
+            >
+              <div className="flex items-center gap-3 mb-3 px-1">
+                <div className="label-micro">{day}</div>
+                <div className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+                <div className="text-[11px] text-muted-foreground">
+                  {items.length} bookings · {items.reduce((s: number, b: any) => s + (b.party_size || 0), 0)} covers
+                </div>
               </div>
-            </div>
-            <div className="card-cine divide-y divide-white/[0.04] overflow-hidden">
-              {items.map((b: any) => {
-                const s = statusStyle(b.status);
-                return (
-                  <div key={b.id} className="p-4 flex items-center gap-4 hover:bg-white/[0.02] transition-colors group">
-                    <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/15 grid place-items-center text-primary font-semibold text-[14px] tabular-nums">
-                      {format(new Date(b.booking_time), "HH:mm")}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium">{b.guest_name} <span className="text-muted-foreground font-normal">· party of {b.party_size}</span></div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{b.guest_phone || "—"} · via {b.source}</div>
-                    </div>
-                    <select
-                      value={b.status}
-                      onChange={e => setStatus(b.id, e.target.value)}
-                      className="text-[11px] uppercase tracking-wider px-2.5 py-1.5 rounded-lg border font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      style={{ color: s.color, background: s.bg, borderColor: s.border }}
+              <div className="card-cine divide-y divide-white/[0.04] overflow-hidden">
+                {items.map((b: any) => {
+                  const s = statusStyle(b.status);
+                  const g = guestFor(b);
+                  const isVip = g?.vip;
+                  const isRepeat = !isVip && g?.visit_count > 1;
+                  return (
+                    <motion.div
+                      key={b.id}
+                      layout
+                      className="p-4 flex items-center gap-4 hover:bg-white/[0.02] transition-colors group"
                     >
-                      {["pending","confirmed","seated","completed","cancelled","no_show"].map(opt => <option key={opt} value={opt} className="bg-card text-foreground">{opt}</option>)}
-                    </select>
-                    <button
-                      onClick={() => remove(b.id)}
-                      className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </motion.div>
-        ))}
+                      <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/15 grid place-items-center text-primary font-semibold text-[14px] tabular-nums">
+                        {format(new Date(b.booking_time), "HH:mm")}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium flex items-center gap-2 flex-wrap">
+                          <span>{b.guest_name}</span>
+                          {isVip && (
+                            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary">
+                              <Crown className="h-2.5 w-2.5" /> VIP
+                            </span>
+                          )}
+                          {isRepeat && (
+                            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/10 bg-white/[0.04] text-foreground/70">
+                              <Repeat className="h-2.5 w-2.5" /> {g.visit_count}× guest
+                            </span>
+                          )}
+                          <span className="text-muted-foreground font-normal text-sm">· party of {b.party_size}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {b.guest_phone || "—"} · via {b.source}
+                          {b.notes && <span className="ml-2 text-foreground/70">· {b.notes}</span>}
+                        </div>
+                      </div>
+                      <select
+                        value={b.status}
+                        onChange={(e) => setStatus(b.id, e.target.value)}
+                        className="text-[11px] uppercase tracking-wider px-2.5 py-1.5 rounded-lg border font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        style={{ color: s.color, background: s.bg, borderColor: s.border }}
+                      >
+                        {["pending", "confirmed", "seated", "completed", "cancelled", "no_show"].map((opt) => (
+                          <option key={opt} value={opt} className="bg-card text-foreground">{opt}</option>
+                        ))}
+                      </select>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Booking actions"
+                            className="h-9 w-9 opacity-60 group-hover:opacity-100 transition-opacity hover:bg-white/[0.05]"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="glass-strong border-white/10 w-48">
+                          <DropdownMenuItem onClick={() => openEdit(b)}>
+                            <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openMove(b)}>
+                            <MoveRight className="h-3.5 w-3.5 mr-2" /> Move
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openDuplicate(b)}>
+                            <Copy className="h-3.5 w-3.5 mr-2" /> Duplicate
+                          </DropdownMenuItem>
+                          {b.status !== "cancelled" && (
+                            <DropdownMenuItem onClick={() => cancelBooking(b)} className="text-warn">
+                              <X className="h-3.5 w-3.5 mr-2" /> Cancel
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setDeleteId(b.id)} className="text-destructive focus:text-destructive">
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
+
+      <BookingDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        mode={dialogMode}
+        initial={dialogInitial}
+        onSaved={load}
+      />
+
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent className="glass-strong border-white/10">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this booking?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the booking from your diary. Prefer "Cancel" if you want to keep the record.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteId && remove(deleteId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

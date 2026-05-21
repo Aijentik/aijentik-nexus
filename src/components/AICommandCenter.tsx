@@ -80,7 +80,7 @@ export function AICommandCenter() {
 
       <div
         className="relative flex items-center gap-2 sm:gap-2.5 h-12 sm:h-[52px] pl-1.5 pr-3 sm:pr-5 rounded-full
-          bg-[hsl(28_18%_5%_/_0.78)] backdrop-blur-xl
+          bg-[hsl(28_18%_5%_/_0.94)]
           border border-primary/30
           shadow-[0_18px_50px_-12px_hsl(0_0%_0%_/_0.65),0_0_28px_-6px_hsl(var(--primary)/0.45),0_1px_0_hsl(36_100%_90%_/_0.08)_inset]
           transition-[border-color,box-shadow] duration-300

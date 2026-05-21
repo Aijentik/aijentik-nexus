@@ -1,13 +1,17 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Phone, CalendarDays, BookOpen, Bot, BarChart3,
   Settings, Sparkles, MessagesSquare, LogOut, Plug, Brain, Mic, Map, Workflow,
-  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck,
+  ChevronDown, Radio, PanelLeftClose, PanelLeft, ShieldCheck, User, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 type Item = { to: string; label: string; icon: any; hero?: boolean; live?: boolean };
 
@@ -54,6 +58,7 @@ const SECTIONS: { id: string; title: string; items: Item[] }[] = [
 ];
 
 const COLLAPSE_KEY = "aijentik:sidebarCollapsed";
+const GROUPS_KEY = "aijentik:sidebarGroups";
 
 export function Sidebar() {
   const loc = useLocation();
@@ -62,13 +67,41 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch { return false; }
   });
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(GROUPS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return { primary: true, ops: true, ai: true, biz: true };
+  });
 
   useEffect(() => {
     try { localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0"); } catch {}
   }, [collapsed]);
 
+  useEffect(() => {
+    try { localStorage.setItem(GROUPS_KEY, JSON.stringify(openGroups)); } catch {}
+  }, [openGroups]);
+
   const isActive = (to: string) =>
     loc.pathname === to || (to !== "/app" && loc.pathname.startsWith(to));
+
+  // Auto-open the group containing the active route
+  const activeSectionId = useMemo(() => {
+    for (const s of SECTIONS) {
+      if (s.items.some(i => isActive(i.to))) return s.id;
+    }
+    return null;
+  }, [loc.pathname]);
+
+  useEffect(() => {
+    if (activeSectionId && !openGroups[activeSectionId]) {
+      setOpenGroups(g => ({ ...g, [activeSectionId]: true }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSectionId]);
+
+  const initials = (user?.email?.[0] || "?").toUpperCase();
 
   return (
     <motion.aside
@@ -80,7 +113,7 @@ export function Sidebar() {
         border-r border-white/[0.04]
         shadow-[1px_0_0_0_hsl(36_100%_80%_/_0.03)_inset,_8px_0_40px_-12px_hsl(0_0%_0%_/_0.6)]"
     >
-      {/* Ambient lighting layers */}
+      {/* Ambient lighting */}
       <div
         className="absolute top-0 left-0 right-0 h-56 pointer-events-none opacity-60"
         style={{ background: "radial-gradient(circle at 30% 0%, hsl(32 96% 58% / 0.18), transparent 70%)" }}
@@ -96,7 +129,7 @@ export function Sidebar() {
         bg-gradient-to-b from-transparent via-primary/15 to-transparent" />
 
       {/* Brand + collapse */}
-      <div className="relative px-4 pt-5 pb-4 border-b border-white/[0.04]">
+      <div className="relative px-4 pt-5 pb-4 border-b border-white/[0.04] shrink-0">
         <div className="flex items-center gap-3">
           <Link to="/app" className="flex items-center gap-3 group min-w-0">
             <div className="relative shrink-0">
@@ -137,12 +170,11 @@ export function Sidebar() {
 
       {/* Venue selector */}
       {venue && !collapsed && (
-        <div className="relative px-4 py-3.5 border-b border-white/[0.04]">
+        <div className="relative px-4 py-3.5 border-b border-white/[0.04] shrink-0">
           <div className="label-micro mb-2 flex items-center gap-2">
             <span className="pulse-amber !h-1.5 !w-1.5" /> Active Venue
           </div>
           <div className="relative group">
-            <div className="absolute -inset-px rounded-xl bg-gradient-to-b from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none blur-sm" />
             <select
               value={venue.id}
               onChange={(e) => setActiveVenue(e.target.value)}
@@ -157,108 +189,120 @@ export function Sidebar() {
                 <option key={v.id} value={v.id}>{v.name}</option>
               ))}
             </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none transition-transform group-hover:translate-y-[-40%]" />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           </div>
         </div>
       )}
 
       {/* Navigation */}
-      <nav className="relative flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin">
-        {SECTIONS.map((section) => (
-          <div key={section.id}>
-            {!collapsed && (
-              <div className="px-3 mb-1.5 text-[9.5px] uppercase tracking-[0.24em] text-muted-foreground/55 font-medium">
-                {section.title}
-              </div>
-            )}
-            {collapsed && (
-              <div className="mx-3 mb-1.5 h-px bg-white/[0.05]" />
-            )}
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                const active = isActive(item.to);
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    title={collapsed ? item.label : undefined}
-                    className={cn(
-                      "relative flex items-center gap-3 rounded-xl text-[13.5px] font-medium transition-all duration-300 group",
-                      collapsed ? "px-2.5 py-2.5 justify-center" : "px-3",
-                      item.hero ? "py-[11px]" : "py-2.5",
-                      active
-                        ? "text-primary"
-                        : "text-muted-foreground/85 hover:text-foreground hover:bg-white/[0.025]"
-                    )}
+      <nav className="relative flex-1 overflow-y-auto px-3 py-4 space-y-3 scrollbar-thin">
+        {SECTIONS.map((section) => {
+          const isOpen = collapsed ? true : (openGroups[section.id] ?? true);
+          const hasActive = section.items.some(i => isActive(i.to));
+          return (
+            <div key={section.id}>
+              {!collapsed ? (
+                <button
+                  onClick={() => setOpenGroups(g => ({ ...g, [section.id]: !isOpen }))}
+                  className="w-full flex items-center gap-1.5 px-3 mb-1 text-[9.5px] uppercase tracking-[0.24em] text-muted-foreground/55 hover:text-muted-foreground/90 font-medium transition-colors"
+                  aria-expanded={isOpen}
+                >
+                  <ChevronRight className={cn("h-2.5 w-2.5 transition-transform duration-200", isOpen && "rotate-90")} />
+                  <span className="truncate">{section.title}</span>
+                  {hasActive && !isOpen && (
+                    <span className="ml-auto h-1 w-1 rounded-full bg-primary shadow-[0_0_6px_hsl(var(--primary))]" />
+                  )}
+                </button>
+              ) : (
+                <div className="mx-3 mb-1.5 h-px bg-white/[0.05]" />
+              )}
+              <AnimatePresence initial={false}>
+                {isOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.22, ease: [0.2, 0.7, 0.2, 1] }}
+                    className="overflow-hidden"
                   >
-                    {/* Hero ambient glow */}
-                    {item.hero && !active && (
-                      <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                        style={{ background: "linear-gradient(90deg, hsl(32 96% 58% / 0.06), transparent 60%)" }} />
-                    )}
-
-                    {/* Active capsule */}
-                    {active && (
-                      <motion.div
-                        layoutId="active-pill"
-                        className="absolute inset-0 rounded-xl"
-                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                        style={{
-                          background:
-                            "linear-gradient(180deg, hsl(32 96% 58% / 0.16), hsl(22 88% 52% / 0.08))",
-                          boxShadow:
-                            "inset 0 1px 0 hsl(36 100% 90% / 0.08), 0 8px 24px -10px hsl(var(--primary)/0.55)",
-                          border: "1px solid hsl(var(--primary)/0.28)",
-                        }}
-                      />
-                    )}
-                    {active && (
-                      <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-gradient-to-b from-primary-glow to-primary shadow-[0_0_10px_hsl(var(--primary)/0.8)]" />
-                    )}
-
-                    <span className="relative shrink-0">
-                      <Icon
-                        className={cn(
-                          "transition-all duration-300",
-                          item.hero ? "h-[18px] w-[18px]" : "h-[16.5px] w-[16.5px]",
-                          active
-                            ? "drop-shadow-[0_0_10px_hsl(var(--primary)/0.7)]"
-                            : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
-                        )}
-                        strokeWidth={active ? 2.2 : 1.8}
-                      />
-                      {/* Live pulse for Venue Live */}
-                      {item.live && (
-                        <span className="absolute -top-0.5 -right-0.5 flex h-1.5 w-1.5">
-                          <span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-75" />
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
-                        </span>
-                      )}
-                    </span>
-
-                    {!collapsed && (
-                      <>
-                        <span className="relative truncate">{item.label}</span>
-                        {item.live && (
-                          <span className="relative ml-auto px-1.5 py-[1px] rounded-full text-[8.5px] uppercase tracking-[0.18em] font-semibold
-                            text-primary bg-primary/10 border border-primary/25">
-                            Live
-                          </span>
-                        )}
-                        {active && !item.live && (
-                          <span className="relative ml-auto h-1 w-1 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
-                        )}
-                      </>
-                    )}
-                  </Link>
-                );
-              })}
+                    <div className="space-y-0.5">
+                      {section.items.map((item) => {
+                        const active = isActive(item.to);
+                        const Icon = item.icon;
+                        return (
+                          <Link
+                            key={item.to}
+                            to={item.to}
+                            title={collapsed ? item.label : undefined}
+                            className={cn(
+                              "relative flex items-center gap-3 rounded-xl text-[13.5px] font-medium transition-all duration-300 group",
+                              collapsed ? "px-2.5 py-2.5 justify-center" : "px-3",
+                              item.hero ? "py-[11px]" : "py-2.5",
+                              active
+                                ? "text-primary"
+                                : "text-muted-foreground/85 hover:text-foreground hover:bg-white/[0.025]"
+                            )}
+                          >
+                            {item.hero && !active && (
+                              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                                style={{ background: "linear-gradient(90deg, hsl(32 96% 58% / 0.06), transparent 60%)" }} />
+                            )}
+                            {active && (
+                              <motion.div
+                                layoutId="active-pill"
+                                className="absolute inset-0 rounded-xl"
+                                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                                style={{
+                                  background: "linear-gradient(180deg, hsl(32 96% 58% / 0.16), hsl(22 88% 52% / 0.08))",
+                                  boxShadow: "inset 0 1px 0 hsl(36 100% 90% / 0.08), 0 8px 24px -10px hsl(var(--primary)/0.55)",
+                                  border: "1px solid hsl(var(--primary)/0.28)",
+                                }}
+                              />
+                            )}
+                            {active && (
+                              <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-gradient-to-b from-primary-glow to-primary shadow-[0_0_10px_hsl(var(--primary)/0.8)]" />
+                            )}
+                            <span className="relative shrink-0">
+                              <Icon
+                                className={cn(
+                                  "transition-all duration-300",
+                                  item.hero ? "h-[18px] w-[18px]" : "h-[16.5px] w-[16.5px]",
+                                  active ? "drop-shadow-[0_0_10px_hsl(var(--primary)/0.7)]" : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                                )}
+                                strokeWidth={active ? 2.2 : 1.8}
+                              />
+                              {item.live && (
+                                <span className="absolute -top-0.5 -right-0.5 flex h-1.5 w-1.5">
+                                  <span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-75" />
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
+                                </span>
+                              )}
+                            </span>
+                            {!collapsed && (
+                              <>
+                                <span className="relative truncate">{item.label}</span>
+                                {item.live && (
+                                  <span className="relative ml-auto px-1.5 py-[1px] rounded-full text-[8.5px] uppercase tracking-[0.18em] font-semibold
+                                    text-primary bg-primary/10 border border-primary/25">
+                                    Live
+                                  </span>
+                                )}
+                                {active && !item.live && (
+                                  <span className="relative ml-auto h-1 w-1 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
+                                )}
+                              </>
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
-        {/* System status — only when expanded */}
         {!collapsed && (
           <div className="pt-2">
             <div className="px-3 mb-1.5 text-[9.5px] uppercase tracking-[0.24em] text-muted-foreground/55 font-medium">
@@ -278,54 +322,69 @@ export function Sidebar() {
                 <span className="text-[11.5px] font-medium text-foreground/90">AI Workforce Healthy</span>
               </div>
               <div className="relative space-y-1 text-[10.5px] text-muted-foreground/80">
-                <div className="flex items-center justify-between">
-                  <span>Agents active</span>
-                  <span className="tabular-nums text-foreground/85">4</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Escalations</span>
-                  <span className="tabular-nums text-foreground/85">0</span>
-                </div>
+                <div className="flex items-center justify-between"><span>Agents active</span><span className="tabular-nums text-foreground/85">4</span></div>
+                <div className="flex items-center justify-between"><span>Escalations</span><span className="tabular-nums text-foreground/85">0</span></div>
               </div>
             </div>
           </div>
         )}
       </nav>
 
-      {/* Profile */}
-      <div className="relative p-3 border-t border-white/[0.04]">
-        <div className={cn(
-          "flex items-center gap-2.5 rounded-xl transition-colors",
-          collapsed ? "p-1 justify-center" : "px-2.5 py-2 hover:bg-white/[0.03]"
-        )}>
-          <div className="relative shrink-0">
-            <div className="absolute inset-0 rounded-full bg-primary/30 blur-md" />
-            <div className="relative h-9 w-9 rounded-full bg-gradient-to-br from-accent via-primary to-primary-deep grid place-items-center text-xs font-semibold text-primary-foreground border border-white/10
-              shadow-[0_6px_18px_-6px_hsl(var(--primary)/0.6)]">
-              {user?.email?.[0]?.toUpperCase()}
-            </div>
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-background shadow-[0_0_8px_hsl(142_70%_45%)]" />
-          </div>
-          {!collapsed && (
-            <>
-              <div className="flex-1 min-w-0">
-                <div className="text-[12.5px] font-medium truncate flex items-center gap-1.5">
-                  {user?.email}
+      {/* Profile dropdown */}
+      <div className="relative p-3 border-t border-white/[0.04] shrink-0">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                "w-full flex items-center gap-2.5 rounded-xl transition-colors text-left",
+                collapsed ? "p-1 justify-center" : "px-2.5 py-2 hover:bg-white/[0.04]"
+              )}
+              aria-label="Open account menu"
+            >
+              <div className="relative shrink-0">
+                <div className="absolute inset-0 rounded-full bg-primary/30 blur-md" />
+                <div className="relative h-9 w-9 rounded-full bg-gradient-to-br from-accent via-primary to-primary-deep grid place-items-center text-xs font-semibold text-primary-foreground border border-white/10
+                  shadow-[0_6px_18px_-6px_hsl(var(--primary)/0.6)]">
+                  {initials}
                 </div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                  <ShieldCheck className="h-2.5 w-2.5" /> Owner · Live
-                </div>
+                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-background shadow-[0_0_8px_hsl(142_70%_45%)]" />
               </div>
-              <button
-                onClick={async () => { await signOut(); nav2("/auth"); }}
-                className="p-1.5 rounded-md hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Sign out"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </>
-          )}
-        </div>
+              {!collapsed && (
+                <>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12.5px] font-medium truncate">{user?.email}</div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <ShieldCheck className="h-2.5 w-2.5" /> Owner · Live
+                    </div>
+                  </div>
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                </>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="end" className="w-56 glass-strong">
+            <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              {user?.email}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => nav2("/app/settings")}>
+              <User className="h-4 w-4 mr-2" /> Profile & account
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => nav2("/app/settings")}>
+              <Settings className="h-4 w-4 mr-2" /> Workspace settings
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => nav2("/app/integrations")}>
+              <Plug className="h-4 w-4 mr-2" /> Integrations
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={async () => { await signOut(); nav2("/auth"); }}
+              className="text-destructive focus:text-destructive"
+            >
+              <LogOut className="h-4 w-4 mr-2" /> Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </motion.aside>
   );

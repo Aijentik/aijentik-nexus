@@ -112,6 +112,20 @@ export default function Knowledge() {
     finally { setHealing(false); }
   };
 
+  // Confidence heuristic per entry, based on content depth
+  const confidenceFor = (k: any): { score: number; label: string; tone: string } => {
+    const len = (k.content || "").length;
+    if (len > 400) return { score: 95, label: "High", tone: "hsl(var(--success))" };
+    if (len > 120) return { score: 72, label: "Medium", tone: "hsl(var(--primary))" };
+    return { score: 38, label: "Low", tone: "hsl(var(--warn))" };
+  };
+
+  // AI learning progress — essential categories coverage
+  const ESSENTIALS = ["policy", "hours", "menu", "faq", "allergen", "booking"];
+  const covered = new Set(items.map(i => (i.category || "").toLowerCase()));
+  const learnedCount = ESSENTIALS.filter(e => Array.from(covered).some(c => c.includes(e))).length;
+  const learningPct = Math.round((learnedCount / ESSENTIALS.length) * 100);
+
   return (
     <>
       <PageHeader title="Knowledge" subtitle="What your AI knows. Update anytime — agents pick it up immediately."
@@ -148,6 +162,37 @@ export default function Knowledge() {
           )
         } />
 
+      {tab === "knowledge" && (
+        <div className="card-cine p-4 mb-5 flex items-center gap-4">
+          <div className="relative h-12 w-12 shrink-0">
+            <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
+              <circle cx="18" cy="18" r="15" fill="none" stroke="hsl(var(--border))" strokeWidth="2.5" />
+              <circle cx="18" cy="18" r="15" fill="none" stroke="hsl(var(--primary))" strokeWidth="2.5"
+                strokeDasharray={`${(learningPct / 100) * 94.25} 94.25`} strokeLinecap="round"
+                className="drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]" />
+            </svg>
+            <div className="absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">{learningPct}%</div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-medium">AI learning progress</div>
+            <div className="text-[11.5px] text-muted-foreground">
+              {learnedCount} of {ESSENTIALS.length} essentials covered · {items.length} total entries
+            </div>
+          </div>
+          <div className="hidden sm:flex gap-1.5 flex-wrap justify-end max-w-[280px]">
+            {ESSENTIALS.map(e => {
+              const ok = Array.from(covered).some(c => c.includes(e));
+              return (
+                <span key={e} className={`text-[10px] px-2 py-0.5 rounded-full border capitalize ${
+                  ok ? "border-[hsl(var(--success))]/30 bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]"
+                     : "border-white/[0.06] bg-white/[0.02] text-muted-foreground"
+                }`}>{e}</span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 mb-5 glass rounded-xl p-1 w-fit">
         {[
@@ -180,15 +225,28 @@ export default function Knowledge() {
               <div key={cat}>
                 <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{cat}</div>
                 <div className="card-cine divide-y divide-white/5">
-                  {ks.map((k: any) => (
-                    <div key={k.id} className="p-4 flex items-start gap-3 hover:bg-secondary/30">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">{k.title}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{k.content}</div>
+                  {ks.map((k: any) => {
+                    const conf = confidenceFor(k);
+                    return (
+                      <div key={k.id} className="p-4 flex items-start gap-3 hover:bg-secondary/30">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="text-sm font-medium">{k.title}</div>
+                            <span
+                              title={`Confidence ${conf.score}%`}
+                              className="text-[9.5px] uppercase tracking-wider px-1.5 py-0.5 rounded-full border inline-flex items-center gap-1"
+                              style={{ borderColor: `${conf.tone}50`, background: `${conf.tone}15`, color: conf.tone }}
+                            >
+                              <span className="h-1 w-1 rounded-full" style={{ background: conf.tone }} />
+                              {conf.label} · {conf.score}%
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">{k.content}</div>
+                        </div>
+                        <button onClick={() => del(k.id)} className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
                       </div>
-                      <button onClick={() => del(k.id)} className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}

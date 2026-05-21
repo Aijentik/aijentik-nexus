@@ -60,6 +60,7 @@ const App = () => (
                 <Route path="knowledge" element={<Knowledge />} />
                 <Route path="messages" element={<Messages />} />
                 <Route path="email" element={<EmailOps />} />
+                <Route path="orders" element={<Orders />} />
                 <Route path="earpiece" element={<ManagerEarpiece />} />
                 <Route path="forecast" element={<Forecast />} />
                 <Route path="insights" element={<Insights />} />

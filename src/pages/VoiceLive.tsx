@@ -103,7 +103,7 @@ function VoiceLiveInner() {
       setCallStartedAt(null);
     },
     onMessage: (m: any) => {
-      console.log("[VoiceLive] message", m);
+      
       if (m?.source === "user" && typeof m.message === "string") {
         setTranscript(t => [...t, { role: "user", text: m.message }]);
         return;

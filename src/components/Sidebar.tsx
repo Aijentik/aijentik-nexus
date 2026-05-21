@@ -24,6 +24,7 @@ const SECTIONS: { id: string; title: string; items: Item[] }[] = [
       { to: "/app/live", label: "Venue Live", icon: Radio, hero: true, live: true },
       { to: "/app/voice", label: "Live Voice", icon: Mic, hero: true },
       { to: "/app/brain", label: "Live Brain", icon: Brain, hero: true },
+      { to: "/app/earpiece", label: "Ear-Piece", icon: Headphones, hero: true },
       { to: "/app/flow", label: "Flow Studio", icon: Workflow },
     ],
   },

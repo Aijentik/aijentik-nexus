@@ -17,9 +17,16 @@ function pick(obj: Record<string, any>, keys: string[]): string | null {
 
 function parseAddress(raw: string | null): { name: string | null; email: string } {
   if (!raw) return { name: null, email: "" };
-  const m = raw.match(/^\s*(?:"?([^"<]+?)"?\s*)?<?([^<>\s]+@[^<>\s]+)>?\s*$/);
-  if (!m) return { name: null, email: raw };
-  return { name: m[1]?.trim() || null, email: m[2].toLowerCase() };
+  const trimmed = raw.trim();
+  // Form: "Name" <email@x> or Name <email@x>
+  const withName = trimmed.match(/^\s*"?([^"<]*?)"?\s*<\s*([^<>\s]+@[^<>\s]+)\s*>\s*$/);
+  if (withName) {
+    return { name: withName[1]?.trim() || null, email: withName[2].toLowerCase() };
+  }
+  // Bare email
+  const bare = trimmed.match(/^([^<>\s]+@[^<>\s]+)$/);
+  if (bare) return { name: null, email: bare[1].toLowerCase() };
+  return { name: null, email: trimmed.toLowerCase() };
 }
 
 Deno.serve(async (req) => {

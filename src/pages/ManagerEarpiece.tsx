@@ -293,6 +293,7 @@ export default function ManagerEarpiece() {
   const transcriptHandlerRef = useRef<(text: string, isFinal: boolean, source: "scribe" | "browser") => void>(() => undefined);
   const lastCommittedQuestionRef = useRef<{ normalized: string; at: number }>({ normalized: "", at: 0 });
   const recentQuestionNormsRef = useRef<string[]>([]);
+  const lastBrowserResultRef = useRef<{ index: number; text: string; isFinal: boolean }>({ index: -1, text: "", isFinal: false });
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -490,6 +491,10 @@ export default function ManagerEarpiece() {
         const result = event.results[i];
         if (phaseRef.current !== "wake_listening") {
           const best = result[0]?.transcript?.trim();
+          if (i === lastBrowserResultRef.current.index
+            && best === lastBrowserResultRef.current.text
+            && result.isFinal === lastBrowserResultRef.current.isFinal) continue;
+          lastBrowserResultRef.current = { index: i, text: best || "", isFinal: result.isFinal };
           if (best) transcriptHandlerRef.current(best, result.isFinal, "browser");
           continue;
         }
@@ -829,6 +834,7 @@ export default function ManagerEarpiece() {
     }
 
     setLivePhase("listening");
+    lastBrowserResultRef.current = { index: -1, text: "", isFinal: false };
     const tail = stripWake(heardText);
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
     // Reset whisper accumulator at the start of each capture window.

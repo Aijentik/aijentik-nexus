@@ -121,6 +121,7 @@ export default function ManagerEarpiece() {
   const reconnectTimerRef = useRef<number | null>(null);
   const followupTimerRef = useRef<number | null>(null);
   const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
+  const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -318,6 +319,14 @@ export default function ManagerEarpiece() {
   const disconnectScribe = useCallback(async () => {
     try { await scribe.disconnect(); } catch { console.warn("scribe disconnect failed"); }
   }, [scribe]);
+
+  useEffect(() => {
+    cleanupRef.current = () => {
+      stopMicStream();
+      void disconnectScribe();
+      stopAudio();
+    };
+  }, [disconnectScribe, stopAudio, stopMicStream]);
 
   // -------- TTS --------
   const stopAudio = useCallback(() => {

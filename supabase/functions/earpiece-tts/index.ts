@@ -1,5 +1,15 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -33,7 +43,7 @@ Deno.serve(async (req) => {
       });
     }
     const buf = await r.arrayBuffer();
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const b64 = arrayBufferToBase64(buf);
     return new Response(JSON.stringify({ audio_base64: b64, mime: "audio/mpeg" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

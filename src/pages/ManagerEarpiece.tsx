@@ -72,6 +72,22 @@ function errorName(err: unknown): string {
   return err instanceof DOMException ? err.name : err instanceof Error && "name" in err ? err.name : "";
 }
 
+function pcm16ToBase64(samples: Float32Array): string {
+  const bytes = new Uint8Array(samples.length * 2);
+  const view = new DataView(bytes.buffer);
+  for (let i = 0; i < samples.length; i += 1) {
+    const sample = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 export default function ManagerEarpiece() {
   const { venue } = useAuth();
   const [mode, setMode] = useState<Mode>("idle");

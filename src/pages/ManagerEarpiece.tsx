@@ -768,9 +768,31 @@ export default function ManagerEarpiece() {
     clearFollowupTimer();
     clearFollowupPromptTimer();
     awaitingFollowupRef.current = false;
+
+    // ---- Wake telemetry + adaptive voice profile ----
+    const { rms: wakeRms, threshold: wakeThreshold } = lastWakeMeasurementRef.current;
+    logWakeTelemetry({
+      ts: Date.now(),
+      rms: Number(wakeRms.toFixed(5)),
+      threshold: Number(wakeThreshold.toFixed(5)),
+      text: heardText.slice(0, 80),
+      accepted: true,
+    });
+    // If the manager regularly fires the wake word at a quieter level than our threshold,
+    // gently lower the threshold so they don't have to project. Clamp to a safe floor.
+    if (wakeRms > 0 && wakeRms < wakeProfileRef.current.minWakeRms * 0.85) {
+      const next = Math.max(0.0006, wakeProfileRef.current.minWakeRms * 0.92);
+      wakeProfileRef.current = { minWakeRms: next };
+      saveWakeProfile(wakeProfileRef.current);
+    }
+
     setLivePhase("listening");
     const tail = stripWake(heardText);
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
+    // Reset whisper accumulator at the start of each capture window.
+    captureRmsSumRef.current = 0;
+    captureRmsCountRef.current = 0;
+    captureWhisperRef.current = false;
     startCapture(tail);
     if (hasUsableCommand(tail)) {
       scheduleCaptureCommit(450);

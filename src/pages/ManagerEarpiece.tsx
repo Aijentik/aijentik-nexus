@@ -567,6 +567,8 @@ export default function ManagerEarpiece() {
   // -------- Conversation flow --------
   const handleWakeDetected = useCallback((heardText: string) => {
     if (phaseRef.current !== "wake_listening") return;
+    clearFollowupTimer();
+    clearFollowupPromptTimer();
     phaseRef.current = "listening";
     setPhase("listening");
     // If the user packed the question into the same utterance, capture the tail
@@ -578,16 +580,55 @@ export default function ManagerEarpiece() {
     } else {
       void speak(WAKE_ACK, false);
     }
-  }, [scheduleCaptureCommit, speak, startCapture]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, speak, startCapture]);
+
+  useEffect(() => {
+    transcriptHandlerRef.current = (rawText: string, isFinal: boolean) => {
+      if (speakingRef.current) return;
+      const text = rawText.trim();
+      if (!text) return;
+
+      if (phaseRef.current === "wake_listening") {
+        if (hasWake(text)) {
+          console.info("[earpiece] wake detected", text);
+          handleWakeDetected(text);
+        }
+        return;
+      }
+
+      if (captureRef.current.active || phaseRef.current === "listening") {
+        clearFollowupTimer();
+        clearFollowupPromptTimer();
+        if (hasWake(text) && !captureCandidate(captureRef.current)) {
+          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, stripWake(text));
+        } else if (isFinal) {
+          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, text);
+          captureRef.current.live = "";
+        } else {
+          captureRef.current.live = mergeTranscript(captureRef.current.live, text);
+        }
+
+        const candidate = captureCandidate(captureRef.current);
+        setPartial(candidate || WAKE_ACK);
+        if (hasUsableCommand(candidate, awaitingFollowupRef.current)) {
+          const normalized = normalizeVoiceText(candidate);
+          const looksComplete = isFinal || normalized.length > 24 || QUESTION_START_PATTERN.test(normalized);
+          scheduleCaptureCommit(looksComplete ? 850 : CAPTURE_IDLE_MS);
+        }
+      }
+    };
+  }, [clearFollowupPromptTimer, clearFollowupTimer, handleWakeDetected, scheduleCaptureCommit]);
 
   const endSession = useCallback(async () => {
     clearFollowupTimer();
+    clearFollowupPromptTimer();
     desiredAlwaysOnRef.current = false;
     if (reconnectTimerRef.current) {
       window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
     resetCapture();
+    stopBrowserRecognition();
     stopMicStream();
     await disconnectScribe();
     stopAudio();
@@ -595,7 +636,7 @@ export default function ManagerEarpiece() {
     setPhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [clearFollowupTimer, disconnectScribe, resetCapture, stopAudio, stopMicStream]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, disconnectScribe, resetCapture, stopAudio, stopBrowserRecognition, stopMicStream]);
 
   const goSpeakAndFollowup = useCallback(async (answer: string) => {
     setPhase("speaking");

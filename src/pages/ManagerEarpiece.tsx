@@ -705,6 +705,8 @@ export default function ManagerEarpiece() {
 
   // Fetches a single TTS chunk (no playback). Used by both one-shot speak and streaming pipeline.
   const fetchTTSChunk = useCallback(async (text: string): Promise<{ b64: string; mime: string } | null> => {
+    // Offline fallback: skip the network round-trip entirely so the agent still acks instantly.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return null;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/earpiece-tts`, {
@@ -727,7 +729,8 @@ export default function ManagerEarpiece() {
       const audio = outputAudioRef.current || new Audio();
       try { audioRef.current?.pause(); } catch { /* ignore */ }
       audio.src = `data:${mime};base64,${b64}`;
-      audio.volume = 1;
+      // Whisper-mode: if the user spoke softly, the agent responds softly too.
+      audio.volume = captureWhisperRef.current ? WHISPER_VOLUME : NORMAL_VOLUME;
       audioRef.current = audio;
       audio.onended = () => resolve();
       audio.onerror = () => resolve();

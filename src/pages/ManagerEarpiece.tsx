@@ -531,12 +531,22 @@ export default function ManagerEarpiece() {
           }
 
           const threshold = phaseRef.current === "wake_listening"
-            ? Math.max(0.0006, Math.min(MIN_WAKE_RMS, noiseFloorRef.current * 0.85))
+            ? Math.max(0.0006, Math.min(wakeProfileRef.current.minWakeRms, noiseFloorRef.current * 0.85))
             : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.15);
 
           if (rms < threshold) {
             noiseFloorRef.current = noiseFloorRef.current * 0.96 + rms * 0.04;
             return;
+          }
+
+          // Record loudness for whisper-mode detection while we're capturing a user question.
+          if (captureRef.current.active || phaseRef.current === "listening") {
+            captureRmsSumRef.current += rms;
+            captureRmsCountRef.current += 1;
+          }
+          // Snapshot the latest above-threshold mic energy for wake telemetry.
+          if (phaseRef.current === "wake_listening") {
+            lastWakeMeasurementRef.current = { rms, threshold };
           }
 
           sendAudioRef.current(pcm16ToBase64(resampleTo16k(input, audioContext.sampleRate)));

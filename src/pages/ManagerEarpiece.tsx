@@ -505,8 +505,12 @@ export default function ManagerEarpiece() {
     // If the user packed the question into the same utterance, capture the tail
     const tail = stripWake(heardText);
     startCapture(tail);
-    if (hasUsableCommand(tail)) scheduleCaptureCommit(750);
-  }, [scheduleCaptureCommit, startCapture]);
+    if (hasUsableCommand(tail)) {
+      scheduleCaptureCommit(650);
+    } else {
+      void speak(WAKE_ACK);
+    }
+  }, [scheduleCaptureCommit, speak, startCapture]);
 
   const endSession = useCallback(async () => {
     clearFollowupTimer();
@@ -570,6 +574,7 @@ export default function ManagerEarpiece() {
     }
 
     setTurns(t => [...t, { role: "user", content: text, ts: Date.now() }]);
+    setPartial("");
     setPhase("thinking");
     try {
       const { data: { session } } = await supabase.auth.getSession();

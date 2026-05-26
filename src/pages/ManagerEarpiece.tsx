@@ -504,9 +504,9 @@ export default function ManagerEarpiece() {
     if (phaseRef.current !== "wake_listening") return;
     phaseRef.current = "listening";
     setPhase("listening");
-    setPartial("");
     // If the user packed the question into the same utterance, capture the tail
     const tail = stripWake(heardText);
+    setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
     startCapture(tail);
     if (hasUsableCommand(tail)) {
       scheduleCaptureCommit(650);

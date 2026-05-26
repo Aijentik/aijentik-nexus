@@ -224,6 +224,35 @@ export default function Orders() {
         } hint="AI capture" />
       </div>
 
+      {/* Filter bar */}
+      {orders.length > 0 && (
+        <div className="mb-4 flex flex-col sm:flex-row gap-2 sm:items-center">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search guest, phone, item…" className="pl-9 h-9 bg-white/[0.02] border-white/[0.06]" />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button onClick={() => setChannelFilter("all")}
+              className={`text-[11.5px] px-3 py-1.5 rounded-full border transition-all ${
+                channelFilter === "all" ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:text-foreground"
+              }`}>All <span className="opacity-60 ml-0.5">{orders.length}</span></button>
+            {(Object.keys(CHANNEL_LABEL) as Order["channel"][]).filter(c => channelCounts[c]).map(c => (
+              <button key={c} onClick={() => setChannelFilter(c)}
+                className={`text-[11.5px] px-3 py-1.5 rounded-full border transition-all ${
+                  channelFilter === c ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:text-foreground"
+                }`}>{CHANNEL_LABEL[c]} <span className="opacity-60 ml-0.5">{channelCounts[c]}</span></button>
+            ))}
+          </div>
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={() => { setQuery(""); setChannelFilter("all"); }} className="h-9 text-xs text-muted-foreground">
+              <X className="h-3 w-3 mr-1" /> Reset
+            </Button>
+          )}
+        </div>
+      )}
+
+
+
       {loading && orders.length === 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
           {COLUMNS.map(c => (

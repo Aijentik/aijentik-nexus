@@ -1073,7 +1073,7 @@ export default function ManagerEarpiece() {
       toast.error(errorMessage(e) || "Ear-piece failed");
       setLivePhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, armFollowup, endSession, enqueueSentence, playChime]);
+  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, speakWithBrowser, armFollowup, endSession, enqueueSentence, playChime]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 

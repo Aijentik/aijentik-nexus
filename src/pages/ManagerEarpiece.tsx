@@ -11,6 +11,7 @@ import { useScribe, CommitStrategy } from "@elevenlabs/react";
 type Turn = { role: "user" | "assistant"; content: string; ts: number };
 type Mode = "idle" | "call" | "always_on";
 type Phase = "idle" | "wake_listening" | "listening" | "thinking" | "speaking";
+type ScribeTranscript = { text?: string };
 
 const QUICK_PROMPTS = [
   "How's tonight looking?",
@@ -63,6 +64,14 @@ function hasWake(text: string): boolean {
     || /(hey|hay|hi|okay|ok)(aijentik|aijentic|agentic|aigentic|ajentic|agentik|agenttech)/.test(compact);
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err || "");
+}
+
+function errorName(err: unknown): string {
+  return err instanceof DOMException ? err.name : err instanceof Error && "name" in err ? err.name : "";
+}
+
 export default function ManagerEarpiece() {
   const { venue } = useAuth();
   const [mode, setMode] = useState<Mode>("idle");
@@ -83,6 +92,7 @@ export default function ManagerEarpiece() {
   const connectInFlightRef = useRef<Promise<boolean> | null>(null);
   const connectScribeRef = useRef<(silent?: boolean) => Promise<boolean>>(async () => false);
   const reconnectTimerRef = useRef<number | null>(null);
+  const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null }>({
     active: false, buffer: "", timer: null,

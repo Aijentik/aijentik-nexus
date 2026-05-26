@@ -209,6 +209,7 @@ export default function ManagerEarpiece() {
       if (hasUsableCommand(q, awaitingFollowupRef.current)) {
         void handleUserUtteranceRef.current(stripWake(q));
       } else if (modeRef.current === "always_on") {
+        awaitingFollowupRef.current = false;
         setPhase("wake_listening");
       }
     }, delayMs);
@@ -282,10 +283,10 @@ export default function ManagerEarpiece() {
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
-    vadSilenceThresholdSecs: 0.8,
-    vadThreshold: 0.65,
-    minSpeechDurationMs: 120,
-    minSilenceDurationMs: 350,
+    vadSilenceThresholdSecs: 0.95,
+    vadThreshold: 0.72,
+    minSpeechDurationMs: 220,
+    minSilenceDurationMs: 500,
     languageCode: "en",
     keyterms: WAKE_KEYTERMS,
     noVerbatim: false,
@@ -357,10 +358,10 @@ export default function ManagerEarpiece() {
       await scribe.connect({
         token: json.token,
         commitStrategy: CommitStrategy.VAD,
-        vadSilenceThresholdSecs: 0.8,
-        vadThreshold: 0.65,
-        minSpeechDurationMs: 120,
-        minSilenceDurationMs: 350,
+        vadSilenceThresholdSecs: 0.95,
+        vadThreshold: 0.72,
+        minSpeechDurationMs: 220,
+        minSilenceDurationMs: 500,
         languageCode: "en",
         keyterms: WAKE_KEYTERMS,
         noVerbatim: false,

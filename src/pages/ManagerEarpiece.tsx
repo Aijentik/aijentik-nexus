@@ -173,13 +173,13 @@ export default function ManagerEarpiece() {
   const goSpeakAndFollowup = useCallback(async (answer: string) => {
     setPhase("speaking");
     await speak(answer);
-    if (modeRef.current === "idle") return;
+    if ((modeRef.current as Mode) === "idle") return;
 
     // Ask the follow-up
     awaitingFollowupRef.current = true;
     setTurns(t => [...t, { role: "assistant", content: FOLLOWUP, ts: Date.now() }]);
     await speak(FOLLOWUP);
-    if (modeRef.current === "idle") return;
+    if ((modeRef.current as Mode) === "idle") return;
 
     // Listen for the user's yes/no follow-up
     setPhase("listening");

@@ -505,19 +505,19 @@ export default function ManagerEarpiece() {
     if ((modeRef.current as Mode) === "idle") return;
 
     setPhase("listening");
-    captureRef.current = { active: true, buffer: "", timer: null };
+    startCapture("", 8000);
     if (modeRef.current === "always_on") {
       clearFollowupTimer();
       followupTimerRef.current = window.setTimeout(() => {
         if (modeRef.current !== "always_on" || !awaitingFollowupRef.current) return;
         awaitingFollowupRef.current = false;
-        captureRef.current = { active: false, buffer: "", timer: null };
+        resetCapture();
         setPartial("");
         setPhase("wake_listening");
         followupTimerRef.current = null;
       }, 6500);
     }
-  }, [clearFollowupTimer, speak]);
+  }, [clearFollowupTimer, resetCapture, speak, startCapture]);
 
   const handleUserUtterance = useCallback(async (text: string) => {
     if (!venue) return;
@@ -596,7 +596,7 @@ export default function ManagerEarpiece() {
     setPhase("listening");
     setPartial("");
     awaitingFollowupRef.current = false;
-    captureRef.current = { active: true, buffer: "", timer: null };
+    startCapture("", 30000);
     const connected = await connectScribe();
     if (!connected) { endSession(); }
   };
@@ -615,7 +615,7 @@ export default function ManagerEarpiece() {
     setPhase("wake_listening");
     setPartial("");
     awaitingFollowupRef.current = false;
-    captureRef.current = { active: false, buffer: "", timer: null };
+    resetCapture();
     const connected = await connectScribe();
     if (!connected) { endSession(); }
   };

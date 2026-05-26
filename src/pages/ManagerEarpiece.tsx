@@ -13,6 +13,21 @@ type Mode = "idle" | "call" | "always_on";
 type Phase = "idle" | "wake_listening" | "listening" | "thinking" | "speaking";
 type ScribeTranscript = { text?: string };
 type CaptureState = { active: boolean; buffer: string; live: string; timer: number | null; deadline: number | null };
+type BrowserSpeechRecognitionResult = ArrayLike<{ transcript: string; confidence?: number }> & { isFinal: boolean };
+type BrowserSpeechRecognitionEvent = { resultIndex: number; results: ArrayLike<BrowserSpeechRecognitionResult> };
+type BrowserSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+type BrowserSpeechRecognitionCtor = new () => BrowserSpeechRecognition;
 
 const QUICK_PROMPTS = [
   "How's tonight looking?",
@@ -25,23 +40,26 @@ const QUICK_PROMPTS = [
 // Spoken wake phrase uses the real word "Agentic" for STT reliability.
 // Keep the visible brand phrase as "Aijentik" in the UI because it sounds the same.
 const WAKE_PATTERNS = [
-  /\b(h+ey|hay|hi|okay|ok|yo)[,\s-]+(?:agentic|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|a?i?\s*j?ent[iy]?k|asian\s*tech|urgent\s*(?:ic|ick|tick))\b/i,
-  /\b(?:agentic|ai\s*gentic|a\s*gentic|aijentik|aijentic|ajentic)\b/i,
+  /\b(h+ey|hay|hi|okay|ok|yo|oi|aye)[,\s-]+(?:agentic|agents?\s*(?:ic|ik|ick|tick|tech|take)?|ai\s*gentic|a\s*gentic|a?i?\s*j?ent[iy]?k|asian\s*tech|urgent\s*(?:ic|ick|tick|take)|authentic|agenda)\b/i,
+  /\b(?:agentic|ai\s*gentic|a\s*gentic|aijentik|aijentic|ajentic|agent\s*(?:tick|take|tech|ic|ick)|urgent\s*(?:tick|take)|asian\s*tech)\b/i,
 ];
-const WAKE_KEYTERMS = ["Hey Agentic", "Hey Aijentik", "Agentic", "Aijentik", "AI gentic", "agent tech", "agent tick", "agent take"];
+const WAKE_KEYTERMS = ["Hey Agentic", "Hey Aijentik", "Agentic", "Aijentik", "AI gentic", "agent", "agent tech", "agent tick", "agent take", "urgent tick", "asian tech"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
 const WAKE_ACK = "Yes?";
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
-const MIN_WAKE_RMS = 0.006;
-const MIN_LISTENING_RMS = 0.01;
-const CAPTURE_IDLE_MS = 1150;
-const WAKE_CAPTURE_TIMEOUT_MS = 5500;
+const MIN_WAKE_RMS = 0.0015;
+const MIN_LISTENING_RMS = 0.003;
+const CAPTURE_IDLE_MS = 1250;
+const WAKE_CAPTURE_TIMEOUT_MS = 9500;
+const FOLLOWUP_PROMPT_DELAY_MS = 9000;
+const FOLLOWUP_REPLY_TIMEOUT_MS = 12000;
 const FILLER_ONLY_PATTERNS = [
-  /^(hey|hay|hi|okay|ok)\s*(agentic|agent\s*ic|agent\s*tech|ai\s*gentic|a\s*gentic|aijentik|aijentic)?$/i,
+  /^(hey|hay|hi|okay|ok|yo|oi|aye)\s*(agentic|agents?|agent\s*(?:ic|ick|tick|tech|take)?|ai\s*gentic|a\s*gentic|aijentik|aijentic)?$/i,
   /^(yes|yeah|yep|listening|go on|mhm|mm hmm|hello|hi)$/i,
 ];
+const QUESTION_START_PATTERN = /^(who|what|when|where|why|how|which|any|is|are|am|can|could|should|would|do|does|did|will|walk|show|tell|check|find|move|book|seat)\b/i;
 
 function normalizeVoiceText(text: string): string {
   return text

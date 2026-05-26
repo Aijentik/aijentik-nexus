@@ -31,18 +31,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [venue, setVenue] = useState<Venue | null>(null);
+  const [venuesLoaded, setVenuesLoaded] = useState(false);
   const lastLoadedUserIdRef = useRef<string | null>(null);
 
   const refreshVenues = async () => {
     if (venueRefreshPromise) return venueRefreshPromise;
     venueRefreshPromise = (async () => {
     const { data: { user: u } } = await supabase.auth.getUser();
-    if (!u) { setVenues([]); setVenue(null); return; }
+    if (!u) { setVenues([]); setVenue(null); setVenuesLoaded(true); return; }
     const { data: vs } = await supabase.from("venues").select("id,name,venue_type,status,features").order("created_at", { ascending: true });
     setVenues(vs || []);
     const { data: prof } = await supabase.from("profiles").select("current_venue_id").eq("user_id", u.id).maybeSingle();
     const active = (vs || []).find(v => v.id === prof?.current_venue_id) || (vs || [])[0] || null;
     setVenue(active);
+    setVenuesLoaded(true);
     })().finally(() => { venueRefreshPromise = null; });
     return venueRefreshPromise;
   };

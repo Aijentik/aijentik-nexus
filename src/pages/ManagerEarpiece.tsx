@@ -1098,8 +1098,44 @@ export default function ManagerEarpiece() {
             </div>
           )}
 
+          {mode !== "idle" && (
+            <div className="flex flex-col items-center pt-5 pb-3 select-none">
+              {(() => {
+                const speaking = phase === "speaking";
+                const level = speaking ? Math.max(0.35, outLevel) : liveLevel;
+                const scale = 1 + level * 0.35;
+                const ringOpacity = 0.25 + level * 0.55;
+                return (
+                  <div className="relative w-24 h-24 flex items-center justify-center">
+                    <div
+                      className={`absolute inset-0 rounded-full blur-2xl transition-colors ${speaking ? "bg-accent/40" : "bg-primary/40"}`}
+                      style={{ transform: `scale(${scale * 1.1})`, opacity: 0.35 + level * 0.4 }}
+                    />
+                    <div
+                      className={`absolute inset-0 rounded-full border ${speaking ? "border-accent/60" : "border-primary/60"}`}
+                      style={{ transform: `scale(${scale})`, opacity: ringOpacity, transition: "transform 80ms linear, opacity 80ms linear" }}
+                    />
+                    <div
+                      className={`absolute inset-2 rounded-full ${speaking ? "bg-accent/20" : "bg-primary/20"}`}
+                      style={{ transform: `scale(${1 + level * 0.18})`, transition: "transform 80ms linear" }}
+                    />
+                    <div className={`relative w-12 h-12 rounded-full grid place-items-center ${speaking ? "bg-accent/30 text-accent" : "bg-primary/30 text-primary"}`}>
+                      {phase === "thinking" ? <Loader2 className="w-5 h-5 animate-spin" /> :
+                       speaking ? <Volume2 className="w-5 h-5" /> :
+                       phase === "wake_listening" ? <Ear className="w-5 h-5" /> :
+                       <Mic className="w-5 h-5" />}
+                    </div>
+                  </div>
+                );
+              })()}
+              <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                {statusLabel}
+              </div>
+            </div>
+          )}
+
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4">
-            {!turns.length && (
+            {!turns.length && mode === "idle" && (
               <div className="h-full flex flex-col items-center justify-center text-center py-16">
                 <motion.div
                   initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}

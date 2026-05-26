@@ -443,6 +443,25 @@ export default function ManagerEarpiece() {
         try {
           const input = event.inputBuffer.getChannelData(0);
           const rms = getRms(input);
+
+          // Live level for breathing orb (smoothed)
+          liveLevelRef.current = liveLevelRef.current * 0.7 + Math.min(1, rms * 8) * 0.3;
+
+          // Barge-in: user starts speaking while agent is speaking → cut TTS
+          if (speakingRef.current && rms > BARGE_IN_RMS) {
+            bargeFramesRef.current += 1;
+            if (bargeFramesRef.current >= BARGE_IN_FRAMES) {
+              bargeFramesRef.current = 0;
+              ttsCancelRef.current.cancelled = true;
+              try { audioRef.current?.pause(); } catch { /* ignore */ }
+              speakingRef.current = false;
+              setOutLevel(0);
+              setLivePhase("listening");
+            }
+          } else if (rms < BARGE_IN_RMS * 0.5) {
+            bargeFramesRef.current = 0;
+          }
+
           const threshold = phaseRef.current === "wake_listening"
             ? Math.max(0.0006, Math.min(MIN_WAKE_RMS, noiseFloorRef.current * 0.85))
             : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.15);

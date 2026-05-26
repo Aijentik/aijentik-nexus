@@ -37,8 +37,14 @@ const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i,
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
-const MIN_WAKE_RMS = 0.026;
-const MIN_LISTENING_RMS = 0.018;
+const MIN_WAKE_RMS = 0.034;
+const MIN_LISTENING_RMS = 0.024;
+const CAPTURE_IDLE_MS = 1150;
+const WAKE_CAPTURE_TIMEOUT_MS = 5500;
+const FILLER_ONLY_PATTERNS = [
+  /^(hey|hay|hi|okay|ok)\s*(agentic|agent\s*ic|agent\s*tech|ai\s*gentic|a\s*gentic|aijentik|aijentic)?$/i,
+  /^(yes|yeah|yep|listening|go on|mhm|mm hmm|hello|hi)$/i,
+];
 
 function normalizeVoiceText(text: string): string {
   return text
@@ -61,6 +67,15 @@ function hasWake(text: string): boolean {
   const compact = normalized.replace(/\s+/g, "");
   return /\b(hey|hay|hi|okay|ok)\s+(agentic|agent\s*ic|ai\s*gentic|a\s*gentic|agent\s*tech|aijentik|aijentic)\b/.test(normalized)
     || /(hey|hay|hi|okay|ok)(agentic|agentic|aigentic|agenttech|aijentik|aijentic)/.test(compact);
+}
+
+function hasUsableCommand(text: string, allowShort = false): boolean {
+  const cleaned = stripWake(text).trim();
+  const normalized = normalizeVoiceText(cleaned);
+  if (!normalized) return false;
+  if (FILLER_ONLY_PATTERNS.some(p => p.test(normalized))) return false;
+  if (allowShort && NEGATIVE_PATTERNS.some(p => p.test(cleaned))) return true;
+  return normalized.length >= 4 && /\b[a-z0-9]{3,}\b/i.test(normalized);
 }
 
 function errorMessage(err: unknown): string {

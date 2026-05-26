@@ -10,6 +10,41 @@ import { VenueClock } from "./VenueClock";
 import { motion } from "framer-motion";
 import { Menu, Brain } from "lucide-react";
 
+function SignInLoader({ label = "Signing you in" }: { label?: string }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-background overflow-hidden">
+      <div className="absolute inset-0 grid-bg opacity-20" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[520px] w-[520px] rounded-full bg-primary/20 blur-[120px] animate-pulse" />
+      <motion.div
+        initial={{ opacity: 0, y: 8, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.2, 0.7, 0.2, 1] }}
+        className="relative text-center"
+      >
+        <div className="relative mx-auto mb-6 h-20 w-20">
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary to-accent shadow-[0_0_60px_hsl(var(--primary)/0.6)]" />
+          <div className="absolute inset-0 rounded-3xl border border-primary/40 animate-ping" />
+          <div className="absolute inset-0 grid place-items-center">
+            <Brain className="h-10 w-10 text-primary-foreground" />
+          </div>
+        </div>
+        <div className="text-[10px] uppercase tracking-[0.32em] text-primary mb-2">Aijentik</div>
+        <div className="text-xl font-semibold tracking-tight">{label}</div>
+        <div className="mt-3 flex items-center justify-center gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <motion.span
+              key={i}
+              className="h-1.5 w-1.5 rounded-full bg-primary"
+              animate={{ opacity: [0.3, 1, 0.3] }}
+              transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.18 }}
+            />
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export function ProtectedLayout() {
   const { user, loading, venue, venuesLoaded } = useAuth();
   if (loading) return <SignInLoader />;

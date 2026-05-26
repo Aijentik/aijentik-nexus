@@ -267,6 +267,13 @@ export default function ManagerEarpiece() {
   const ttsChainRef = useRef<Promise<void>>(Promise.resolve());        // sequential TTS queue
   const ttsCancelRef = useRef<{ cancelled: boolean }>({ cancelled: false });
   const chimeCtxRef = useRef<AudioContext | null>(null);
+  // Personalised voice profile — adaptive wake threshold per device.
+  const wakeProfileRef = useRef<{ minWakeRms: number }>(loadWakeProfile());
+  // Whisper-mode detector: rolling RMS samples during a capture window.
+  const captureRmsSumRef = useRef(0);
+  const captureRmsCountRef = useRef(0);
+  const captureWhisperRef = useRef(false);
+  const lastWakeMeasurementRef = useRef<{ rms: number; threshold: number }>({ rms: 0, threshold: DEFAULT_MIN_WAKE_RMS });
   // Buffer for the user's question after wake detection
   const captureRef = useRef<CaptureState>({
     active: false, buffer: "", live: "", timer: null, deadline: null,

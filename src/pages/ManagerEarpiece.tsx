@@ -20,6 +20,7 @@ const QUICK_PROMPTS = [
 ];
 
 const WAKE_PATTERNS = [/\bhey\s+ai?jentik\b/i, /\bhey\s+agentic\b/i, /\bhey\s+agent\b/i];
+const WAKE_ACKS = ["Yesss?", "Mhm?", "Go on…", "Yep, listening.", "Hit me.", "I'm all ears.", "Yes boss?"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
@@ -121,13 +122,19 @@ export default function ManagerEarpiece() {
           // Switch to command mode
           wantRecRef.current = false;
           try { rec.stop(); } catch {}
-          setPhase("listening");
           setPartial("");
-          // small delay so SR can fully reset
-          setTimeout(() => startRecognition("command"), 200);
+          setPhase("speaking");
+          const ack = WAKE_ACKS[Math.floor(Math.random() * WAKE_ACKS.length)];
+          // Cheeky ack, then open the mic
+          speak(ack).finally(() => {
+            if (modeRef.current !== "always_on") return;
+            setPhase("listening");
+            setTimeout(() => startRecognition("command"), 150);
+          });
         }
         return;
       }
+
 
       // command mode
       if (finalText) {

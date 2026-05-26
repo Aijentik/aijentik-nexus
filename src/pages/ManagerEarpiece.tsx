@@ -281,6 +281,11 @@ export default function ManagerEarpiece() {
   }, [speak]);
 
   const endSession = useCallback(async () => {
+    desiredAlwaysOnRef.current = false;
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
     captureRef.current = { active: false, buffer: "", timer: null };
     await disconnectScribe();
@@ -399,6 +404,7 @@ export default function ManagerEarpiece() {
     if (mode === "always_on") { endSession(); return; }
     const ok = await ensureMicPermission();
     if (!ok) return;
+    desiredAlwaysOnRef.current = true;
     stopAudio();
     setMode("always_on");
     setPhase("wake_listening");

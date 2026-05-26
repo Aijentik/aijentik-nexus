@@ -11,9 +11,10 @@ import { motion } from "framer-motion";
 import { Menu, Brain } from "lucide-react";
 
 export function ProtectedLayout() {
-  const { user, loading, venue } = useAuth();
-  if (loading) return <div className="h-screen grid place-items-center text-muted-foreground">Loading…</div>;
+  const { user, loading, venue, venuesLoaded } = useAuth();
+  if (loading) return <SignInLoader />;
   if (!user) return <Navigate to="/auth" replace />;
+  if (!venuesLoaded) return <SignInLoader label="Waking up your venue" />;
   if (!venue) return <Navigate to="/onboarding" replace />;
   return (
     <div className="flex min-h-screen relative">

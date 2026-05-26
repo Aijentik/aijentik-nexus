@@ -73,15 +73,17 @@ function normalizeVoiceText(text: string): string {
 function stripWake(text: string): string {
   let t = text;
   for (const p of WAKE_PATTERNS) t = t.replace(p, "");
-  t = t.replace(/^\s*(h+ey|hay|hi|okay|ok|yo)[,\s-]*(agentic|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|aijentik|aijentic|ajentic|asian\s*tech|urgent\s*(?:ic|ick|tick))\b/i, "");
+  t = t.replace(/^\s*(h+ey|hay|hi|okay|ok|yo|oi|aye)[,\s-]*(agentic|agents?\s*(?:ic|ik|ick|tick|tech|take)?|ai\s*gentic|a\s*gentic|aijentik|aijentic|ajentic|asian\s*tech|urgent\s*(?:ic|ick|tick|take)|authentic|agenda)\b/i, "");
   return t.replace(/^[\s,.\-!?:;]+/, "").trim();
 }
 function hasWake(text: string): boolean {
   if (WAKE_PATTERNS.some(p => p.test(text))) return true;
   const normalized = normalizeVoiceText(text);
   const compact = normalized.replace(/\s+/g, "");
-  return /\b(hey|hay|hi|okay|ok|yo)\s+(agentic|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|agent\s*tech|aijentik|aijentic|ajentic|asian\s*tech)\b/.test(normalized)
-    || /(hey|hay|hi|okay|ok|yo)?(agentic|aigentic|agentik|agentick|agenttick|agenttech|agenttake|aijentik|aijentic|ajentic|asiantech|urgentick|urgenttick)/.test(compact);
+  const hasPrefix = /\b(hey|hay|hi|okay|ok|yo|oi|aye)\b/.test(normalized);
+  const hasAgentTerm = /\b(agentic|agents?|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|agent\s*tech|aijentik|aijentic|ajentic|asian\s*tech|urgent\s*(?:ick|tick|take)|authentic|agenda)\b/.test(normalized);
+  return (hasPrefix && hasAgentTerm)
+    || /(hey|hay|hi|okay|ok|yo|oi|aye)?(agentic|aigentic|agentik|agentick|agenttick|agenttech|agenttake|agent|agents|aijentik|aijentic|ajentic|asiantech|urgentick|urgenttick|urgenttake)/.test(compact);
 }
 
 function hasUsableCommand(text: string, allowShort = false): boolean {
@@ -90,6 +92,7 @@ function hasUsableCommand(text: string, allowShort = false): boolean {
   if (!normalized) return false;
   if (FILLER_ONLY_PATTERNS.some(p => p.test(normalized))) return false;
   if (allowShort && NEGATIVE_PATTERNS.some(p => p.test(cleaned))) return true;
+  if (QUESTION_START_PATTERN.test(normalized) && normalized.length >= 3) return true;
   return normalized.length >= 4 && /\b[a-z0-9]{3,}\b/i.test(normalized);
 }
 

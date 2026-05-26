@@ -281,20 +281,39 @@ export default function Knowledge() {
                 </div>
               </div>
             ))}
-            {items.length === 0 && <div className="card-cine p-12 text-center text-muted-foreground">No knowledge yet.</div>}
+            {filteredItems.length === 0 && (
+              <div className="card-cine p-12 text-center">
+                <Sparkles className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                <div className="font-medium mb-1">
+                  {items.length === 0 ? "No knowledge yet." : "No entries match your search."}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {items.length === 0
+                    ? "Add an entry or import from your website to teach your AI what it needs to know."
+                    : "Try a different keyword or clear your search."}
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
 
       {tab === "menu" && (
         <div className="space-y-8">
-          {menu.length === 0 && (
+          {filteredMenu.length === 0 && (
             <div className="card-cine p-12 text-center">
               <UtensilsCrossed className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-              <div className="font-medium mb-1">No menu items yet</div>
-              <div className="text-sm text-muted-foreground">Items appear here automatically when a venue is scanned, or add them manually.</div>
+              <div className="font-medium mb-1">
+                {menu.length === 0 ? "No menu items yet" : "No menu items match your search."}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {menu.length === 0
+                  ? "Items appear here automatically when a venue is scanned, or add them manually."
+                  : "Try a different keyword or clear your search."}
+              </div>
             </div>
           )}
+
 
           {orderedSections.map((section) => (
             <div key={section}>

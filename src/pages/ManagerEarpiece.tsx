@@ -51,7 +51,7 @@ const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
 const MIN_WAKE_RMS = 0.0015;
 const MIN_LISTENING_RMS = 0.003;
-const CAPTURE_IDLE_MS = 1250;
+const CAPTURE_IDLE_MS = 850;
 const WAKE_CAPTURE_TIMEOUT_MS = 9500;
 const FOLLOWUP_PROMPT_DELAY_MS = 9000;
 const FOLLOWUP_REPLY_TIMEOUT_MS = 12000;
@@ -113,6 +113,29 @@ function mergeTranscript(existing: string, incoming: string): string {
 
 function captureCandidate(capture: CaptureState): string {
   return mergeTranscript(capture.buffer, capture.live).trim();
+}
+
+function stripRecentQuestionEcho(text: string, recentQuestions: string[]): string {
+  let normalized = normalizeVoiceText(stripWake(text));
+  if (!normalized) return "";
+
+  const recent = [...recentQuestions]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const prev of recent) {
+      if (normalized === prev) return "";
+      if (normalized.startsWith(`${prev} `)) {
+        normalized = normalized.slice(prev.length).trim();
+        changed = true;
+      }
+    }
+  }
+
+  return normalized;
 }
 
 function errorMessage(err: unknown): string {
@@ -184,6 +207,8 @@ export default function ManagerEarpiece() {
   const followupPromptTimerRef = useRef<number | null>(null);
   const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
   const transcriptHandlerRef = useRef<(text: string, isFinal: boolean, source: "scribe" | "browser") => void>(() => undefined);
+  const lastCommittedQuestionRef = useRef<{ normalized: string; at: number }>({ normalized: "", at: 0 });
+  const recentQuestionNormsRef = useRef<string[]>([]);
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -203,16 +228,21 @@ export default function ManagerEarpiece() {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: 999999, behavior: "smooth" }); }, [turns, partial]);
 
+  const setLivePhase = useCallback((next: Phase) => {
+    phaseRef.current = next;
+    setPhase(next);
+  }, []);
+
   const scheduleScribeReconnect = useCallback(() => {
     if (!desiredAlwaysOnRef.current || modeRef.current !== "always_on" || reconnectTimerRef.current) return;
     reconnectTimerRef.current = window.setTimeout(async () => {
       reconnectTimerRef.current = null;
       if (!desiredAlwaysOnRef.current || modeRef.current !== "always_on") return;
-      setPhase("wake_listening");
+      setLivePhase("wake_listening");
       setPartial("");
       await connectScribeRef.current(true);
     }, 1200);
-  }, []);
+  }, [setLivePhase]);
 
   const clearFollowupTimer = useCallback(() => {
     if (!followupTimerRef.current) return;
@@ -246,10 +276,10 @@ export default function ManagerEarpiece() {
       setPartial("");
       if (modeRef.current === "always_on") {
         awaitingFollowupRef.current = false;
-        setPhase("wake_listening");
+        setLivePhase("wake_listening");
       }
     }, timeoutMs);
-  }, [resetCapture]);
+  }, [resetCapture, setLivePhase]);
 
   const scheduleCaptureCommit = useCallback((delayMs = CAPTURE_IDLE_MS) => {
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
@@ -262,10 +292,10 @@ export default function ManagerEarpiece() {
       } else if (modeRef.current === "always_on") {
         setPartial("");
         awaitingFollowupRef.current = false;
-        setPhase("wake_listening");
+        setLivePhase("wake_listening");
       }
     }, delayMs);
-  }, [resetCapture]);
+  }, [resetCapture, setLivePhase]);
 
   const stopMicStream = useCallback(() => {
     try { micProcessorRef.current?.disconnect(); } catch { console.warn("mic processor disconnect failed"); }
@@ -416,7 +446,7 @@ export default function ManagerEarpiece() {
     noVerbatim: false,
     onSessionStarted: () => {
       if (desiredAlwaysOnRef.current && modeRef.current === "always_on" && phaseRef.current === "idle") {
-        setPhase("wake_listening");
+        setLivePhase("wake_listening");
       }
     },
     onPartialTranscript: (data: ScribeTranscript) => {
@@ -574,18 +604,18 @@ export default function ManagerEarpiece() {
     if (phaseRef.current !== "wake_listening") return;
     clearFollowupTimer();
     clearFollowupPromptTimer();
-    phaseRef.current = "listening";
-    setPhase("listening");
+    awaitingFollowupRef.current = false;
+    setLivePhase("listening");
     // If the user packed the question into the same utterance, capture the tail
     const tail = stripWake(heardText);
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
     startCapture(tail);
     if (hasUsableCommand(tail)) {
-      scheduleCaptureCommit(650);
+      scheduleCaptureCommit(450);
     } else {
-      void speak(WAKE_ACK, false);
+      void speakWithBrowser(WAKE_ACK, false);
     }
-  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, speak, startCapture]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, speakWithBrowser, startCapture]);
 
   useEffect(() => {
     transcriptHandlerRef.current = (rawText: string, isFinal: boolean) => {
@@ -604,13 +634,17 @@ export default function ManagerEarpiece() {
       if (captureRef.current.active || phaseRef.current === "listening") {
         clearFollowupTimer();
         clearFollowupPromptTimer();
+        const stripped = stripWake(text);
+        const cleaned = stripRecentQuestionEcho(stripped, recentQuestionNormsRef.current);
+        if (!cleaned && !hasWake(text)) return;
+
         if (hasWake(text) && !captureCandidate(captureRef.current)) {
-          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, stripWake(text));
+          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, cleaned);
         } else if (isFinal) {
-          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, text);
+          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, cleaned);
           captureRef.current.live = "";
         } else {
-          captureRef.current.live = mergeTranscript(captureRef.current.live, text);
+          captureRef.current.live = mergeTranscript(captureRef.current.live, cleaned);
         }
 
         const candidate = captureCandidate(captureRef.current);
@@ -618,7 +652,7 @@ export default function ManagerEarpiece() {
         if (hasUsableCommand(candidate, awaitingFollowupRef.current)) {
           const normalized = normalizeVoiceText(candidate);
           const looksComplete = isFinal || normalized.length > 24 || QUESTION_START_PATTERN.test(normalized);
-          scheduleCaptureCommit(looksComplete ? 850 : CAPTURE_IDLE_MS);
+          scheduleCaptureCommit(looksComplete ? 550 : CAPTURE_IDLE_MS);
         }
       }
     };
@@ -638,18 +672,19 @@ export default function ManagerEarpiece() {
     await disconnectScribe();
     stopAudio();
     setMode("idle");
-    setPhase("idle");
+    setLivePhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [clearFollowupPromptTimer, clearFollowupTimer, disconnectScribe, resetCapture, stopAudio, stopBrowserRecognition, stopMicStream]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, disconnectScribe, resetCapture, setLivePhase, stopAudio, stopBrowserRecognition, stopMicStream]);
 
   const goSpeakAndFollowup = useCallback(async (answer: string) => {
-    setPhase("speaking");
+    resetCapture();
+    setLivePhase("speaking");
     await speak(answer);
     if ((modeRef.current as Mode) === "idle") return;
 
     awaitingFollowupRef.current = true;
-    setPhase("listening");
+    setLivePhase("listening");
     setPartial("");
     startCapture("", FOLLOWUP_PROMPT_DELAY_MS + FOLLOWUP_REPLY_TIMEOUT_MS + 3500);
 
@@ -660,10 +695,10 @@ export default function ManagerEarpiece() {
       if (hasUsableCommand(captureCandidate(captureRef.current), true)) return;
       void (async () => {
         setTurns(t => [...t, { role: "assistant", content: FOLLOWUP, ts: Date.now() }]);
-        setPhase("speaking");
+        setLivePhase("speaking");
         await speak(FOLLOWUP);
         if ((modeRef.current as Mode) === "idle" || !awaitingFollowupRef.current) return;
-        setPhase("listening");
+        setLivePhase("listening");
         startCapture("", FOLLOWUP_REPLY_TIMEOUT_MS);
       })();
     }, FOLLOWUP_PROMPT_DELAY_MS);
@@ -676,27 +711,41 @@ export default function ManagerEarpiece() {
         awaitingFollowupRef.current = false;
         resetCapture();
         setPartial("");
-        setPhase("wake_listening");
+        setLivePhase("wake_listening");
       } else if (modeRef.current === "call") {
         void endSession();
       }
       followupTimerRef.current = null;
     }, FOLLOWUP_PROMPT_DELAY_MS + FOLLOWUP_REPLY_TIMEOUT_MS + 4500);
-  }, [clearFollowupPromptTimer, clearFollowupTimer, endSession, resetCapture, speak, startCapture]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, endSession, resetCapture, setLivePhase, speak, startCapture]);
 
   const handleUserUtterance = useCallback(async (text: string) => {
     if (!venue) return;
     clearFollowupPromptTimer();
+    clearFollowupTimer();
+    resetCapture();
+
+    const question = stripRecentQuestionEcho(text, recentQuestionNormsRef.current);
+    if (!hasUsableCommand(question, awaitingFollowupRef.current)) {
+      setPartial("");
+      if (modeRef.current === "always_on") setLivePhase("wake_listening");
+      return;
+    }
+
+    const normalizedQuestion = normalizeVoiceText(question);
+    const now = Date.now();
+    if (lastCommittedQuestionRef.current.normalized === normalizedQuestion && now - lastCommittedQuestionRef.current.at < 3500) return;
+    lastCommittedQuestionRef.current = { normalized: normalizedQuestion, at: now };
+    recentQuestionNormsRef.current = [normalizedQuestion, ...recentQuestionNormsRef.current.filter(q => q !== normalizedQuestion)].slice(0, 4);
 
     if (awaitingFollowupRef.current) {
       awaitingFollowupRef.current = false;
-      clearFollowupTimer();
-      if (NEGATIVE_PATTERNS.some(p => p.test(text)) && text.split(/\s+/).length <= 6) {
-        setTurns(t => [...t, { role: "user", content: text, ts: Date.now() }, { role: "assistant", content: SIGNOFF, ts: Date.now() }]);
-        setPhase("speaking");
+      if (NEGATIVE_PATTERNS.some(p => p.test(question)) && question.split(/\s+/).length <= 6) {
+        setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }, { role: "assistant", content: SIGNOFF, ts: Date.now() }]);
+        setLivePhase("speaking");
         await speak(SIGNOFF);
         if (modeRef.current === "always_on") {
-          setPhase("wake_listening");
+          setLivePhase("wake_listening");
         } else {
           endSession();
         }
@@ -704,9 +753,9 @@ export default function ManagerEarpiece() {
       }
     }
 
-    setTurns(t => [...t, { role: "user", content: text, ts: Date.now() }]);
+    setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }]);
     setPartial("");
-    setPhase("thinking");
+    setLivePhase("thinking");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manager-earpiece`, {
@@ -718,8 +767,8 @@ export default function ManagerEarpiece() {
         },
         body: JSON.stringify({
           venue_id: venue.id,
-          question: text,
-          history: turns.slice(-6).map(t => ({ role: t.role, content: t.content })),
+          question,
+          history: [],
         }),
       });
       const json = await res.json();
@@ -729,9 +778,9 @@ export default function ManagerEarpiece() {
       await goSpeakAndFollowup(json.answer);
     } catch (e: unknown) {
       toast.error(errorMessage(e) || "Ear-piece failed");
-      setPhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
+      setLivePhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, turns, clearFollowupPromptTimer, clearFollowupTimer, speak, goSpeakAndFollowup, endSession]);
+  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, goSpeakAndFollowup, endSession]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 
@@ -754,14 +803,14 @@ export default function ManagerEarpiece() {
     if (!canUseMic()) return;
     desiredAlwaysOnRef.current = false;
     modeRef.current = "call";
-    phaseRef.current = "listening";
+    setLivePhase("listening");
     unlockAudioOutput();
     stopAudio();
     startBrowserRecognition();
     const micReady = await startMicStream();
     if (!micReady) { stopBrowserRecognition(); return; }
     setMode("call");
-    setPhase("listening");
+    setLivePhase("listening");
     setPartial("");
     awaitingFollowupRef.current = false;
     startCapture("", 30000);
@@ -774,14 +823,14 @@ export default function ManagerEarpiece() {
     if (!canUseMic()) return;
     desiredAlwaysOnRef.current = true;
     modeRef.current = "always_on";
-    phaseRef.current = "wake_listening";
+    setLivePhase("wake_listening");
     unlockAudioOutput();
     stopAudio();
     startBrowserRecognition();
     const micReady = await startMicStream();
     if (!micReady) { desiredAlwaysOnRef.current = false; stopBrowserRecognition(); return; }
     setMode("always_on");
-    setPhase("wake_listening");
+    setLivePhase("wake_listening");
     setPartial("");
     awaitingFollowupRef.current = false;
     resetCapture();

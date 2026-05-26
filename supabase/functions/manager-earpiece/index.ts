@@ -68,7 +68,9 @@ ${recentCalls.map((c: any) => `- ${c.caller || "?"}: ${c.outcome}${c.summary ? `
         role: "system",
         content: `You are the manager's AI ear-piece — a fast, confident, calm operations co-pilot speaking directly into a venue manager's ear during service. 
 
-Style: short, spoken English. 1-3 sentences max. No bullet points, no markdown, no preambles like "Sure" or "Based on the data". Speak like a trusted GM whispering insight. Use the venue's brand voice.
+Style: short, spoken English. 1-2 sentences max. No bullet points, no markdown, no preambles like "Sure" or "Based on the data". Speak like a trusted GM whispering insight. Use the venue's brand voice.
+
+Answer ONLY the newest user question. Do not combine it with earlier questions. Treat history only as light context when the newest question is clearly a follow-up.
 
 You have full live context of today's bookings, VIPs, pending emails, and recent calls below. Answer using ONLY this context. If asked for an action (e.g. "move table 4 to 8pm"), describe what you'd do; do not invent confirmations.
 
@@ -89,7 +91,7 @@ ${context}`,
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: "google/gemini-2.5-flash", messages, temperature: 0.4 }),
+      body: JSON.stringify({ model: "google/gemini-2.5-flash", messages, temperature: 0.25, max_tokens: 140 }),
     });
 
     if (!resp.ok) {

@@ -336,6 +336,28 @@ export default function ManagerEarpiece() {
     }, delayMs);
   }, [resetCapture, setLivePhase]);
 
+  const stopLiveLevelLoop = useCallback(() => {
+    if (liveLevelRafRef.current != null) {
+      cancelAnimationFrame(liveLevelRafRef.current);
+      liveLevelRafRef.current = null;
+    }
+    liveLevelRef.current = 0;
+    setLiveLevel(0);
+  }, []);
+
+  const startLiveLevelLoop = useCallback(() => {
+    if (liveLevelRafRef.current != null) return;
+    let lastFlush = 0;
+    const tick = (t: number) => {
+      if (t - lastFlush > 70) {
+        lastFlush = t;
+        setLiveLevel(liveLevelRef.current);
+      }
+      liveLevelRafRef.current = requestAnimationFrame(tick);
+    };
+    liveLevelRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
   const stopMicStream = useCallback(() => {
     try { micProcessorRef.current?.disconnect(); } catch { console.warn("mic processor disconnect failed"); }
     try { micSourceRef.current?.disconnect(); } catch { console.warn("mic source disconnect failed"); }
@@ -347,7 +369,8 @@ export default function ManagerEarpiece() {
     micSourceRef.current = null;
     micStreamRef.current = null;
     audioContextRef.current = null;
-  }, []);
+    stopLiveLevelLoop();
+  }, [stopLiveLevelLoop]);
 
   const stopBrowserRecognition = useCallback(() => {
     const recognition = browserRecognitionRef.current;

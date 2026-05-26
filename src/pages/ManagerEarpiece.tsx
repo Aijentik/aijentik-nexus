@@ -956,7 +956,7 @@ export default function ManagerEarpiece() {
     clearFollowupTimer();
     resetCapture();
 
-    const question = stripRecentQuestionEcho(text, recentQuestionNormsRef.current);
+    const question = repairSpeechRevisions(stripRecentQuestionEcho(text, recentQuestionNormsRef.current));
     if (!hasUsableCommand(question, awaitingFollowupRef.current)) {
       setPartial("");
       if (modeRef.current === "always_on") setLivePhase("wake_listening");

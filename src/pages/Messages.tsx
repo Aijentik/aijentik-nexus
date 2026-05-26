@@ -19,6 +19,9 @@ export default function Messages() {
   const [contact, setContact] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [dirFilter, setDirFilter] = useState<"all" | "inbound" | "outbound">("all");
+
 
   const load = async () => {
     if (!venue) return;

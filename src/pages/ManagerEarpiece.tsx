@@ -36,6 +36,9 @@ const WAKE_ACKS = ["Yesss?", "Mhm?", "Go on…", "Yep, listening.", "Hit me.", "
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
+const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+const MIN_WAKE_RMS = 0.026;
+const MIN_LISTENING_RMS = 0.018;
 
 function normalizeVoiceText(text: string): string {
   return text
@@ -99,6 +102,12 @@ function resampleTo16k(input: Float32Array, inputRate: number): Float32Array {
   return output;
 }
 
+function getRms(samples: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
+  return Math.sqrt(sum / Math.max(1, samples.length));
+}
+
 export default function ManagerEarpiece() {
   const { venue } = useAuth();
   const [mode, setMode] = useState<Mode>("idle");
@@ -124,9 +133,11 @@ export default function ManagerEarpiece() {
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const outputAudioRef = useRef<HTMLAudioElement | null>(null);
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const micProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
+  const noiseFloorRef = useRef(0.012);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null }>({
     active: false, buffer: "", timer: null,
@@ -186,7 +197,18 @@ export default function ManagerEarpiece() {
       processor.onaudioprocess = event => {
         if (!desiredAlwaysOnRef.current && modeRef.current !== "call") return;
         try {
-          sendAudioRef.current(pcm16ToBase64(resampleTo16k(event.inputBuffer.getChannelData(0), audioContext.sampleRate)));
+          const input = event.inputBuffer.getChannelData(0);
+          const rms = getRms(input);
+          const threshold = phaseRef.current === "wake_listening"
+            ? Math.max(MIN_WAKE_RMS, noiseFloorRef.current * 2.6)
+            : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.8);
+
+          if (rms < threshold) {
+            noiseFloorRef.current = noiseFloorRef.current * 0.96 + rms * 0.04;
+            return;
+          }
+
+          sendAudioRef.current(pcm16ToBase64(resampleTo16k(input, audioContext.sampleRate)));
         } catch (e) {
           console.warn("mic chunk send failed", e);
         }
@@ -323,8 +345,36 @@ export default function ManagerEarpiece() {
   // -------- TTS --------
   const stopAudio = useCallback(() => {
     try { audioRef.current?.pause(); } catch { console.warn("audio pause failed"); }
+    try { outputAudioRef.current?.pause(); } catch { console.warn("output audio pause failed"); }
     audioRef.current = null;
     speakingRef.current = false;
+  }, []);
+
+  const unlockAudioOutput = useCallback(() => {
+    if (outputAudioRef.current) return;
+    const audio = new Audio(SILENT_WAV);
+    audio.preload = "auto";
+    audio.volume = 1;
+    outputAudioRef.current = audio;
+    audio.play().then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    }).catch(() => undefined);
+  }, []);
+
+  const speakWithBrowser = useCallback(async (text: string): Promise<void> => {
+    if (!window.speechSynthesis) return;
+    await new Promise<void>((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1;
+      utterance.pitch = 1.05;
+      utterance.volume = 1;
+      speakingRef.current = true;
+      utterance.onend = () => { speakingRef.current = false; resolve(); };
+      utterance.onerror = () => { speakingRef.current = false; resolve(); };
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    });
   }, []);
 
   useEffect(() => {
@@ -349,21 +399,27 @@ export default function ManagerEarpiece() {
         body: JSON.stringify({ text }),
       });
       const json = await res.json();
-      if (!json.audio_base64) return;
+      if (!res.ok || !json.audio_base64) {
+        await speakWithBrowser(text);
+        return;
+      }
       await new Promise<void>((resolve) => {
-        const audio = new Audio(`data:${json.mime};base64,${json.audio_base64}`);
+        const audio = outputAudioRef.current || new Audio();
         audioRef.current?.pause();
+        audio.src = `data:${json.mime || "audio/mpeg"};base64,${json.audio_base64}`;
+        audio.volume = 1;
         audioRef.current = audio;
         speakingRef.current = true;
         audio.onended = () => { speakingRef.current = false; resolve(); };
-        audio.onerror = () => { speakingRef.current = false; resolve(); };
-        audio.play().catch(() => { speakingRef.current = false; resolve(); });
+        audio.onerror = () => { speakingRef.current = false; void speakWithBrowser(text).finally(resolve); };
+        audio.play().catch(() => { speakingRef.current = false; void speakWithBrowser(text).finally(resolve); });
       });
     } catch (e: unknown) {
       console.warn("earpiece TTS failed", e);
       speakingRef.current = false;
+      await speakWithBrowser(text);
     }
-  }, [muted]);
+  }, [muted, speakWithBrowser]);
 
   // -------- Conversation flow --------
   const handleWakeDetected = useCallback((heardText: string) => {
@@ -503,6 +559,7 @@ export default function ManagerEarpiece() {
     desiredAlwaysOnRef.current = false;
     modeRef.current = "call";
     phaseRef.current = "listening";
+    unlockAudioOutput();
     stopAudio();
     const micReady = await startMicStream();
     if (!micReady) return;
@@ -521,6 +578,7 @@ export default function ManagerEarpiece() {
     desiredAlwaysOnRef.current = true;
     modeRef.current = "always_on";
     phaseRef.current = "wake_listening";
+    unlockAudioOutput();
     stopAudio();
     const micReady = await startMicStream();
     if (!micReady) { desiredAlwaysOnRef.current = false; return; }

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { Headphones, Mic, Volume2, VolumeX, Sparkles, Send, Loader2, Radio, Ear, PhoneOff } from "lucide-react";
 import { toast } from "sonner";
-import { useScribe, CommitStrategy } from "@elevenlabs/react";
+import { useScribe, CommitStrategy, AudioFormat } from "@elevenlabs/react";
 
 type Turn = { role: "user" | "assistant"; content: string; ts: number };
 type Mode = "idle" | "call" | "always_on";
@@ -72,6 +72,37 @@ function errorName(err: unknown): string {
   return err instanceof DOMException ? err.name : err instanceof Error && "name" in err ? err.name : "";
 }
 
+function pcm16ToBase64(samples: Float32Array): string {
+  const bytes = new Uint8Array(samples.length * 2);
+  const view = new DataView(bytes.buffer);
+  for (let i = 0; i < samples.length; i += 1) {
+    const sample = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function resampleTo16k(input: Float32Array, inputRate: number): Float32Array {
+  if (inputRate === 16000) return input;
+  const ratio = inputRate / 16000;
+  const outputLength = Math.max(1, Math.round(input.length / ratio));
+  const output = new Float32Array(outputLength);
+  for (let i = 0; i < outputLength; i += 1) {
+    const sourceIndex = i * ratio;
+    const left = Math.floor(sourceIndex);
+    const right = Math.min(input.length - 1, left + 1);
+    const weight = sourceIndex - left;
+    output[i] = input[left] * (1 - weight) + input[right] * weight;
+  }
+  return output;
+}
+
 export default function ManagerEarpiece() {
   const { venue } = useAuth();
   const [mode, setMode] = useState<Mode>("idle");
@@ -94,6 +125,11 @@ export default function ManagerEarpiece() {
   const reconnectTimerRef = useRef<number | null>(null);
   const followupTimerRef = useRef<number | null>(null);
   const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const micProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null }>({
     active: false, buffer: "", timer: null,
@@ -119,6 +155,59 @@ export default function ManagerEarpiece() {
     window.clearTimeout(followupTimerRef.current);
     followupTimerRef.current = null;
   }, []);
+
+  const stopMicStream = useCallback(() => {
+    try { micProcessorRef.current?.disconnect(); } catch { console.warn("mic processor disconnect failed"); }
+    try { micSourceRef.current?.disconnect(); } catch { console.warn("mic source disconnect failed"); }
+    micStreamRef.current?.getTracks().forEach(track => track.stop());
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      void audioContextRef.current.close();
+    }
+    micProcessorRef.current = null;
+    micSourceRef.current = null;
+    micStreamRef.current = null;
+    audioContextRef.current = null;
+  }, []);
+
+  const startMicStream = useCallback(async (): Promise<boolean> => {
+    if (micStreamRef.current) return true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: { ideal: 16000 },
+        },
+      });
+      const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextCtor) throw new Error("This browser can't start live microphone audio.");
+      const audioContext = new AudioContextCtor();
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      processor.onaudioprocess = event => {
+        if (!desiredAlwaysOnRef.current && modeRef.current !== "call") return;
+        try {
+          sendAudioRef.current(pcm16ToBase64(resampleTo16k(event.inputBuffer.getChannelData(0), audioContext.sampleRate)));
+        } catch (e) {
+          console.warn("mic chunk send failed", e);
+        }
+      };
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+      if (audioContext.state === "suspended") await audioContext.resume();
+      micStreamRef.current = stream;
+      audioContextRef.current = audioContext;
+      micSourceRef.current = source;
+      micProcessorRef.current = processor;
+      return true;
+    } catch (e) {
+      stopMicStream();
+      toast.error("Couldn't keep the microphone open: " + errorMessage(e));
+      return false;
+    }
+  }, [stopMicStream]);
 
   // -------- Scribe (ElevenLabs realtime STT) --------
   const scribe = useScribe({
@@ -212,11 +301,8 @@ export default function ManagerEarpiece() {
         languageCode: "en",
         keyterms: WAKE_KEYTERMS,
         noVerbatim: false,
-        microphone: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audioFormat: AudioFormat.PCM_16000,
+        sampleRate: 16000,
       });
       return true;
     } catch (e: unknown) {
@@ -231,6 +317,7 @@ export default function ManagerEarpiece() {
   }, [scribe]);
 
   useEffect(() => { connectScribeRef.current = connectScribe; }, [connectScribe]);
+  useEffect(() => { sendAudioRef.current = scribe.sendAudio; }, [scribe.sendAudio]);
 
   const disconnectScribe = useCallback(async () => {
     try { await scribe.disconnect(); } catch { console.warn("scribe disconnect failed"); }
@@ -308,13 +395,14 @@ export default function ManagerEarpiece() {
     }
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
     captureRef.current = { active: false, buffer: "", timer: null };
+    stopMicStream();
     await disconnectScribe();
     stopAudio();
     setMode("idle");
     setPhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [clearFollowupTimer, disconnectScribe, stopAudio]);
+  }, [clearFollowupTimer, disconnectScribe, stopAudio, stopMicStream]);
 
   const goSpeakAndFollowup = useCallback(async (answer: string) => {
     setPhase("speaking");
@@ -391,7 +479,7 @@ export default function ManagerEarpiece() {
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 
   // -------- Mic permission --------
-  const ensureMicPermission = useCallback(async (): Promise<boolean> => {
+  const canUseMic = useCallback((): boolean => {
     if (!navigator.mediaDevices?.getUserMedia) {
       toast.error("This browser can't access the microphone.");
       return false;
@@ -400,32 +488,17 @@ export default function ManagerEarpiece() {
       toast.error("Mic needs HTTPS. Open the published URL.");
       return false;
     }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => t.stop());
-      return true;
-    } catch (err: unknown) {
-      const name = errorName(err);
-      if (name === "NotAllowedError" || name === "SecurityError") {
-        toast.error("Mic blocked. Tap 🔒 in your browser bar → Site settings → allow Microphone, then retry.", { duration: 7000 });
-      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
-        toast.error("No microphone found on this device.");
-      } else if (name === "NotReadableError") {
-        toast.error("Microphone is in use by another app.");
-      } else {
-        toast.error("Couldn't access the microphone: " + (errorMessage(err) || name));
-      }
-      return false;
-    }
+    return true;
   }, []);
 
   // -------- Public actions --------
   const startCall = async () => {
     if (mode === "call") { endSession(); return; }
-    const ok = await ensureMicPermission();
-    if (!ok) return;
+    if (!canUseMic()) return;
     desiredAlwaysOnRef.current = false;
     stopAudio();
+    const micReady = await startMicStream();
+    if (!micReady) return;
     setMode("call");
     setPhase("listening");
     setPartial("");
@@ -437,10 +510,11 @@ export default function ManagerEarpiece() {
 
   const toggleAlwaysOn = async () => {
     if (mode === "always_on") { endSession(); return; }
-    const ok = await ensureMicPermission();
-    if (!ok) return;
+    if (!canUseMic()) return;
     desiredAlwaysOnRef.current = true;
     stopAudio();
+    const micReady = await startMicStream();
+    if (!micReady) { desiredAlwaysOnRef.current = false; return; }
     setMode("always_on");
     setPhase("wake_listening");
     setPartial("");
@@ -458,7 +532,7 @@ export default function ManagerEarpiece() {
     handleUserUtterance(q);
   };
 
-  useEffect(() => () => { disconnectScribe(); stopAudio(); }, [disconnectScribe, stopAudio]);
+  useEffect(() => () => { stopMicStream(); disconnectScribe(); stopAudio(); }, [disconnectScribe, stopAudio, stopMicStream]);
 
   const callActive = mode === "call";
   const alwaysOn = mode === "always_on";

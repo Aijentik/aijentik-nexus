@@ -240,11 +240,11 @@ export default function ManagerEarpiece() {
     reconnectTimerRef.current = window.setTimeout(async () => {
       reconnectTimerRef.current = null;
       if (!desiredAlwaysOnRef.current || modeRef.current !== "always_on") return;
-      setPhase("wake_listening");
+      setLivePhase("wake_listening");
       setPartial("");
       await connectScribeRef.current(true);
     }, 1200);
-  }, []);
+  }, [setLivePhase]);
 
   const clearFollowupTimer = useCallback(() => {
     if (!followupTimerRef.current) return;
@@ -448,7 +448,7 @@ export default function ManagerEarpiece() {
     noVerbatim: false,
     onSessionStarted: () => {
       if (desiredAlwaysOnRef.current && modeRef.current === "always_on" && phaseRef.current === "idle") {
-        setPhase("wake_listening");
+        setLivePhase("wake_listening");
       }
     },
     onPartialTranscript: (data: ScribeTranscript) => {
@@ -805,14 +805,14 @@ export default function ManagerEarpiece() {
     if (!canUseMic()) return;
     desiredAlwaysOnRef.current = false;
     modeRef.current = "call";
-    phaseRef.current = "listening";
+    setLivePhase("listening");
     unlockAudioOutput();
     stopAudio();
     startBrowserRecognition();
     const micReady = await startMicStream();
     if (!micReady) { stopBrowserRecognition(); return; }
     setMode("call");
-    setPhase("listening");
+    setLivePhase("listening");
     setPartial("");
     awaitingFollowupRef.current = false;
     startCapture("", 30000);
@@ -825,14 +825,14 @@ export default function ManagerEarpiece() {
     if (!canUseMic()) return;
     desiredAlwaysOnRef.current = true;
     modeRef.current = "always_on";
-    phaseRef.current = "wake_listening";
+    setLivePhase("wake_listening");
     unlockAudioOutput();
     stopAudio();
     startBrowserRecognition();
     const micReady = await startMicStream();
     if (!micReady) { desiredAlwaysOnRef.current = false; stopBrowserRecognition(); return; }
     setMode("always_on");
-    setPhase("wake_listening");
+    setLivePhase("wake_listening");
     setPartial("");
     awaitingFollowupRef.current = false;
     resetCapture();

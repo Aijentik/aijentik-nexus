@@ -81,13 +81,22 @@ export default function Knowledge() {
     finally { setGenerating((s) => { const n = new Set(s); n.delete(item.id); return n; }); }
   };
 
-  const grouped = items.reduce((a: any, k) => { (a[k.category] ||= []).push(k); return a; }, {});
-  const groupedMenu = menu.reduce((a: Record<string, MenuItem[]>, m) => { (a[m.section] ||= []).push(m); return a; }, {});
+  const q = query.trim().toLowerCase();
+  const filteredItems = q
+    ? items.filter((k: any) => `${k.title || ""} ${k.content || ""} ${k.category || ""}`.toLowerCase().includes(q))
+    : items;
+  const filteredMenu = q
+    ? menu.filter((m) => `${m.name || ""} ${m.description || ""} ${m.section || ""}`.toLowerCase().includes(q))
+    : menu;
+
+  const grouped = filteredItems.reduce((a: any, k) => { (a[k.category] ||= []).push(k); return a; }, {});
+  const groupedMenu = filteredMenu.reduce((a: Record<string, MenuItem[]>, m) => { (a[m.section] ||= []).push(m); return a; }, {});
   const sectionOrder = ["starters", "mains", "sides", "desserts", "brunch", "specials", "kids", "drinks", "cocktails", "wine", "beer"];
   const orderedSections = Object.keys(groupedMenu).sort((a, b) => {
     const ai = sectionOrder.indexOf(a), bi = sectionOrder.indexOf(b);
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
   });
+
 
   const scrape = async () => {
     if (!venue || !scrapeUrl) return;

@@ -331,6 +331,7 @@ export default function ManagerEarpiece() {
       }
       // Allow wake to fire from partials too (faster reaction)
       if (phaseRef.current === "wake_listening" && hasWake(text)) {
+        console.info("[earpiece] wake detected", text);
         handleWakeDetected(text);
       }
     },
@@ -341,7 +342,10 @@ export default function ManagerEarpiece() {
 
       // Always-on wake stage
       if (phaseRef.current === "wake_listening") {
-        if (hasWake(text)) handleWakeDetected(text);
+        if (hasWake(text)) {
+          console.info("[earpiece] wake detected", text);
+          handleWakeDetected(text);
+        }
         return;
       }
 

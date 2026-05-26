@@ -32,7 +32,6 @@ const WAKE_PATTERNS = [
   /\b(h+ey|hay|hi|okay|ok)[,\s-]+a?i?\s*j?ent[iy]?k\b/i,
 ];
 const WAKE_KEYTERMS = ["Hey Agentic", "Agentic", "agentic", "AI gentic", "agent tech"];
-const WAKE_ACKS = ["Yesss?", "Mhm?", "Go on…", "Yep, listening.", "Hit me.", "I'm all ears.", "Yes boss?"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
@@ -196,7 +195,10 @@ export default function ManagerEarpiece() {
         void handleUserUtteranceRef.current(stripWake(q));
         return;
       }
-      if (modeRef.current === "always_on") setPhase("wake_listening");
+      if (modeRef.current === "always_on") {
+        awaitingFollowupRef.current = false;
+        setPhase("wake_listening");
+      }
     }, timeoutMs);
   }, [resetCapture]);
 
@@ -325,7 +327,9 @@ export default function ManagerEarpiece() {
         captureRef.current.buffer = (captureRef.current.buffer + " " + text).trim();
         setPartial(captureRef.current.buffer);
         // Debounce — assume user is done if no new committed segment arrives quickly.
-        scheduleCaptureCommit();
+        if (hasUsableCommand(captureRef.current.buffer, awaitingFollowupRef.current)) {
+          scheduleCaptureCommit();
+        }
       }
     },
     onError: (err: unknown) => {

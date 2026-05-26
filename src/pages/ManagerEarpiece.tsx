@@ -936,10 +936,26 @@ export default function ManagerEarpiece() {
       }
     }
 
+    // Finalise whisper-mode decision from the rolling RMS over this capture window.
+    const avgRms = captureRmsCountRef.current > 0
+      ? captureRmsSumRef.current / captureRmsCountRef.current
+      : 0;
+    captureWhisperRef.current = avgRms > 0 && avgRms < WHISPER_RMS_AVG;
+
     setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }]);
     setPartial("");
     setLivePhase("thinking");
     playChime("commit");
+
+    // Offline fallback: if there's no network, ack via local TTS and bail gracefully.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      const offlineMsg = "I'm offline right now — I'll catch up the moment we're back.";
+      setTurns(t => [...t, { role: "assistant", content: offlineMsg, ts: Date.now() }]);
+      setLivePhase("speaking");
+      await speakWithBrowser(offlineMsg, true);
+      armFollowup();
+      return;
+    }
 
     // Prep a streaming TTS session
     ttsCancelRef.current = { cancelled: false };

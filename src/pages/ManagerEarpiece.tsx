@@ -193,6 +193,7 @@ export default function ManagerEarpiece() {
   const [partial, setPartial] = useState("");
   const [ctx, setCtx] = useState<{ bookings: number; covers: number; vips: number; pending_emails: number } | null>(null);
 
+  const turnsRef = useRef<Turn[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const modeRef = useRef<Mode>("idle");
@@ -226,6 +227,7 @@ export default function ManagerEarpiece() {
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { turnsRef.current = turns; }, [turns]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: 999999, behavior: "smooth" }); }, [turns, partial]);
 
   const setLivePhase = useCallback((next: Phase) => {

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import {
   Loader2, Plus, ShoppingBag, Clock, ChefHat, CheckCircle2, Truck, XCircle, MessageCircle,
-  Instagram, Phone, Send, Home, ChevronRight, Trash2, CreditCard,
+  Instagram, Phone, Send, Home, ChevronRight, Trash2, CreditCard, Search, X,
 } from "lucide-react";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { toast } from "sonner";
@@ -83,6 +83,8 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Order | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [channelFilter, setChannelFilter] = useState<"all" | Order["channel"]>("all");
 
   const load = async () => {
     if (!venue) return;
@@ -123,12 +125,31 @@ export default function Orders() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venue?.id]);
 
+  const filteredOrders = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return orders.filter(o => {
+      if (channelFilter !== "all" && o.channel !== channelFilter) return false;
+      if (!q) return true;
+      const itemNames = (items[o.id] || []).map(i => i.name).join(" ").toLowerCase();
+      return `${o.guest_name} ${o.guest_phone || ""} ${o.guest_email || ""} ${o.notes || ""} ${itemNames}`.toLowerCase().includes(q);
+    });
+  }, [orders, query, channelFilter, items]);
+
   const byStatus = useMemo(() => {
     const m: Record<string, Order[]> = {};
     COLUMNS.forEach(c => { m[c.id] = []; });
-    orders.forEach(o => { if (m[o.status]) m[o.status].push(o); });
+    filteredOrders.forEach(o => { if (m[o.status]) m[o.status].push(o); });
+    return m;
+  }, [filteredOrders]);
+
+  const channelCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    orders.forEach(o => { m[o.channel] = (m[o.channel] || 0) + 1; });
     return m;
   }, [orders]);
+
+  const hasFilters = !!query || channelFilter !== "all";
+
 
   const advance = async (o: Order) => {
     const next = NEXT[o.status];
@@ -202,6 +223,35 @@ export default function Orders() {
             : "—"
         } hint="AI capture" />
       </div>
+
+      {/* Filter bar */}
+      {orders.length > 0 && (
+        <div className="mb-4 flex flex-col sm:flex-row gap-2 sm:items-center">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search guest, phone, item…" className="pl-9 h-9 bg-white/[0.02] border-white/[0.06]" />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button onClick={() => setChannelFilter("all")}
+              className={`text-[11.5px] px-3 py-1.5 rounded-full border transition-all ${
+                channelFilter === "all" ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:text-foreground"
+              }`}>All <span className="opacity-60 ml-0.5">{orders.length}</span></button>
+            {(Object.keys(CHANNEL_LABEL) as Order["channel"][]).filter(c => channelCounts[c]).map(c => (
+              <button key={c} onClick={() => setChannelFilter(c)}
+                className={`text-[11.5px] px-3 py-1.5 rounded-full border transition-all ${
+                  channelFilter === c ? "border-primary/50 bg-primary/[0.08] text-primary" : "border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:text-foreground"
+                }`}>{CHANNEL_LABEL[c]} <span className="opacity-60 ml-0.5">{channelCounts[c]}</span></button>
+            ))}
+          </div>
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={() => { setQuery(""); setChannelFilter("all"); }} className="h-9 text-xs text-muted-foreground">
+              <X className="h-3 w-3 mr-1" /> Reset
+            </Button>
+          )}
+        </div>
+      )}
+
+
 
       {loading && orders.length === 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">

@@ -26,6 +26,7 @@ export default function Integrations() {
   const [conns, setConns] = useState<Record<string, Conn>>({});
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState<string>("All");
+  const [connectedOnly, setConnectedOnly] = useState(false);
   const [connectTarget, setConnectTarget] = useState<Integration | null>(null);
   const [manageTarget, setManageTarget] = useState<Integration | null>(null);
   const [reload, setReload] = useState(0);
@@ -43,10 +44,24 @@ export default function Integrations() {
   }, [venue?.id, reload]);
 
   const categories = useMemo(() => ["All", ...Array.from(new Set(INTEGRATIONS.map(i => i.category)))], []);
-  const filtered = INTEGRATIONS.filter(i =>
-    (activeCat === "All" || i.category === activeCat) &&
-    (!query || i.name.toLowerCase().includes(query.toLowerCase()) || i.desc.toLowerCase().includes(query.toLowerCase()))
-  );
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = INTEGRATIONS.filter(i =>
+      (activeCat === "All" || i.category === activeCat) &&
+      (!q || i.name.toLowerCase().includes(q) || i.desc.toLowerCase().includes(q)) &&
+      (!connectedOnly || !!conns[i.id]?.connected)
+    );
+    // Connected first, then highlighted, then alpha
+    return [...list].sort((a, b) => {
+      const ac = conns[a.id]?.connected ? 1 : 0;
+      const bc = conns[b.id]?.connected ? 1 : 0;
+      if (ac !== bc) return bc - ac;
+      const ah = a.highlight ? 1 : 0;
+      const bh = b.highlight ? 1 : 0;
+      if (ah !== bh) return bh - ah;
+      return a.name.localeCompare(b.name);
+    });
+  }, [query, activeCat, connectedOnly, conns]);
 
   const connectedCount = Object.values(conns).filter(c => c.connected).length;
 
@@ -64,9 +79,20 @@ export default function Integrations() {
 
       {/* Search + categories — minimal, doesn't touch the grid */}
       <div className="mb-6 space-y-3">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search integrations…" className="pl-9 h-10 bg-white/[0.02] border-white/[0.06]" />
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search integrations…" className="pl-9 h-10 bg-white/[0.02] border-white/[0.06]" />
+          </div>
+          <button
+            onClick={() => setConnectedOnly(v => !v)}
+            className={`text-[11.5px] px-3 py-2 rounded-lg border transition-all whitespace-nowrap ${
+              connectedOnly
+                ? "border-[hsl(var(--success))]/40 bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]"
+                : "border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:text-foreground"
+            }`}>
+            {connectedOnly ? "✓ Connected only" : "Connected only"}
+          </button>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {categories.map(c => (
@@ -79,6 +105,13 @@ export default function Integrations() {
           ))}
         </div>
       </div>
+
+      {filtered.length === 0 && (
+        <div className="card-cine p-10 text-center text-sm text-muted-foreground">
+          No integrations match your filters.
+        </div>
+      )}
+
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {filtered.map((i, idx) => {

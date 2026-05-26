@@ -440,16 +440,16 @@ export default function ManagerEarpiece() {
     }).catch(() => undefined);
   }, []);
 
-  const speakWithBrowser = useCallback(async (text: string): Promise<void> => {
+  const speakWithBrowser = useCallback(async (text: string, suppressInput = true): Promise<void> => {
     if (!window.speechSynthesis) return;
     await new Promise<void>((resolve) => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1;
       utterance.pitch = 1.05;
       utterance.volume = 1;
-      speakingRef.current = true;
-      utterance.onend = () => { speakingRef.current = false; resolve(); };
-      utterance.onerror = () => { speakingRef.current = false; resolve(); };
+      if (suppressInput) speakingRef.current = true;
+      utterance.onend = () => { if (suppressInput) speakingRef.current = false; resolve(); };
+      utterance.onerror = () => { if (suppressInput) speakingRef.current = false; resolve(); };
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     });
@@ -463,7 +463,7 @@ export default function ManagerEarpiece() {
     };
   }, [disconnectScribe, stopAudio, stopMicStream]);
 
-  const speak = useCallback(async (text: string): Promise<void> => {
+  const speak = useCallback(async (text: string, suppressInput = true): Promise<void> => {
     if (muted) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -478,7 +478,7 @@ export default function ManagerEarpiece() {
       });
       const json = await res.json();
       if (!res.ok || !json.audio_base64) {
-        await speakWithBrowser(text);
+        await speakWithBrowser(text, suppressInput);
         return;
       }
       await new Promise<void>((resolve) => {
@@ -487,15 +487,15 @@ export default function ManagerEarpiece() {
         audio.src = `data:${json.mime || "audio/mpeg"};base64,${json.audio_base64}`;
         audio.volume = 1;
         audioRef.current = audio;
-        speakingRef.current = true;
-        audio.onended = () => { speakingRef.current = false; resolve(); };
-        audio.onerror = () => { speakingRef.current = false; void speakWithBrowser(text).finally(resolve); };
-        audio.play().catch(() => { speakingRef.current = false; void speakWithBrowser(text).finally(resolve); });
+        if (suppressInput) speakingRef.current = true;
+        audio.onended = () => { if (suppressInput) speakingRef.current = false; resolve(); };
+        audio.onerror = () => { if (suppressInput) speakingRef.current = false; void speakWithBrowser(text, suppressInput).finally(resolve); };
+        audio.play().catch(() => { if (suppressInput) speakingRef.current = false; void speakWithBrowser(text, suppressInput).finally(resolve); });
       });
     } catch (e: unknown) {
       console.warn("earpiece TTS failed", e);
-      speakingRef.current = false;
-      await speakWithBrowser(text);
+      if (suppressInput) speakingRef.current = false;
+      await speakWithBrowser(text, suppressInput);
     }
   }, [muted, speakWithBrowser]);
 

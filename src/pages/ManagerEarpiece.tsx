@@ -681,6 +681,7 @@ export default function ManagerEarpiece() {
 
   const handleUserUtterance = useCallback(async (text: string) => {
     if (!venue) return;
+    clearFollowupPromptTimer();
 
     if (awaitingFollowupRef.current) {
       awaitingFollowupRef.current = false;
@@ -725,7 +726,7 @@ export default function ManagerEarpiece() {
       toast.error(errorMessage(e) || "Ear-piece failed");
       setPhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, turns, clearFollowupTimer, speak, goSpeakAndFollowup, endSession]);
+  }, [venue, turns, clearFollowupPromptTimer, clearFollowupTimer, speak, goSpeakAndFollowup, endSession]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 
@@ -751,6 +752,7 @@ export default function ManagerEarpiece() {
     phaseRef.current = "listening";
     unlockAudioOutput();
     stopAudio();
+    startBrowserRecognition();
     const micReady = await startMicStream();
     if (!micReady) return;
     setMode("call");
@@ -770,6 +772,7 @@ export default function ManagerEarpiece() {
     phaseRef.current = "wake_listening";
     unlockAudioOutput();
     stopAudio();
+    startBrowserRecognition();
     const micReady = await startMicStream();
     if (!micReady) { desiredAlwaysOnRef.current = false; return; }
     setMode("always_on");

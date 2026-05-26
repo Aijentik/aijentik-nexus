@@ -115,6 +115,29 @@ function captureCandidate(capture: CaptureState): string {
   return mergeTranscript(capture.buffer, capture.live).trim();
 }
 
+function stripRecentQuestionEcho(text: string, recentQuestions: string[]): string {
+  let normalized = normalizeVoiceText(stripWake(text));
+  if (!normalized) return "";
+
+  const recent = [...recentQuestions]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const prev of recent) {
+      if (normalized === prev) return "";
+      if (normalized.startsWith(`${prev} `)) {
+        normalized = normalized.slice(prev.length).trim();
+        changed = true;
+      }
+    }
+  }
+
+  return normalized;
+}
+
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err || "");
 }

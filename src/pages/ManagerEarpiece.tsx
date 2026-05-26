@@ -247,9 +247,41 @@ export default function ManagerEarpiece() {
     }
   }, [venue, turns, speak, goSpeakAndFollowup, startRecognition, endSession]);
 
+  // Ask for mic permission inside the user gesture (required on iOS/Android)
+  const ensureMicPermission = useCallback(async (): Promise<boolean> => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error("This browser can't access the microphone. Try Chrome or Safari.");
+      return false;
+    }
+    if (!window.isSecureContext) {
+      toast.error("Mic needs HTTPS. Open the published URL, not a local IP.");
+      return false;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Release immediately — SpeechRecognition opens its own stream
+      stream.getTracks().forEach(t => t.stop());
+      return true;
+    } catch (err: any) {
+      const name = err?.name || "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        toast.error("Mic blocked. Tap the 🔒 in your browser bar → Site settings → allow Microphone, then retry.", { duration: 7000 });
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+        toast.error("No microphone found on this device.");
+      } else if (name === "NotReadableError") {
+        toast.error("Microphone is in use by another app. Close it and try again.");
+      } else {
+        toast.error("Couldn't access the microphone: " + (err?.message || name || "unknown error"));
+      }
+      return false;
+    }
+  }, []);
+
   // Public actions ---------------------------------------------------------
-  const startCall = () => {
+  const startCall = async () => {
     if (mode === "call") { endSession(); return; }
+    const ok = await ensureMicPermission();
+    if (!ok) return;
     stopAudio();
     setMode("call");
     setPhase("listening");
@@ -258,8 +290,10 @@ export default function ManagerEarpiece() {
     startRecognition("command");
   };
 
-  const toggleAlwaysOn = () => {
+  const toggleAlwaysOn = async () => {
     if (mode === "always_on") { endSession(); return; }
+    const ok = await ensureMicPermission();
+    if (!ok) return;
     stopAudio();
     setMode("always_on");
     setPhase("wake_listening");
@@ -267,6 +301,7 @@ export default function ManagerEarpiece() {
     awaitingFollowupRef.current = false;
     startRecognition("wake");
   };
+
 
   const sendTyped = (text: string) => {
     const q = text.trim();

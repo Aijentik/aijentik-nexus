@@ -25,21 +25,17 @@ const QUICK_PROMPTS = [
 // Spoken wake phrase uses the real word "Agentic" for STT reliability.
 // Keep the visible brand phrase as "Aijentik" in the UI because it sounds the same.
 const WAKE_PATTERNS = [
-  /\b(h+ey|hay|hi|okay|ok)[,\s-]+agentic\b/i,
-  /\b(h+ey|hay|hi|okay|ok)[,\s-]+agent\s*ic\b/i,
-  /\b(h+ey|hay|hi|okay|ok)[,\s-]+agent\s*tech\b/i,
-  /\b(h+ey|hay|hi|okay|ok)[,\s-]+ai\s*gentic\b/i,
-  /\b(h+ey|hay|hi|okay|ok)[,\s-]+a\s*gentic\b/i,
-  /\b(h+ey|hay|hi|okay|ok)[,\s-]+a?i?\s*j?ent[iy]?k\b/i,
+  /\b(h+ey|hay|hi|okay|ok|yo)[,\s-]+(?:agentic|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|a?i?\s*j?ent[iy]?k|asian\s*tech|urgent\s*(?:ic|ick|tick))\b/i,
+  /\b(?:agentic|ai\s*gentic|a\s*gentic|aijentik|aijentic|ajentic)\b/i,
 ];
-const WAKE_KEYTERMS = ["Hey Agentic", "Agentic", "agentic", "AI gentic", "agent tech"];
+const WAKE_KEYTERMS = ["Hey Agentic", "Hey Aijentik", "Agentic", "Aijentik", "AI gentic", "agent tech", "agent tick", "agent take"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
 const WAKE_ACK = "Yes?";
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
-const MIN_WAKE_RMS = 0.034;
-const MIN_LISTENING_RMS = 0.024;
+const MIN_WAKE_RMS = 0.006;
+const MIN_LISTENING_RMS = 0.01;
 const CAPTURE_IDLE_MS = 1150;
 const WAKE_CAPTURE_TIMEOUT_MS = 5500;
 const FILLER_ONLY_PATTERNS = [
@@ -59,15 +55,15 @@ function normalizeVoiceText(text: string): string {
 function stripWake(text: string): string {
   let t = text;
   for (const p of WAKE_PATTERNS) t = t.replace(p, "");
-  t = t.replace(/^\s*(h+ey|hay|hi|okay|ok)[,\s-]*(agentic|agent\s*ic|agent\s*tech|ai\s*gentic|a\s*gentic|aijentik|aijentic)\b/i, "");
+  t = t.replace(/^\s*(h+ey|hay|hi|okay|ok|yo)[,\s-]*(agentic|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|aijentik|aijentic|ajentic|asian\s*tech|urgent\s*(?:ic|ick|tick))\b/i, "");
   return t.replace(/^[\s,.\-!?:;]+/, "").trim();
 }
 function hasWake(text: string): boolean {
   if (WAKE_PATTERNS.some(p => p.test(text))) return true;
   const normalized = normalizeVoiceText(text);
   const compact = normalized.replace(/\s+/g, "");
-  return /\b(hey|hay|hi|okay|ok)\s+(agentic|agent\s*ic|ai\s*gentic|a\s*gentic|agent\s*tech|aijentik|aijentic)\b/.test(normalized)
-    || /(hey|hay|hi|okay|ok)(agentic|agentic|aigentic|agenttech|aijentik|aijentic)/.test(compact);
+  return /\b(hey|hay|hi|okay|ok|yo)\s+(agentic|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|agent\s*tech|aijentik|aijentic|ajentic|asian\s*tech)\b/.test(normalized)
+    || /(hey|hay|hi|okay|ok|yo)?(agentic|aigentic|agentik|agentick|agenttick|agenttech|agenttake|aijentik|aijentic|ajentic|asiantech|urgentick|urgenttick)/.test(compact);
 }
 
 function hasUsableCommand(text: string, allowShort = false): boolean {

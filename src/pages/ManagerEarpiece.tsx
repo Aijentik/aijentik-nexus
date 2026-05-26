@@ -193,7 +193,7 @@ export default function ManagerEarpiece() {
   const browserRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const browserRecognitionRunningRef = useRef(false);
   const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
-  const noiseFloorRef = useRef(0.012);
+  const noiseFloorRef = useRef(0.004);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<CaptureState>({
     active: false, buffer: "", live: "", timer: null, deadline: null,
@@ -370,8 +370,8 @@ export default function ManagerEarpiece() {
           const input = event.inputBuffer.getChannelData(0);
           const rms = getRms(input);
           const threshold = phaseRef.current === "wake_listening"
-            ? MIN_WAKE_RMS
-            : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.4);
+            ? Math.max(0.0006, Math.min(MIN_WAKE_RMS, noiseFloorRef.current * 0.85))
+            : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.15);
 
           if (rms < threshold) {
             noiseFloorRef.current = noiseFloorRef.current * 0.96 + rms * 0.04;

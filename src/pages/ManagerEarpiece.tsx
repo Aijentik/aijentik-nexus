@@ -501,6 +501,8 @@ export default function ManagerEarpiece() {
     if (mode === "call") { endSession(); return; }
     if (!canUseMic()) return;
     desiredAlwaysOnRef.current = false;
+    modeRef.current = "call";
+    phaseRef.current = "listening";
     stopAudio();
     const micReady = await startMicStream();
     if (!micReady) return;
@@ -517,6 +519,8 @@ export default function ManagerEarpiece() {
     if (mode === "always_on") { endSession(); return; }
     if (!canUseMic()) return;
     desiredAlwaysOnRef.current = true;
+    modeRef.current = "always_on";
+    phaseRef.current = "wake_listening";
     stopAudio();
     const micReady = await startMicStream();
     if (!micReady) { desiredAlwaysOnRef.current = false; return; }
@@ -537,7 +541,7 @@ export default function ManagerEarpiece() {
     handleUserUtterance(q);
   };
 
-  useEffect(() => () => { stopMicStream(); disconnectScribe(); stopAudio(); }, [disconnectScribe, stopAudio, stopMicStream]);
+  useEffect(() => () => { cleanupRef.current(); }, []);
 
   const callActive = mode === "call";
   const alwaysOn = mode === "always_on";

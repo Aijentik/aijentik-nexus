@@ -8,6 +8,7 @@ type Ctx = {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  venuesLoaded: boolean;
   venue: Venue | null;
   venues: Venue[];
   setActiveVenue: (id: string) => Promise<void>;

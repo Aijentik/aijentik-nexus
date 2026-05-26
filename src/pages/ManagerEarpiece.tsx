@@ -92,6 +92,7 @@ export default function ManagerEarpiece() {
   const connectInFlightRef = useRef<Promise<boolean> | null>(null);
   const connectScribeRef = useRef<(silent?: boolean) => Promise<boolean>>(async () => false);
   const reconnectTimerRef = useRef<number | null>(null);
+  const followupTimerRef = useRef<number | null>(null);
   const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null }>({
@@ -111,6 +112,12 @@ export default function ManagerEarpiece() {
       setPartial("");
       await connectScribeRef.current(true);
     }, 1200);
+  }, []);
+
+  const clearFollowupTimer = useCallback(() => {
+    if (!followupTimerRef.current) return;
+    window.clearTimeout(followupTimerRef.current);
+    followupTimerRef.current = null;
   }, []);
 
   // -------- Scribe (ElevenLabs realtime STT) --------
@@ -155,6 +162,7 @@ export default function ManagerEarpiece() {
 
       // Command capture (call mode OR after wake)
       if (captureRef.current.active || phaseRef.current === "listening") {
+        clearFollowupTimer();
         captureRef.current.buffer = (captureRef.current.buffer + " " + text).trim();
         setPartial(captureRef.current.buffer);
         // Debounce — assume user is done if no new committed segment in 900ms

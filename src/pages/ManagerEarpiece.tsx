@@ -506,6 +506,7 @@ export default function ManagerEarpiece() {
     captureRef.current = { active: true, buffer: "", timer: null };
     const connected = await connectScribe();
     if (!connected) { endSession(); }
+    else { await startMicStream(); }
   };
 
   const toggleAlwaysOn = async () => {
@@ -521,6 +522,7 @@ export default function ManagerEarpiece() {
     captureRef.current = { active: false, buffer: "", timer: null };
     const connected = await connectScribe();
     if (!connected) { endSession(); }
+    else { await startMicStream(); }
   };
 
   const sendTyped = (text: string) => {
@@ -531,7 +533,7 @@ export default function ManagerEarpiece() {
     handleUserUtterance(q);
   };
 
-  useEffect(() => () => { disconnectScribe(); stopAudio(); }, [disconnectScribe, stopAudio]);
+  useEffect(() => () => { stopMicStream(); disconnectScribe(); stopAudio(); }, [disconnectScribe, stopAudio, stopMicStream]);
 
   const callActive = mode === "call";
   const alwaysOn = mode === "always_on";

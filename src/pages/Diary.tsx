@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, CalendarDays, Users, Pencil, Copy, MoveRight, X, Crown, Repeat, MoreHorizontal, Sparkles } from "lucide-react";
-import { format } from "date-fns";
+import { Input } from "@/components/ui/input";
+import { Plus, Trash2, CalendarDays, Users, Pencil, Copy, MoveRight, X, Crown, Repeat, MoreHorizontal, Sparkles, Search } from "lucide-react";
+import { format, isToday, isThisWeek, isPast, isFuture } from "date-fns";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+
 import { BookingDialog, type BookingDialogMode } from "@/components/booking/BookingDialog";
 import { RunSheetDialog } from "@/components/RunSheetDialog";
 import {
@@ -38,6 +40,10 @@ const statusStyle = (s: string): { color: string; bg: string; border: string } =
   }
 };
 
+type Scope = "upcoming" | "today" | "week" | "past" | "all";
+const SCOPE_LABEL: Record<Scope, string> = { upcoming: "Upcoming", today: "Today", week: "This week", past: "Past", all: "All" };
+const STATUS_OPTS = ["all", "pending", "confirmed", "seated", "completed", "cancelled", "no_show"] as const;
+
 export default function Diary() {
   const { venue } = useAuth();
   const [bookings, setBookings] = useState<any[]>([]);
@@ -47,6 +53,10 @@ export default function Diary() {
   const [dialogInitial, setDialogInitial] = useState<any | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [runSheetOpen, setRunSheetOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<Scope>("upcoming");
+  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTS)[number]>("all");
+
 
   const load = async () => {
     if (!venue) return;
@@ -130,13 +140,31 @@ export default function Diary() {
     return null;
   };
 
-  const grouped = bookings.reduce((acc: any, b) => {
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return bookings.filter((b) => {
+      const t = new Date(b.booking_time);
+      if (scope === "today" && !isToday(t)) return false;
+      if (scope === "week" && !isThisWeek(t, { weekStartsOn: 1 })) return false;
+      if (scope === "upcoming" && !isFuture(t) && !isToday(t)) return false;
+      if (scope === "past" && !isPast(t)) return false;
+      if (statusFilter !== "all" && b.status !== statusFilter) return false;
+      if (q) {
+        const hay = `${b.guest_name || ""} ${b.guest_phone || ""} ${b.notes || ""} ${b.source || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [bookings, scope, statusFilter, query]);
+
+  const grouped = filtered.reduce((acc: any, b) => {
     const d = format(new Date(b.booking_time), "EEE d MMM");
     (acc[d] ||= []).push(b);
     return acc;
   }, {});
 
-  const totalCovers = bookings.reduce((s, b) => s + (b.party_size || 0), 0);
+  const totalCovers = filtered.reduce((s, b) => s + (b.party_size || 0), 0);
+  const hasActiveFilters = query.trim() !== "" || statusFilter !== "all" || scope !== "upcoming";
 
   return (
     <>
@@ -144,6 +172,7 @@ export default function Diary() {
         title="Diary"
         subtitle="Your living booking diary. Updates the moment your AI confirms a table — voice, web or SMS."
         actions={
+
           <div className="flex items-center gap-2">
             <Button
               size="lg"
@@ -165,32 +194,91 @@ export default function Diary() {
       />
 
       {/* Stat strip */}
-      <div className="grid sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-5">
         {[
-          { label: "Total bookings", value: bookings.length, icon: CalendarDays },
-          { label: "Total covers",   value: totalCovers,     icon: Users },
+          { label: "Shown", value: filtered.length, icon: CalendarDays },
+          { label: "Covers",   value: totalCovers,     icon: Users },
           { label: "Days",           value: Object.keys(grouped).length, icon: CalendarDays },
         ].map((s, i) => (
-          <div key={i} className="card-cine p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/12 border border-primary/25 grid place-items-center">
+          <div key={i} className="card-cine p-3 sm:p-4 flex items-center gap-3">
+            <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-primary/12 border border-primary/25 grid place-items-center shrink-0">
               <s.icon className="h-4 w-4 text-primary" />
             </div>
-            <div>
-              <div className="num-cine text-2xl font-semibold">{s.value}</div>
-              <div className="label-micro">{s.label}</div>
+            <div className="min-w-0">
+              <div className="num-cine text-xl sm:text-2xl font-semibold">{s.value}</div>
+              <div className="label-micro truncate">{s.label}</div>
             </div>
           </div>
         ))}
       </div>
 
+      {/* Filters / search */}
+      <div className="card-cine p-3 mb-5 flex flex-col lg:flex-row gap-3 lg:items-center">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search guest, phone, notes or source…"
+            className="pl-9 h-10 bg-white/[0.02] border-white/[0.06] focus-visible:ring-primary/40"
+          />
+        </div>
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-white/[0.02] border border-white/[0.05] overflow-x-auto scrollbar-thin">
+          {(Object.keys(SCOPE_LABEL) as Scope[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setScope(s)}
+              className={`px-3 h-8 rounded-md text-[12px] font-medium whitespace-nowrap transition-colors ${
+                scope === s
+                  ? "bg-primary/15 text-primary border border-primary/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/[0.03] border border-transparent"
+              }`}
+            >
+              {SCOPE_LABEL[s]}
+            </button>
+          ))}
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as any)}
+          className="h-10 px-3 rounded-lg bg-white/[0.02] border border-white/[0.06] text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer capitalize"
+        >
+          {STATUS_OPTS.map((s) => (
+            <option key={s} value={s} className="bg-card capitalize">{s === "all" ? "All statuses" : s.replace("_", " ")}</option>
+          ))}
+        </select>
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setQuery(""); setStatusFilter("all"); setScope("upcoming"); }}
+            className="h-10 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5 mr-1" /> Reset
+          </Button>
+        )}
+      </div>
+
       <div className="space-y-7">
         {Object.entries(grouped).length === 0 && (
-          <div className="card-cine p-16 text-center">
+          <div className="card-cine p-12 sm:p-16 text-center">
             <CalendarDays className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-            <div className="text-lg font-medium mb-1">Your diary is a clean slate.</div>
-            <div className="text-sm text-muted-foreground max-w-md mx-auto">As your AI host takes calls and confirms bookings, they'll stream in here in real time.</div>
+            <div className="text-lg font-medium mb-1">
+              {hasActiveFilters ? "No bookings match these filters." : bookings.length === 0 ? "Your diary is a clean slate." : "Nothing in this view."}
+            </div>
+            <div className="text-sm text-muted-foreground max-w-md mx-auto">
+              {hasActiveFilters
+                ? "Try a different scope, status or clear your search."
+                : "As your AI host takes calls and confirms bookings, they'll stream in here in real time."}
+            </div>
+            {hasActiveFilters && (
+              <Button variant="outline" size="sm" className="mt-4" onClick={() => { setQuery(""); setStatusFilter("all"); setScope("all"); }}>
+                Show everything
+              </Button>
+            )}
           </div>
         )}
+
         <AnimatePresence initial={false}>
           {Object.entries(grouped).map(([day, items]: any, gi) => (
             <motion.div

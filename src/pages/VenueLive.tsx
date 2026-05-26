@@ -151,6 +151,14 @@ export default function VenueLive() {
   }, [demoOn, venue?.id]);
 
   const occupancy = useMemo(() => 62 + (counters.bookings % 20), [counters.bookings]);
+  const sevCounts = useMemo(() => ({
+    all: events.length,
+    success: events.filter(e => e.severity === "success").length,
+    warn: events.filter(e => e.severity === "warn").length,
+    critical: events.filter(e => e.severity === "critical").length,
+    info: events.filter(e => e.severity === "info").length,
+  }), [events]);
+  const filteredEvents = useMemo(() => sevFilter === "all" ? events : events.filter(e => e.severity === sevFilter), [events, sevFilter]);
 
   return (
     <div className="space-y-8">

@@ -323,14 +323,8 @@ export default function ManagerEarpiece() {
         clearFollowupTimer();
         captureRef.current.buffer = (captureRef.current.buffer + " " + text).trim();
         setPartial(captureRef.current.buffer);
-        // Debounce — assume user is done if no new committed segment in 900ms
-        if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
-        captureRef.current.timer = window.setTimeout(() => {
-          const q = captureRef.current.buffer.trim();
-          captureRef.current = { active: false, buffer: "", timer: null };
-          setPartial("");
-          if (q) void handleUserUtteranceRef.current(q);
-        }, 900);
+        // Debounce — assume user is done if no new committed segment arrives quickly.
+        scheduleCaptureCommit();
       }
     },
     onError: (err: unknown) => {
@@ -474,28 +468,14 @@ export default function ManagerEarpiece() {
   // -------- Conversation flow --------
   const handleWakeDetected = useCallback((heardText: string) => {
     if (phaseRef.current !== "wake_listening") return;
-    setPhase("speaking");
+    phaseRef.current = "listening";
+    setPhase("listening");
     setPartial("");
     // If the user packed the question into the same utterance, capture the tail
     const tail = stripWake(heardText);
-    captureRef.current = { active: true, buffer: tail, timer: null };
-
-    const ack = WAKE_ACKS[Math.floor(Math.random() * WAKE_ACKS.length)];
-    speak(ack).finally(() => {
-      if (modeRef.current !== "always_on") return;
-      setPhase("listening");
-      // If we already have a non-empty tail, give VAD a moment then commit
-      if (captureRef.current.buffer.trim().length > 2) {
-        if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
-        captureRef.current.timer = window.setTimeout(() => {
-          const q = captureRef.current.buffer.trim();
-          captureRef.current = { active: false, buffer: "", timer: null };
-          setPartial("");
-          if (q) void handleUserUtteranceRef.current(q);
-        }, 1200);
-      }
-    });
-  }, [speak]);
+    startCapture(tail);
+    if (hasUsableCommand(tail)) scheduleCaptureCommit(750);
+  }, [scheduleCaptureCommit, startCapture]);
 
   const endSession = useCallback(async () => {
     clearFollowupTimer();
@@ -504,8 +484,7 @@ export default function ManagerEarpiece() {
       window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
-    if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
-    captureRef.current = { active: false, buffer: "", timer: null };
+    resetCapture();
     stopMicStream();
     await disconnectScribe();
     stopAudio();
@@ -513,7 +492,7 @@ export default function ManagerEarpiece() {
     setPhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [clearFollowupTimer, disconnectScribe, stopAudio, stopMicStream]);
+  }, [clearFollowupTimer, disconnectScribe, resetCapture, stopAudio, stopMicStream]);
 
   const goSpeakAndFollowup = useCallback(async (answer: string) => {
     setPhase("speaking");

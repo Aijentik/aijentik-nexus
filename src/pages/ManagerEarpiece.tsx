@@ -121,6 +121,7 @@ export default function ManagerEarpiece() {
   const reconnectTimerRef = useRef<number | null>(null);
   const followupTimerRef = useRef<number | null>(null);
   const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
+  const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -326,6 +327,14 @@ export default function ManagerEarpiece() {
     speakingRef.current = false;
   }, []);
 
+  useEffect(() => {
+    cleanupRef.current = () => {
+      stopMicStream();
+      void disconnectScribe();
+      stopAudio();
+    };
+  }, [disconnectScribe, stopAudio, stopMicStream]);
+
   const speak = useCallback(async (text: string): Promise<void> => {
     if (muted) return;
     try {
@@ -492,6 +501,8 @@ export default function ManagerEarpiece() {
     if (mode === "call") { endSession(); return; }
     if (!canUseMic()) return;
     desiredAlwaysOnRef.current = false;
+    modeRef.current = "call";
+    phaseRef.current = "listening";
     stopAudio();
     const micReady = await startMicStream();
     if (!micReady) return;
@@ -508,6 +519,8 @@ export default function ManagerEarpiece() {
     if (mode === "always_on") { endSession(); return; }
     if (!canUseMic()) return;
     desiredAlwaysOnRef.current = true;
+    modeRef.current = "always_on";
+    phaseRef.current = "wake_listening";
     stopAudio();
     const micReady = await startMicStream();
     if (!micReady) { desiredAlwaysOnRef.current = false; return; }
@@ -528,7 +541,7 @@ export default function ManagerEarpiece() {
     handleUserUtterance(q);
   };
 
-  useEffect(() => () => { stopMicStream(); disconnectScribe(); stopAudio(); }, [disconnectScribe, stopAudio, stopMicStream]);
+  useEffect(() => () => { cleanupRef.current(); }, []);
 
   const callActive = mode === "call";
   const alwaysOn = mode === "always_on";

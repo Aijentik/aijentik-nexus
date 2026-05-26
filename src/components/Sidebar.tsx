@@ -454,5 +454,6 @@ export function Sidebar() {
         </DropdownMenu>
       </div>
     </aside>
+    </>
   );
 }

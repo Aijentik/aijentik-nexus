@@ -125,12 +125,31 @@ export default function Orders() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venue?.id]);
 
+  const filteredOrders = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return orders.filter(o => {
+      if (channelFilter !== "all" && o.channel !== channelFilter) return false;
+      if (!q) return true;
+      const itemNames = (items[o.id] || []).map(i => i.name).join(" ").toLowerCase();
+      return `${o.guest_name} ${o.guest_phone || ""} ${o.guest_email || ""} ${o.notes || ""} ${itemNames}`.toLowerCase().includes(q);
+    });
+  }, [orders, query, channelFilter, items]);
+
   const byStatus = useMemo(() => {
     const m: Record<string, Order[]> = {};
     COLUMNS.forEach(c => { m[c.id] = []; });
-    orders.forEach(o => { if (m[o.status]) m[o.status].push(o); });
+    filteredOrders.forEach(o => { if (m[o.status]) m[o.status].push(o); });
+    return m;
+  }, [filteredOrders]);
+
+  const channelCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    orders.forEach(o => { m[o.channel] = (m[o.channel] || 0) + 1; });
     return m;
   }, [orders]);
+
+  const hasFilters = !!query || channelFilter !== "all";
+
 
   const advance = async (o: Order) => {
     const next = NEXT[o.status];

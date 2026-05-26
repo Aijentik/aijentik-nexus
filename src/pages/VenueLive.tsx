@@ -101,6 +101,7 @@ export default function VenueLive() {
   const [events, setEvents] = useState<BrainEvent[]>([]);
   const [demoOn, setDemoOn] = useState(false);
   const [counters, setCounters] = useState({ calls: 12, bookings: 38, revenue: 7820, vip: 4, waitlist: 12 });
+  const [sevFilter, setSevFilter] = useState<"all" | "success" | "warn" | "critical" | "info">("all");
 
   // load recent events
   useEffect(() => {
@@ -150,6 +151,14 @@ export default function VenueLive() {
   }, [demoOn, venue?.id]);
 
   const occupancy = useMemo(() => 62 + (counters.bookings % 20), [counters.bookings]);
+  const sevCounts = useMemo(() => ({
+    all: events.length,
+    success: events.filter(e => e.severity === "success").length,
+    warn: events.filter(e => e.severity === "warn").length,
+    critical: events.filter(e => e.severity === "critical").length,
+    info: events.filter(e => e.severity === "info").length,
+  }), [events]);
+  const filteredEvents = useMemo(() => sevFilter === "all" ? events : events.filter(e => e.severity === sevFilter), [events, sevFilter]);
 
   return (
     <div className="space-y-8">
@@ -187,15 +196,28 @@ export default function VenueLive() {
         <div className="lg:col-span-2 card-cine relative p-6 overflow-hidden">
           <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full opacity-40 blur-3xl"
             style={{ background: "radial-gradient(circle, hsl(var(--primary)/0.25), transparent 70%)" }} />
-          <div className="relative flex items-center justify-between mb-5">
+          <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
             <div>
               <div className="label-micro mb-1.5 flex items-center gap-2">
                 <span className="pulse-amber" /> AI Timeline
               </div>
               <div className="text-[19px] font-semibold tracking-tight">Live operational stream</div>
             </div>
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              {events.length ? "streaming" : "idle"}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([
+                { k: "all" as const, label: "All", n: sevCounts.all },
+                { k: "success" as const, label: "Wins", n: sevCounts.success },
+                { k: "warn" as const, label: "Warn", n: sevCounts.warn },
+                { k: "critical" as const, label: "Alerts", n: sevCounts.critical },
+                { k: "info" as const, label: "Info", n: sevCounts.info },
+              ]).map(t => (
+                <button key={t.k} onClick={() => setSevFilter(t.k)}
+                  className={`text-[10.5px] uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all ${
+                    sevFilter === t.k
+                      ? "border-primary/50 bg-primary/[0.08] text-primary"
+                      : "border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:text-foreground"
+                  }`}>{t.label} <span className="opacity-60 ml-0.5">{t.n}</span></button>
+              ))}
             </div>
           </div>
 
@@ -205,12 +227,16 @@ export default function VenueLive() {
               <div className="text-[14px] font-medium">Your operational intelligence feed will appear here.</div>
               <div className="text-[12px] text-muted-foreground mt-1">Press <span className="text-foreground font-medium">Launch Demo</span> to see your venue come alive.</div>
             </div>
+          ) : filteredEvents.length === 0 ? (
+            <div className="relative py-14 text-center text-sm text-muted-foreground">
+              No events match this filter.
+            </div>
           ) : (
             <div className="relative">
               <div className="absolute left-[15px] top-1 bottom-1 w-px bg-gradient-to-b from-primary/40 via-white/[0.06] to-transparent" />
               <ul className="space-y-3 max-h-[560px] overflow-y-auto pr-2">
                 <AnimatePresence initial={false}>
-                  {events.map((ev) => {
+                  {filteredEvents.map((ev) => {
                     const t = new Date(ev.created_at);
                     const conf = ev.meta?.confidence ? Math.round(ev.meta.confidence * 100) : null;
                     return (

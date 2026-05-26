@@ -104,7 +104,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="num-cine text-[44px] font-semibold tracking-tight">
+            <div className="num-cine text-[32px] sm:text-[40px] lg:text-[44px] font-semibold tracking-tight">
               <AnimatedNumber value={c.value} />
             </div>
             <div className="mt-2 flex items-center justify-between">

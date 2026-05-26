@@ -776,11 +776,12 @@ export default function ManagerEarpiece() {
     stopMicStream();
     await disconnectScribe();
     stopAudio();
+    playChime("end");
     setMode("idle");
     setLivePhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [clearFollowupPromptTimer, clearFollowupTimer, disconnectScribe, resetCapture, setLivePhase, stopAudio, stopBrowserRecognition, stopMicStream]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, disconnectScribe, resetCapture, setLivePhase, stopAudio, stopBrowserRecognition, stopMicStream, playChime]);
 
   const armFollowup = useCallback(() => {
     if ((modeRef.current as Mode) === "idle") return;

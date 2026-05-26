@@ -197,7 +197,18 @@ export default function ManagerEarpiece() {
       processor.onaudioprocess = event => {
         if (!desiredAlwaysOnRef.current && modeRef.current !== "call") return;
         try {
-          sendAudioRef.current(pcm16ToBase64(resampleTo16k(event.inputBuffer.getChannelData(0), audioContext.sampleRate)));
+          const input = event.inputBuffer.getChannelData(0);
+          const rms = getRms(input);
+          const threshold = phaseRef.current === "wake_listening"
+            ? Math.max(MIN_WAKE_RMS, noiseFloorRef.current * 2.6)
+            : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.8);
+
+          if (rms < threshold) {
+            noiseFloorRef.current = noiseFloorRef.current * 0.96 + rms * 0.04;
+            return;
+          }
+
+          sendAudioRef.current(pcm16ToBase64(resampleTo16k(input, audioContext.sampleRate)));
         } catch (e) {
           console.warn("mic chunk send failed", e);
         }

@@ -644,24 +644,40 @@ export default function ManagerEarpiece() {
     if ((modeRef.current as Mode) === "idle") return;
 
     awaitingFollowupRef.current = true;
-    setTurns(t => [...t, { role: "assistant", content: FOLLOWUP, ts: Date.now() }]);
-    await speak(FOLLOWUP);
-    if ((modeRef.current as Mode) === "idle") return;
-
     setPhase("listening");
-    startCapture("", 8000);
-    if (modeRef.current === "always_on") {
-      clearFollowupTimer();
-      followupTimerRef.current = window.setTimeout(() => {
-        if (modeRef.current !== "always_on" || !awaitingFollowupRef.current) return;
+    setPartial("");
+    startCapture("", FOLLOWUP_PROMPT_DELAY_MS + FOLLOWUP_REPLY_TIMEOUT_MS + 3500);
+
+    clearFollowupPromptTimer();
+    followupPromptTimerRef.current = window.setTimeout(() => {
+      followupPromptTimerRef.current = null;
+      if ((modeRef.current as Mode) === "idle" || !awaitingFollowupRef.current) return;
+      if (hasUsableCommand(captureCandidate(captureRef.current), true)) return;
+      void (async () => {
+        setTurns(t => [...t, { role: "assistant", content: FOLLOWUP, ts: Date.now() }]);
+        setPhase("speaking");
+        await speak(FOLLOWUP);
+        if ((modeRef.current as Mode) === "idle" || !awaitingFollowupRef.current) return;
+        setPhase("listening");
+        startCapture("", FOLLOWUP_REPLY_TIMEOUT_MS);
+      })();
+    }, FOLLOWUP_PROMPT_DELAY_MS);
+
+    clearFollowupTimer();
+    followupTimerRef.current = window.setTimeout(() => {
+      if (!awaitingFollowupRef.current) return;
+      if (hasUsableCommand(captureCandidate(captureRef.current), true)) return;
+      if (modeRef.current === "always_on") {
         awaitingFollowupRef.current = false;
         resetCapture();
         setPartial("");
         setPhase("wake_listening");
-        followupTimerRef.current = null;
-      }, 6500);
-    }
-  }, [clearFollowupTimer, resetCapture, speak, startCapture]);
+      } else if (modeRef.current === "call") {
+        void endSession();
+      }
+      followupTimerRef.current = null;
+    }, FOLLOWUP_PROMPT_DELAY_MS + FOLLOWUP_REPLY_TIMEOUT_MS + 4500);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, endSession, resetCapture, speak, startCapture]);
 
   const handleUserUtterance = useCallback(async (text: string) => {
     if (!venue) return;

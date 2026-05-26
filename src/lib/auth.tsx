@@ -66,10 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (nextUser) {
         if (event === "TOKEN_REFRESHED" || lastLoadedUserIdRef.current === nextUser.id) return;
         lastLoadedUserIdRef.current = nextUser.id;
+        setVenuesLoaded(false);
         setTimeout(() => { refreshVenues().finally(() => setLoading(false)); }, 0);
       } else {
         lastLoadedUserIdRef.current = null;
-        setVenues([]); setVenue(null); setLoading(false);
+        setVenues([]); setVenue(null); setVenuesLoaded(false); setLoading(false);
       }
     });
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {

@@ -561,7 +561,7 @@ export default function FlowStudio() {
                     { l: "Completion", v: "94%" },
                     { l: "Avg time", v: "3m 12s" },
                     { l: "Bookings", v: "1,071" },
-                    { l: "Revenue", v: "£82.4k" },
+                    { l: "Revenue", v: "$82.4k" },
                     { l: "Escalations", v: "23" },
                   ].map(s => (
                     <div key={s.l} className="rounded-lg border border-white/5 bg-secondary/30 p-2">
@@ -759,7 +759,7 @@ function NodeConfig({
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Amount</Label>
-                <Input defaultValue="£10 / guest" className="h-8 mt-1 bg-secondary/40 border-white/10" />
+                <Input defaultValue="$10 / guest" className="h-8 mt-1 bg-secondary/40 border-white/10" />
               </div>
               <div>
                 <Label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Expiry</Label>
@@ -784,7 +784,7 @@ function NodeConfig({
               <SelectContent>
                 <SelectItem value="party">Party size &gt; 6</SelectItem>
                 <SelectItem value="vip">Guest is VIP</SelectItem>
-                <SelectItem value="value">Booking value &gt; £200</SelectItem>
+                <SelectItem value="value">Booking value &gt; $200</SelectItem>
                 <SelectItem value="noshow">Guest has prior no-shows</SelectItem>
                 <SelectItem value="sentiment">Sentiment negative</SelectItem>
               </SelectContent>

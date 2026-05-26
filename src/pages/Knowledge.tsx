@@ -165,7 +165,7 @@ export default function Knowledge() {
                     <div><Label>Section</Label><Input value={menuForm.section} onChange={e => setMenuForm({...menuForm, section: e.target.value})} /></div>
                   </div>
                   <div><Label>Description</Label><Textarea rows={3} value={menuForm.description} onChange={e => setMenuForm({...menuForm, description: e.target.value})} /></div>
-                  <div><Label>Price</Label><Input value={menuForm.price} onChange={e => setMenuForm({...menuForm, price: e.target.value})} placeholder="£14.50" /></div>
+                  <div><Label>Price</Label><Input value={menuForm.price} onChange={e => setMenuForm({...menuForm, price: e.target.value})} placeholder="$14.50" /></div>
                   <Button onClick={addMenuItem} className="w-full bg-primary text-primary-foreground">Add item</Button>
                 </div>
               </DialogContent>

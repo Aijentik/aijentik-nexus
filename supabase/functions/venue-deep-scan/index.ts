@@ -169,7 +169,7 @@ async function extractWithAI(payload: any) {
                   properties: {
                     name: { type: "string" },
                     description: { type: "string", description: "1-line description as written or summarised" },
-                    price: { type: "string", description: "Price exactly as written, e.g. £14.50 or $22" },
+                    price: { type: "string", description: "Price exactly as written, e.g. $14.50 or $22" },
                     section: { type: "string", description: "Menu section: starters, mains, desserts, sides, drinks, cocktails, wine, beer, brunch, kids, specials" },
                     image_url: { type: "string", description: "Absolute URL of a matching photo from IMAGE_CANDIDATES — only if confident" },
                     tags: { type: "array", items: { type: "string" }, description: "vegan, gf, spicy, signature, etc" },

@@ -83,7 +83,7 @@ export const DEMO_STEPS: DemoStep[] = [
     route: "/app/integrations",
     targetSelector: "[data-demo='integration-stripe']",
     events: [
-      { title: "Deposit link issued", reason: "£40 · Stripe (simulated)", severity: "info" },
+      { title: "Deposit link issued", reason: "$40 · Stripe (simulated)", severity: "info" },
       { title: "Deposit received", reason: "Payment captured", severity: "success", delay: 1100 },
     ],
   },
@@ -105,7 +105,7 @@ export const DEMO_STEPS: DemoStep[] = [
     route: "/app/live",
     events: [
       { title: "Guest arriving in 12 minutes", reason: "Sarah Mitchell · party of 4", severity: "info" },
-      { title: "Revenue influenced by AI", reason: "+£280 today", severity: "success", delay: 800 },
+      { title: "Revenue influenced by AI", reason: "+$280 today", severity: "success", delay: 800 },
     ],
   },
   {
@@ -134,7 +134,7 @@ export const DEMO_STEPS: DemoStep[] = [
     title: "Analytics — operational truth",
     description: "Every action rolls into operational analytics: revenue saved, bookings captured, missed calls recovered.",
     route: "/app/analytics",
-    events: [{ title: "Daily snapshot ready", reason: "37 calls · 22 bookings · £4,180 influenced", severity: "success" }],
+    events: [{ title: "Daily snapshot ready", reason: "37 calls · 22 bookings · $4,180 influenced", severity: "success" }],
   },
   {
     id: "insights",

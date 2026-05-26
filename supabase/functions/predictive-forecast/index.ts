@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
       peak_hour: peakHour ? Number(peakHour[0]) : null,
     };
 
-    // --- Revenue estimate (£45 avg cover, configurable later) ---
+    // --- Revenue estimate ($45 avg cover, configurable later) ---
     const avgCover = 45;
     const projectedRevenue = expectedShowCovers * avgCover;
 

@@ -60,7 +60,7 @@ export default function Analytics() {
 
   const kpis = [
     { icon: PhoneIncoming, label: "Missed calls saved", value: stats?.missed_calls_saved ?? "—", sub: "AI converted to bookings", glow: "hsl(32 96% 58%)" },
-    { icon: TrendingUp,    label: "Revenue influenced", value: stats ? `£${stats.revenue_influenced.toLocaleString()}` : "—", sub: "30-day estimate", glow: "hsl(38 100% 70%)" },
+    { icon: TrendingUp,    label: "Revenue influenced", value: stats ? `$${stats.revenue_influenced.toLocaleString()}` : "—", sub: "30-day estimate", glow: "hsl(38 100% 70%)" },
     { icon: Users,         label: "AI bookings",        value: stats?.ai_bookings ?? "—", sub: `of ${stats?.total_bookings ?? 0} total`, glow: "hsl(28 88% 60%)" },
     { icon: Sparkles,      label: "Avg call",           value: stats ? `${stats.avg_call_seconds}s` : "—", sub: `${stats?.total_calls ?? 0} calls handled`, glow: "hsl(22 88% 52%)" },
   ];

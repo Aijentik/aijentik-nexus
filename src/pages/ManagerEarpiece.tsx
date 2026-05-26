@@ -320,6 +320,13 @@ export default function ManagerEarpiece() {
     try { await scribe.disconnect(); } catch { console.warn("scribe disconnect failed"); }
   }, [scribe]);
 
+  // -------- TTS --------
+  const stopAudio = useCallback(() => {
+    try { audioRef.current?.pause(); } catch { console.warn("audio pause failed"); }
+    audioRef.current = null;
+    speakingRef.current = false;
+  }, []);
+
   useEffect(() => {
     cleanupRef.current = () => {
       stopMicStream();
@@ -327,13 +334,6 @@ export default function ManagerEarpiece() {
       stopAudio();
     };
   }, [disconnectScribe, stopAudio, stopMicStream]);
-
-  // -------- TTS --------
-  const stopAudio = useCallback(() => {
-    try { audioRef.current?.pause(); } catch { console.warn("audio pause failed"); }
-    audioRef.current = null;
-    speakingRef.current = false;
-  }, []);
 
   const speak = useCallback(async (text: string): Promise<void> => {
     if (muted) return;

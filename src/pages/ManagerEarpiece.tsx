@@ -133,9 +133,11 @@ export default function ManagerEarpiece() {
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const outputAudioRef = useRef<HTMLAudioElement | null>(null);
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const micProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
+  const noiseFloorRef = useRef(0.012);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null }>({
     active: false, buffer: "", timer: null,

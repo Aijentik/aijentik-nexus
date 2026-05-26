@@ -223,6 +223,12 @@ export default function ManagerEarpiece() {
   const browserRecognitionRunningRef = useRef(false);
   const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
   const noiseFloorRef = useRef(0.004);
+  const liveLevelRef = useRef(0);
+  const liveLevelRafRef = useRef<number | null>(null);
+  const bargeFramesRef = useRef(0);
+  const ttsChainRef = useRef<Promise<void>>(Promise.resolve());        // sequential TTS queue
+  const ttsCancelRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const chimeCtxRef = useRef<AudioContext | null>(null);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<CaptureState>({
     active: false, buffer: "", live: "", timer: null, deadline: null,

@@ -12,6 +12,7 @@ type Turn = { role: "user" | "assistant"; content: string; ts: number };
 type Mode = "idle" | "call" | "always_on";
 type Phase = "idle" | "wake_listening" | "listening" | "thinking" | "speaking";
 type ScribeTranscript = { text?: string };
+type CaptureState = { active: boolean; buffer: string; live: string; timer: number | null; deadline: number | null };
 
 const QUICK_PROMPTS = [
   "How's tonight looking?",
@@ -33,6 +34,7 @@ const WAKE_PATTERNS = [
 ];
 const WAKE_KEYTERMS = ["Hey Agentic", "Agentic", "agentic", "AI gentic", "agent tech"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
+const WAKE_ACK = "Yes?";
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
@@ -75,6 +77,25 @@ function hasUsableCommand(text: string, allowShort = false): boolean {
   if (FILLER_ONLY_PATTERNS.some(p => p.test(normalized))) return false;
   if (allowShort && NEGATIVE_PATTERNS.some(p => p.test(cleaned))) return true;
   return normalized.length >= 4 && /\b[a-z0-9]{3,}\b/i.test(normalized);
+}
+
+function mergeTranscript(existing: string, incoming: string): string {
+  const a = stripWake(existing).trim();
+  const b = stripWake(incoming).trim();
+  const aFiller = !a || FILLER_ONLY_PATTERNS.some(p => p.test(normalizeVoiceText(a)));
+  const bFiller = !b || FILLER_ONLY_PATTERNS.some(p => p.test(normalizeVoiceText(b)));
+  if (aFiller && bFiller) return "";
+  if (bFiller) return a;
+  if (aFiller) return b;
+  const na = normalizeVoiceText(a);
+  const nb = normalizeVoiceText(b);
+  if (na.includes(nb)) return a;
+  if (nb.includes(na)) return b;
+  return `${a} ${b}`.trim();
+}
+
+function captureCandidate(capture: CaptureState): string {
+  return mergeTranscript(capture.buffer, capture.live).trim();
 }
 
 function errorMessage(err: unknown): string {
@@ -153,8 +174,8 @@ export default function ManagerEarpiece() {
   const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
   const noiseFloorRef = useRef(0.012);
   // Buffer for the user's question after wake detection
-  const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null; deadline: number | null }>({
-    active: false, buffer: "", timer: null, deadline: null,
+  const captureRef = useRef<CaptureState>({
+    active: false, buffer: "", live: "", timer: null, deadline: null,
   });
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -181,20 +202,21 @@ export default function ManagerEarpiece() {
   const resetCapture = useCallback(() => {
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
     if (captureRef.current.deadline) window.clearTimeout(captureRef.current.deadline);
-    captureRef.current = { active: false, buffer: "", timer: null, deadline: null };
+    captureRef.current = { active: false, buffer: "", live: "", timer: null, deadline: null };
   }, []);
 
   const startCapture = useCallback((initial = "", timeoutMs = WAKE_CAPTURE_TIMEOUT_MS) => {
     resetCapture();
-    captureRef.current = { active: true, buffer: initial.trim(), timer: null, deadline: null };
+    captureRef.current = { active: true, buffer: initial.trim(), live: "", timer: null, deadline: null };
     captureRef.current.deadline = window.setTimeout(() => {
-      const q = captureRef.current.buffer.trim();
+      const q = captureCandidate(captureRef.current);
       resetCapture();
-      setPartial("");
       if (hasUsableCommand(q, awaitingFollowupRef.current)) {
+        setPartial(q);
         void handleUserUtteranceRef.current(stripWake(q));
         return;
       }
+      setPartial("");
       if (modeRef.current === "always_on") {
         awaitingFollowupRef.current = false;
         setPhase("wake_listening");
@@ -205,12 +227,13 @@ export default function ManagerEarpiece() {
   const scheduleCaptureCommit = useCallback((delayMs = CAPTURE_IDLE_MS) => {
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
     captureRef.current.timer = window.setTimeout(() => {
-      const q = captureRef.current.buffer.trim();
+      const q = captureCandidate(captureRef.current);
       resetCapture();
-      setPartial("");
       if (hasUsableCommand(q, awaitingFollowupRef.current)) {
+        setPartial(q);
         void handleUserUtteranceRef.current(stripWake(q));
       } else if (modeRef.current === "always_on") {
+        setPartial("");
         awaitingFollowupRef.current = false;
         setPhase("wake_listening");
       }
@@ -285,10 +308,10 @@ export default function ManagerEarpiece() {
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
-    vadSilenceThresholdSecs: 0.95,
-    vadThreshold: 0.72,
+    vadSilenceThresholdSecs: 0.72,
+    vadThreshold: 0.62,
     minSpeechDurationMs: 220,
-    minSilenceDurationMs: 500,
+    minSilenceDurationMs: 350,
     languageCode: "en",
     keyterms: WAKE_KEYTERMS,
     noVerbatim: false,
@@ -303,7 +326,12 @@ export default function ManagerEarpiece() {
       if (!text) return;
       // Only show partials when we're capturing a question
       if (captureRef.current.active || phaseRef.current === "listening") {
-        setPartial(text);
+        captureRef.current.live = text;
+        const candidate = captureCandidate(captureRef.current);
+        setPartial(candidate || text);
+        if (hasUsableCommand(candidate, awaitingFollowupRef.current)) {
+          scheduleCaptureCommit(950);
+        }
       }
       // Allow wake to fire from partials too (faster reaction)
       if (phaseRef.current === "wake_listening" && hasWake(text)) {
@@ -324,11 +352,12 @@ export default function ManagerEarpiece() {
       // Command capture (call mode OR after wake)
       if (captureRef.current.active || phaseRef.current === "listening") {
         clearFollowupTimer();
-        captureRef.current.buffer = (captureRef.current.buffer + " " + text).trim();
+        captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, text);
+        captureRef.current.live = "";
         setPartial(captureRef.current.buffer);
         // Debounce — assume user is done if no new committed segment arrives quickly.
         if (hasUsableCommand(captureRef.current.buffer, awaitingFollowupRef.current)) {
-          scheduleCaptureCommit();
+          scheduleCaptureCommit(650);
         }
       }
     },
@@ -362,10 +391,10 @@ export default function ManagerEarpiece() {
       await scribe.connect({
         token: json.token,
         commitStrategy: CommitStrategy.VAD,
-        vadSilenceThresholdSecs: 0.95,
-        vadThreshold: 0.72,
+        vadSilenceThresholdSecs: 0.72,
+        vadThreshold: 0.62,
         minSpeechDurationMs: 220,
-        minSilenceDurationMs: 500,
+        minSilenceDurationMs: 350,
         languageCode: "en",
         keyterms: WAKE_KEYTERMS,
         noVerbatim: false,
@@ -411,16 +440,16 @@ export default function ManagerEarpiece() {
     }).catch(() => undefined);
   }, []);
 
-  const speakWithBrowser = useCallback(async (text: string): Promise<void> => {
+  const speakWithBrowser = useCallback(async (text: string, suppressInput = true): Promise<void> => {
     if (!window.speechSynthesis) return;
     await new Promise<void>((resolve) => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1;
       utterance.pitch = 1.05;
       utterance.volume = 1;
-      speakingRef.current = true;
-      utterance.onend = () => { speakingRef.current = false; resolve(); };
-      utterance.onerror = () => { speakingRef.current = false; resolve(); };
+      if (suppressInput) speakingRef.current = true;
+      utterance.onend = () => { if (suppressInput) speakingRef.current = false; resolve(); };
+      utterance.onerror = () => { if (suppressInput) speakingRef.current = false; resolve(); };
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     });
@@ -434,7 +463,7 @@ export default function ManagerEarpiece() {
     };
   }, [disconnectScribe, stopAudio, stopMicStream]);
 
-  const speak = useCallback(async (text: string): Promise<void> => {
+  const speak = useCallback(async (text: string, suppressInput = true): Promise<void> => {
     if (muted) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -449,7 +478,7 @@ export default function ManagerEarpiece() {
       });
       const json = await res.json();
       if (!res.ok || !json.audio_base64) {
-        await speakWithBrowser(text);
+        await speakWithBrowser(text, suppressInput);
         return;
       }
       await new Promise<void>((resolve) => {
@@ -458,15 +487,15 @@ export default function ManagerEarpiece() {
         audio.src = `data:${json.mime || "audio/mpeg"};base64,${json.audio_base64}`;
         audio.volume = 1;
         audioRef.current = audio;
-        speakingRef.current = true;
-        audio.onended = () => { speakingRef.current = false; resolve(); };
-        audio.onerror = () => { speakingRef.current = false; void speakWithBrowser(text).finally(resolve); };
-        audio.play().catch(() => { speakingRef.current = false; void speakWithBrowser(text).finally(resolve); });
+        if (suppressInput) speakingRef.current = true;
+        audio.onended = () => { if (suppressInput) speakingRef.current = false; resolve(); };
+        audio.onerror = () => { if (suppressInput) speakingRef.current = false; void speakWithBrowser(text, suppressInput).finally(resolve); };
+        audio.play().catch(() => { if (suppressInput) speakingRef.current = false; void speakWithBrowser(text, suppressInput).finally(resolve); });
       });
     } catch (e: unknown) {
       console.warn("earpiece TTS failed", e);
-      speakingRef.current = false;
-      await speakWithBrowser(text);
+      if (suppressInput) speakingRef.current = false;
+      await speakWithBrowser(text, suppressInput);
     }
   }, [muted, speakWithBrowser]);
 
@@ -479,8 +508,12 @@ export default function ManagerEarpiece() {
     // If the user packed the question into the same utterance, capture the tail
     const tail = stripWake(heardText);
     startCapture(tail);
-    if (hasUsableCommand(tail)) scheduleCaptureCommit(750);
-  }, [scheduleCaptureCommit, startCapture]);
+    if (hasUsableCommand(tail)) {
+      scheduleCaptureCommit(650);
+    } else {
+      void speak(WAKE_ACK, false);
+    }
+  }, [scheduleCaptureCommit, speak, startCapture]);
 
   const endSession = useCallback(async () => {
     clearFollowupTimer();
@@ -544,6 +577,7 @@ export default function ManagerEarpiece() {
     }
 
     setTurns(t => [...t, { role: "user", content: text, ts: Date.now() }]);
+    setPartial("");
     setPhase("thinking");
     try {
       const { data: { session } } = await supabase.auth.getSession();

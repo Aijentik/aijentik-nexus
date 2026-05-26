@@ -253,10 +253,10 @@ export default function ManagerEarpiece() {
       setPartial("");
       if (modeRef.current === "always_on") {
         awaitingFollowupRef.current = false;
-        setPhase("wake_listening");
+        setLivePhase("wake_listening");
       }
     }, timeoutMs);
-  }, [resetCapture]);
+  }, [resetCapture, setLivePhase]);
 
   const scheduleCaptureCommit = useCallback((delayMs = CAPTURE_IDLE_MS) => {
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
@@ -269,10 +269,10 @@ export default function ManagerEarpiece() {
       } else if (modeRef.current === "always_on") {
         setPartial("");
         awaitingFollowupRef.current = false;
-        setPhase("wake_listening");
+        setLivePhase("wake_listening");
       }
     }, delayMs);
-  }, [resetCapture]);
+  }, [resetCapture, setLivePhase]);
 
   const stopMicStream = useCallback(() => {
     try { micProcessorRef.current?.disconnect(); } catch { console.warn("mic processor disconnect failed"); }

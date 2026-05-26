@@ -49,7 +49,7 @@ const WAKE_ACK = "Listening";
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
-const MIN_WAKE_RMS = 0.0015;
+const DEFAULT_MIN_WAKE_RMS = 0.0015;
 const MIN_LISTENING_RMS = 0.003;
 const BARGE_IN_RMS = 0.05;            // user voice loud enough to interrupt the agent
 const BARGE_IN_FRAMES = 3;            // consecutive frames before we cut TTS
@@ -57,6 +57,15 @@ const CAPTURE_IDLE_MS = 850;
 const WAKE_CAPTURE_TIMEOUT_MS = 9500;
 const FOLLOWUP_PROMPT_DELAY_MS = 9000;
 const FOLLOWUP_REPLY_TIMEOUT_MS = 12000;
+// Whisper-mode threshold: if the average mic RMS during capture is below this,
+// the agent responds at a lower volume so it stays subtle on the service floor.
+const WHISPER_RMS_AVG = 0.012;
+const WHISPER_VOLUME = 0.45;
+const NORMAL_VOLUME = 1.0;
+// Personalised voice profile — adaptive wake threshold persisted per device.
+const WAKE_PROFILE_KEY = "aijentik.earpiece.wakeProfile.v1";
+const WAKE_TELEMETRY_KEY = "aijentik.earpiece.wakeTelemetry.v1";
+const WAKE_TELEMETRY_MAX = 50;
 const FILLER_ONLY_PATTERNS = [
   /^(hey|hay|hi|okay|ok|yo|oi|aye)\s*(agentic|agents?|agent\s*(?:ic|ick|tick|tech|take)?|ai\s*gentic|a\s*gentic|aijentik|aijentic)?$/i,
   /^(yes|yeah|yep|listening|go on|mhm|mm hmm|hello|hi)$/i,

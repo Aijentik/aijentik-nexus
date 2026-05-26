@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { Headphones, Mic, Volume2, VolumeX, Sparkles, Send, Loader2, Radio, Ear, PhoneOff } from "lucide-react";
 import { toast } from "sonner";
+import { useScribe } from "@elevenlabs/react";
 
 type Turn = { role: "user" | "assistant"; content: string; ts: number };
 type Mode = "idle" | "call" | "always_on";
@@ -19,11 +20,29 @@ const QUICK_PROMPTS = [
   "Any emails I need to handle?",
 ];
 
-const WAKE_PATTERNS = [/\bhey\s+ai?jentik\b/i, /\bhey\s+agentic\b/i, /\bhey\s+agent\b/i];
+// Robust wake patterns — tolerate mishearings of "Aijentik"
+const WAKE_PATTERNS = [
+  /\bhey[, ]+a?i?\s*j?ent[iy]?k\b/i,
+  /\bhey[, ]+agentic\b/i,
+  /\bhey[, ]+agent\b/i,
+  /\bhey[, ]+ai\s*gentic\b/i,
+  /\bhey[, ]+i[- ]?gentic\b/i,
+  /\bhey[, ]+a[- ]?gen[a-z]*\b/i,
+];
 const WAKE_ACKS = ["Yesss?", "Mhm?", "Go on…", "Yep, listening.", "Hit me.", "I'm all ears.", "Yes boss?"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
+
+// Strip the wake phrase off the front of an utterance so "Hey Aijentik, what's tonight?" → "what's tonight?"
+function stripWake(text: string): string {
+  let t = text;
+  for (const p of WAKE_PATTERNS) t = t.replace(p, "");
+  return t.replace(/^[\s,.\-!?:;]+/, "").trim();
+}
+function hasWake(text: string): boolean {
+  return WAKE_PATTERNS.some(p => p.test(text));
+}
 
 export default function ManagerEarpiece() {
   const { venue } = useAuth();
@@ -35,24 +54,102 @@ export default function ManagerEarpiece() {
   const [partial, setPartial] = useState("");
   const [ctx, setCtx] = useState<{ bookings: number; covers: number; vips: number; pending_emails: number } | null>(null);
 
-  const recRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const modeRef = useRef<Mode>("idle");
   const phaseRef = useRef<Phase>("idle");
   const awaitingFollowupRef = useRef(false);
-  const wantRecRef = useRef(false); // whether SR should be auto-restarted
   const speakingRef = useRef(false);
+  // Buffer for the user's question after wake detection
+  const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null }>({
+    active: false, buffer: "", timer: null,
+  });
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: 999999, behavior: "smooth" }); }, [turns, partial]);
 
-  const stopRecognition = useCallback(() => {
-    wantRecRef.current = false;
-    try { recRef.current?.stop(); } catch {}
-  }, []);
+  // -------- Scribe (ElevenLabs realtime STT) --------
+  const scribe = useScribe({
+    modelId: "scribe_v2_realtime",
+    commitStrategy: "vad",
+    onPartialTranscript: (data: any) => {
+      if (speakingRef.current) return;
+      const text = (data?.text || "").trim();
+      if (!text) return;
+      // Only show partials when we're capturing a question
+      if (captureRef.current.active || phaseRef.current === "listening") {
+        setPartial(text);
+      }
+      // Allow wake to fire from partials too (faster reaction)
+      if (phaseRef.current === "wake_listening" && hasWake(text)) {
+        handleWakeDetected(text);
+      }
+    },
+    onCommittedTranscript: (data: any) => {
+      if (speakingRef.current) return;
+      const text = (data?.text || "").trim();
+      if (!text) return;
 
+      // Always-on wake stage
+      if (phaseRef.current === "wake_listening") {
+        if (hasWake(text)) handleWakeDetected(text);
+        return;
+      }
+
+      // Command capture (call mode OR after wake)
+      if (captureRef.current.active || phaseRef.current === "listening") {
+        captureRef.current.buffer = (captureRef.current.buffer + " " + text).trim();
+        setPartial(captureRef.current.buffer);
+        // Debounce — assume user is done if no new committed segment in 900ms
+        if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
+        captureRef.current.timer = window.setTimeout(() => {
+          const q = captureRef.current.buffer.trim();
+          captureRef.current = { active: false, buffer: "", timer: null };
+          setPartial("");
+          if (q) handleUserUtterance(q);
+        }, 900);
+      }
+    },
+    onError: (err: any) => {
+      console.error("[scribe]", err);
+    },
+  });
+
+  const connectScribe = useCallback(async (): Promise<boolean> => {
+    try {
+      if (scribe.isConnected) return true;
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scribe-token`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+      });
+      const json = await res.json();
+      if (!json.token) throw new Error(json.error || "no token");
+      await scribe.connect({
+        token: json.token,
+        microphone: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      return true;
+    } catch (e: any) {
+      console.error("scribe connect failed", e);
+      toast.error("Voice service couldn't start. " + (e?.message || ""));
+      return false;
+    }
+  }, [scribe]);
+
+  const disconnectScribe = useCallback(async () => {
+    try { await scribe.disconnect(); } catch {}
+  }, [scribe]);
+
+  // -------- TTS --------
   const stopAudio = useCallback(() => {
     try { audioRef.current?.pause(); } catch {}
     audioRef.current = null;
@@ -88,115 +185,60 @@ export default function ManagerEarpiece() {
     }
   }, [muted]);
 
-  const startRecognition = useCallback((kind: "wake" | "command") => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
-      toast.error("Voice input not supported in this browser. Type instead.");
-      return false;
-    }
-    // tear down any existing
-    try { recRef.current?.stop(); } catch {}
+  // -------- Conversation flow --------
+  const handleWakeDetected = useCallback((heardText: string) => {
+    if (phaseRef.current !== "wake_listening") return;
+    setPhase("speaking");
+    setPartial("");
+    // If the user packed the question into the same utterance, capture the tail
+    const tail = stripWake(heardText);
+    captureRef.current = { active: true, buffer: tail, timer: null };
 
-    const rec = new SR();
-    rec.continuous = kind === "wake"; // wake mode listens continuously
-    rec.interimResults = true;
-    rec.lang = "en-GB";
-
-    rec.onresult = (e: any) => {
-      // Ignore mic input while TTS is playing (avoid self-trigger)
-      if (speakingRef.current) return;
-
-      let interim = "";
-      let finalText = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) finalText += r[0].transcript;
-        else interim += r[0].transcript;
-      }
-      const liveText = (finalText || interim).trim();
-      if (kind === "command") setPartial(liveText);
-
-      if (kind === "wake") {
-        const heard = (finalText || interim);
-        if (WAKE_PATTERNS.some(p => p.test(heard))) {
-          // Switch to command mode
-          wantRecRef.current = false;
-          try { rec.stop(); } catch {}
+    const ack = WAKE_ACKS[Math.floor(Math.random() * WAKE_ACKS.length)];
+    speak(ack).finally(() => {
+      if (modeRef.current !== "always_on") return;
+      setPhase("listening");
+      // If we already have a non-empty tail, give VAD a moment then commit
+      if (captureRef.current.buffer.trim().length > 2) {
+        if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
+        captureRef.current.timer = window.setTimeout(() => {
+          const q = captureRef.current.buffer.trim();
+          captureRef.current = { active: false, buffer: "", timer: null };
           setPartial("");
-          setPhase("speaking");
-          const ack = WAKE_ACKS[Math.floor(Math.random() * WAKE_ACKS.length)];
-          // Cheeky ack, then open the mic
-          speak(ack).finally(() => {
-            if (modeRef.current !== "always_on") return;
-            setPhase("listening");
-            setTimeout(() => startRecognition("command"), 150);
-          });
-        }
-        return;
+          if (q) handleUserUtterance(q);
+        }, 1200);
       }
+    });
+  }, [speak]);
 
-
-      // command mode
-      if (finalText) {
-        const text = finalText.trim();
-        setPartial("");
-        wantRecRef.current = false;
-        try { rec.stop(); } catch {}
-        if (text) handleUserUtterance(text);
-      }
-    };
-
-    rec.onend = () => {
-      // auto-restart if still wanted (continuous wake listening)
-      if (wantRecRef.current) {
-        try { rec.start(); } catch {
-          setTimeout(() => { try { rec.start(); } catch {} }, 300);
-        }
-      }
-    };
-    rec.onerror = (e: any) => {
-      if (e?.error === "not-allowed" || e?.error === "service-not-allowed") {
-        toast.error("Microphone permission denied.");
-        endSession();
-      }
-    };
-
-    recRef.current = rec;
-    wantRecRef.current = kind === "wake";
-    try { rec.start(); } catch {}
-    return true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const endSession = useCallback(() => {
-    stopRecognition();
+  const endSession = useCallback(async () => {
+    if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
+    captureRef.current = { active: false, buffer: "", timer: null };
+    await disconnectScribe();
     stopAudio();
     setMode("idle");
     setPhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [stopRecognition, stopAudio]);
+  }, [disconnectScribe, stopAudio]);
 
   const goSpeakAndFollowup = useCallback(async (answer: string) => {
     setPhase("speaking");
     await speak(answer);
     if ((modeRef.current as Mode) === "idle") return;
 
-    // Ask the follow-up
     awaitingFollowupRef.current = true;
     setTurns(t => [...t, { role: "assistant", content: FOLLOWUP, ts: Date.now() }]);
     await speak(FOLLOWUP);
     if ((modeRef.current as Mode) === "idle") return;
 
-    // Listen for the user's yes/no follow-up
     setPhase("listening");
-    startRecognition("command");
-  }, [speak, startRecognition]);
+    captureRef.current = { active: true, buffer: "", timer: null };
+  }, [speak]);
 
   const handleUserUtterance = useCallback(async (text: string) => {
     if (!venue) return;
 
-    // Follow-up gating: detect "no/that's it" → close out
     if (awaitingFollowupRef.current) {
       awaitingFollowupRef.current = false;
       if (NEGATIVE_PATTERNS.some(p => p.test(text)) && text.split(/\s+/).length <= 6) {
@@ -204,15 +246,12 @@ export default function ManagerEarpiece() {
         setPhase("speaking");
         await speak(SIGNOFF);
         if (modeRef.current === "always_on") {
-          // back to wake listening
           setPhase("wake_listening");
-          startRecognition("wake");
         } else {
           endSession();
         }
         return;
       }
-      // otherwise, treat as a new question
     }
 
     setTurns(t => [...t, { role: "user", content: text, ts: Date.now() }]);
@@ -239,45 +278,40 @@ export default function ManagerEarpiece() {
       await goSpeakAndFollowup(json.answer);
     } catch (e: any) {
       toast.error(e.message || "Ear-piece failed");
-      setPhase("idle");
-      if (modeRef.current === "always_on") {
-        setPhase("wake_listening");
-        startRecognition("wake");
-      }
+      setPhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, turns, speak, goSpeakAndFollowup, startRecognition, endSession]);
+  }, [venue, turns, speak, goSpeakAndFollowup, endSession]);
 
-  // Ask for mic permission inside the user gesture (required on iOS/Android)
+  // -------- Mic permission --------
   const ensureMicPermission = useCallback(async (): Promise<boolean> => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      toast.error("This browser can't access the microphone. Try Chrome or Safari.");
+      toast.error("This browser can't access the microphone.");
       return false;
     }
     if (!window.isSecureContext) {
-      toast.error("Mic needs HTTPS. Open the published URL, not a local IP.");
+      toast.error("Mic needs HTTPS. Open the published URL.");
       return false;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Release immediately — SpeechRecognition opens its own stream
       stream.getTracks().forEach(t => t.stop());
       return true;
     } catch (err: any) {
       const name = err?.name || "";
       if (name === "NotAllowedError" || name === "SecurityError") {
-        toast.error("Mic blocked. Tap the 🔒 in your browser bar → Site settings → allow Microphone, then retry.", { duration: 7000 });
+        toast.error("Mic blocked. Tap 🔒 in your browser bar → Site settings → allow Microphone, then retry.", { duration: 7000 });
       } else if (name === "NotFoundError" || name === "OverconstrainedError") {
         toast.error("No microphone found on this device.");
       } else if (name === "NotReadableError") {
-        toast.error("Microphone is in use by another app. Close it and try again.");
+        toast.error("Microphone is in use by another app.");
       } else {
-        toast.error("Couldn't access the microphone: " + (err?.message || name || "unknown error"));
+        toast.error("Couldn't access the microphone: " + (err?.message || name));
       }
       return false;
     }
   }, []);
 
-  // Public actions ---------------------------------------------------------
+  // -------- Public actions --------
   const startCall = async () => {
     if (mode === "call") { endSession(); return; }
     const ok = await ensureMicPermission();
@@ -287,7 +321,9 @@ export default function ManagerEarpiece() {
     setPhase("listening");
     setPartial("");
     awaitingFollowupRef.current = false;
-    startRecognition("command");
+    captureRef.current = { active: true, buffer: "", timer: null };
+    const connected = await connectScribe();
+    if (!connected) { endSession(); }
   };
 
   const toggleAlwaysOn = async () => {
@@ -299,21 +335,20 @@ export default function ManagerEarpiece() {
     setPhase("wake_listening");
     setPartial("");
     awaitingFollowupRef.current = false;
-    startRecognition("wake");
+    captureRef.current = { active: false, buffer: "", timer: null };
+    const connected = await connectScribe();
+    if (!connected) { endSession(); }
   };
-
 
   const sendTyped = (text: string) => {
     const q = text.trim();
     if (!q) return;
     setInput("");
-    // typing acts like a call turn
     if (mode === "idle") setMode("call");
     handleUserUtterance(q);
   };
 
-  // Cleanup on unmount
-  useEffect(() => () => { stopRecognition(); stopAudio(); }, [stopRecognition, stopAudio]);
+  useEffect(() => () => { disconnectScribe(); stopAudio(); }, [disconnectScribe, stopAudio]);
 
   const callActive = mode === "call";
   const alwaysOn = mode === "always_on";
@@ -349,9 +384,7 @@ export default function ManagerEarpiece() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-        {/* Conversation */}
         <div className="rounded-2xl border border-white/[0.06] bg-card/40 overflow-hidden flex flex-col min-h-[60vh]">
-          {/* Mode status bar */}
           {mode !== "idle" && (
             <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-primary/[0.04]">
               <div className="flex items-center gap-2 text-xs">
@@ -364,10 +397,7 @@ export default function ManagerEarpiece() {
                 </span>
                 <span className="text-muted-foreground">· {statusLabel}</span>
               </div>
-              <button
-                onClick={endSession}
-                className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1"
-              >
+              <button onClick={endSession} className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1">
                 <PhoneOff className="w-3.5 h-3.5" /> End
               </button>
             </div>
@@ -437,7 +467,6 @@ export default function ManagerEarpiece() {
             )}
           </div>
 
-          {/* Always-on toggle row — clear & discoverable */}
           {mode !== "call" && (
             <div className="border-t border-white/[0.06] px-3 py-2.5 flex items-center justify-between gap-3 bg-background/30">
               <div className="flex items-center gap-2 min-w-0">
@@ -462,9 +491,7 @@ export default function ManagerEarpiece() {
             </div>
           )}
 
-          {/* Composer */}
           <div className="border-t border-white/[0.06] p-3 flex items-center gap-2 bg-background/40 backdrop-blur">
-            {/* Call mic — primary action */}
             <button
               onClick={startCall}
               title={callActive ? "End call" : "Start call"}
@@ -497,10 +524,8 @@ export default function ManagerEarpiece() {
               <Send className="w-4 h-4" />
             </Button>
           </div>
-
         </div>
 
-        {/* Quick prompts */}
         <div className="space-y-3">
           <div className="rounded-2xl border border-white/[0.06] bg-card/40 p-4">
             <div className="text-xs uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
@@ -524,7 +549,7 @@ export default function ManagerEarpiece() {
               <Headphones className="w-3.5 h-3.5 text-primary" /> Two ways to use it
             </div>
             <p><b className="text-foreground">Call</b> (mic): tap once — I stay on, you ask anything, and I'll check if you need more before hanging up.</p>
-            <p><b className="text-foreground">Always-on</b> (ear): I quietly listen for <span className="text-primary">"Hey Aijentik"</span>, then wake up and answer.</p>
+            <p><b className="text-foreground">Always-on</b> (ear): I quietly listen for <span className="text-primary">"Hey Aijentik"</span>, then wake up and answer. Works on iPhone too.</p>
           </div>
         </div>
       </div>

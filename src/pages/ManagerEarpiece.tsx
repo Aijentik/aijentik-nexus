@@ -141,6 +141,59 @@ export default function ManagerEarpiece() {
     followupTimerRef.current = null;
   }, []);
 
+  const stopMicStream = useCallback(() => {
+    try { micProcessorRef.current?.disconnect(); } catch { console.warn("mic processor disconnect failed"); }
+    try { micSourceRef.current?.disconnect(); } catch { console.warn("mic source disconnect failed"); }
+    micStreamRef.current?.getTracks().forEach(track => track.stop());
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      void audioContextRef.current.close();
+    }
+    micProcessorRef.current = null;
+    micSourceRef.current = null;
+    micStreamRef.current = null;
+    audioContextRef.current = null;
+  }, []);
+
+  const startMicStream = useCallback(async (): Promise<boolean> => {
+    if (micStreamRef.current) return true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: { ideal: 16000 },
+        },
+      });
+      const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextCtor) throw new Error("This browser can't start live microphone audio.");
+      const audioContext = new AudioContextCtor({ sampleRate: 16000 });
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      processor.onaudioprocess = event => {
+        if (!desiredAlwaysOnRef.current && modeRef.current !== "call") return;
+        try {
+          sendAudioRef.current(pcm16ToBase64(event.inputBuffer.getChannelData(0)));
+        } catch (e) {
+          console.warn("mic chunk send failed", e);
+        }
+      };
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+      if (audioContext.state === "suspended") await audioContext.resume();
+      micStreamRef.current = stream;
+      audioContextRef.current = audioContext;
+      micSourceRef.current = source;
+      micProcessorRef.current = processor;
+      return true;
+    } catch (e) {
+      stopMicStream();
+      toast.error("Couldn't keep the microphone open: " + errorMessage(e));
+      return false;
+    }
+  }, [stopMicStream]);
+
   // -------- Scribe (ElevenLabs realtime STT) --------
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",

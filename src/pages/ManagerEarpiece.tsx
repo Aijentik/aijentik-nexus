@@ -770,7 +770,7 @@ export default function ManagerEarpiece() {
         body: JSON.stringify({
           venue_id: venue.id,
           question,
-          history: turnsRef.current.slice(-6).map(t => ({ role: t.role, content: t.content })),
+          history: [],
         }),
       });
       const json = await res.json();

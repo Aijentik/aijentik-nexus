@@ -20,6 +20,9 @@ export default function Insights() {
   const { venue, session } = useAuth();
   const [items, setItems] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
+  const [impactFilter, setImpactFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   const load = async () => {
     if (!venue) return;
@@ -27,6 +30,34 @@ export default function Insights() {
     setItems(data || []);
   };
   useEffect(() => { load(); }, [venue]);
+
+  const dismiss = async (id: string) => {
+    const prev = items;
+    setItems(items.filter(i => i.id !== id));
+    const { error } = await supabase.from("insights").delete().eq("id", id);
+    if (error) { setItems(prev); toast.error("Could not dismiss"); }
+  };
+
+  const categories = useMemo(() => Array.from(new Set(items.map(i => i.category).filter(Boolean))), [items]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items.filter(i => {
+      if (impactFilter !== "all" && (i.impact || "").toLowerCase() !== impactFilter) return false;
+      if (categoryFilter !== "all" && i.category !== categoryFilter) return false;
+      if (q && !`${i.title} ${i.body} ${i.category}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [items, query, impactFilter, categoryFilter]);
+
+  const counts = useMemo(() => ({
+    all: items.length,
+    high: items.filter(i => (i.impact || "").toLowerCase() === "high").length,
+    medium: items.filter(i => (i.impact || "").toLowerCase() === "medium").length,
+    low: items.filter(i => !["high","medium"].includes((i.impact || "").toLowerCase())).length,
+  }), [items]);
+
+  const hasFilters = query || impactFilter !== "all" || categoryFilter !== "all";
 
   const generate = async () => {
     if (!venue) return;

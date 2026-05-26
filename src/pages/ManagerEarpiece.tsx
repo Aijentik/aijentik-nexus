@@ -724,16 +724,30 @@ export default function ManagerEarpiece() {
   const handleUserUtterance = useCallback(async (text: string) => {
     if (!venue) return;
     clearFollowupPromptTimer();
+    clearFollowupTimer();
+    resetCapture();
+
+    const question = stripRecentQuestionEcho(text, recentQuestionNormsRef.current);
+    if (!hasUsableCommand(question, awaitingFollowupRef.current)) {
+      setPartial("");
+      if (modeRef.current === "always_on") setLivePhase("wake_listening");
+      return;
+    }
+
+    const normalizedQuestion = normalizeVoiceText(question);
+    const now = Date.now();
+    if (lastCommittedQuestionRef.current.normalized === normalizedQuestion && now - lastCommittedQuestionRef.current.at < 3500) return;
+    lastCommittedQuestionRef.current = { normalized: normalizedQuestion, at: now };
+    recentQuestionNormsRef.current = [normalizedQuestion, ...recentQuestionNormsRef.current.filter(q => q !== normalizedQuestion)].slice(0, 4);
 
     if (awaitingFollowupRef.current) {
       awaitingFollowupRef.current = false;
-      clearFollowupTimer();
-      if (NEGATIVE_PATTERNS.some(p => p.test(text)) && text.split(/\s+/).length <= 6) {
-        setTurns(t => [...t, { role: "user", content: text, ts: Date.now() }, { role: "assistant", content: SIGNOFF, ts: Date.now() }]);
-        setPhase("speaking");
+      if (NEGATIVE_PATTERNS.some(p => p.test(question)) && question.split(/\s+/).length <= 6) {
+        setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }, { role: "assistant", content: SIGNOFF, ts: Date.now() }]);
+        setLivePhase("speaking");
         await speak(SIGNOFF);
         if (modeRef.current === "always_on") {
-          setPhase("wake_listening");
+          setLivePhase("wake_listening");
         } else {
           endSession();
         }
@@ -741,9 +755,9 @@ export default function ManagerEarpiece() {
       }
     }
 
-    setTurns(t => [...t, { role: "user", content: text, ts: Date.now() }]);
+    setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }]);
     setPartial("");
-    setPhase("thinking");
+    setLivePhase("thinking");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manager-earpiece`, {
@@ -755,8 +769,8 @@ export default function ManagerEarpiece() {
         },
         body: JSON.stringify({
           venue_id: venue.id,
-          question: text,
-          history: turns.slice(-6).map(t => ({ role: t.role, content: t.content })),
+          question,
+          history: turnsRef.current.slice(-6).map(t => ({ role: t.role, content: t.content })),
         }),
       });
       const json = await res.json();
@@ -766,9 +780,9 @@ export default function ManagerEarpiece() {
       await goSpeakAndFollowup(json.answer);
     } catch (e: unknown) {
       toast.error(errorMessage(e) || "Ear-piece failed");
-      setPhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
+      setLivePhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, turns, clearFollowupPromptTimer, clearFollowupTimer, speak, goSpeakAndFollowup, endSession]);
+  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, goSpeakAndFollowup, endSession]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 

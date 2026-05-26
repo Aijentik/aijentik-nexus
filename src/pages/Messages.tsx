@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, MessageSquare, ArrowDownLeft, ArrowUpRight, Loader2, AlertCircle } from "lucide-react";
+import { Send, MessageSquare, ArrowDownLeft, ArrowUpRight, Loader2, AlertCircle, Search, X } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+
 
 const E164 = /^\+[1-9]\d{6,14}$/;
 

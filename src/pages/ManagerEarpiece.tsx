@@ -129,7 +129,7 @@ export default function ManagerEarpiece() {
         setPhase("wake_listening");
       }
     },
-    onPartialTranscript: (data: any) => {
+    onPartialTranscript: (data: ScribeTranscript) => {
       if (speakingRef.current) return;
       const text = (data?.text || "").trim();
       if (!text) return;
@@ -142,7 +142,7 @@ export default function ManagerEarpiece() {
         handleWakeDetected(text);
       }
     },
-    onCommittedTranscript: (data: any) => {
+    onCommittedTranscript: (data: ScribeTranscript) => {
       if (speakingRef.current) return;
       const text = (data?.text || "").trim();
       if (!text) return;
@@ -163,11 +163,11 @@ export default function ManagerEarpiece() {
           const q = captureRef.current.buffer.trim();
           captureRef.current = { active: false, buffer: "", timer: null };
           setPartial("");
-          if (q) handleUserUtterance(q);
+          if (q) void handleUserUtteranceRef.current(q);
         }, 900);
       }
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       console.error("[scribe]", err);
       if (desiredAlwaysOnRef.current && modeRef.current === "always_on") scheduleScribeReconnect();
     },
@@ -182,7 +182,7 @@ export default function ManagerEarpiece() {
     try {
       if (scribe.isConnected || scribe.status === "connecting") return true;
       if (scribe.status === "error") {
-        try { scribe.disconnect(); } catch {}
+        try { scribe.disconnect(); } catch { console.warn("scribe disconnect after error failed"); }
       }
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scribe-token`, {
@@ -211,9 +211,9 @@ export default function ManagerEarpiece() {
         },
       });
       return true;
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("scribe connect failed", e);
-      if (!silent) toast.error("Voice service couldn't start. " + (e?.message || ""));
+      if (!silent) toast.error("Voice service couldn't start. " + errorMessage(e));
       return false;
     } finally {
       connectInFlightRef.current = null;

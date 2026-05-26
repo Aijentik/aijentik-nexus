@@ -121,13 +121,19 @@ export default function ManagerEarpiece() {
           // Switch to command mode
           wantRecRef.current = false;
           try { rec.stop(); } catch {}
-          setPhase("listening");
           setPartial("");
-          // small delay so SR can fully reset
-          setTimeout(() => startRecognition("command"), 200);
+          setPhase("speaking");
+          const ack = WAKE_ACKS[Math.floor(Math.random() * WAKE_ACKS.length)];
+          // Cheeky ack, then open the mic
+          speak(ack).finally(() => {
+            if (modeRef.current !== "always_on") return;
+            setPhase("listening");
+            setTimeout(() => startRecognition("command"), 150);
+          });
         }
         return;
       }
+
 
       // command mode
       if (finalText) {

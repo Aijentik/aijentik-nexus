@@ -120,11 +120,53 @@ function mergeTranscript(existing: string, incoming: string): string {
   const nb = normalizeVoiceText(b);
   if (na.includes(nb)) return a;
   if (nb.includes(na)) return b;
+
+  const aWords = na.split(" ");
+  const bWords = nb.split(" ");
+  let sharedPrefix = 0;
+  while (aWords[sharedPrefix] && aWords[sharedPrefix] === bWords[sharedPrefix]) sharedPrefix += 1;
+  if (sharedPrefix >= 2 && QUESTION_START_PATTERN.test(na) && bWords.length >= Math.max(3, aWords.length - 1)) return b;
+
+  for (let overlap = Math.min(aWords.length, bWords.length, 8); overlap >= 2; overlap -= 1) {
+    if (aWords.slice(-overlap).join(" ") === bWords.slice(0, overlap).join(" ")) {
+      return `${a} ${b.split(/\s+/).slice(overlap).join(" ")}`.trim();
+    }
+  }
+
   return `${a} ${b}`.trim();
 }
 
+function repairSpeechRevisions(text: string): string {
+  const stripped = stripWake(text).trim();
+  const normalized = normalizeVoiceText(stripped);
+  if (!normalized || !QUESTION_START_PATTERN.test(normalized)) return stripped;
+
+  const words = stripped.split(/\s+/).filter(Boolean);
+  const normalizedWords = normalized.split(" ");
+  if (normalizedWords.length < 5) return stripped;
+
+  for (const anchorSize of [3, 2]) {
+    if (normalizedWords.length <= anchorSize + 2) continue;
+    const anchor = normalizedWords.slice(0, anchorSize).join(" ");
+    const starts: number[] = [];
+    for (let i = 0; i <= normalizedWords.length - anchorSize; i += 1) {
+      if (normalizedWords.slice(i, i + anchorSize).join(" ") === anchor) starts.push(i);
+    }
+
+    const lastStart = starts.at(-1) ?? 0;
+    const isImmediateRestart = starts.length === 2 && lastStart <= anchorSize + 1;
+    const isRepeatedRevision = starts.length >= 3;
+    if (lastStart > 0 && (isImmediateRestart || isRepeatedRevision)) {
+      const candidate = words.slice(lastStart).join(" ").trim();
+      if (hasUsableCommand(candidate, true)) return candidate;
+    }
+  }
+
+  return stripped;
+}
+
 function captureCandidate(capture: CaptureState): string {
-  return mergeTranscript(capture.buffer, capture.live).trim();
+  return repairSpeechRevisions(mergeTranscript(capture.buffer, capture.live)).trim();
 }
 
 function stripRecentQuestionEcho(text: string, recentQuestions: string[]): string {

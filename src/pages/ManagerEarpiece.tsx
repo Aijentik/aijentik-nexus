@@ -464,7 +464,7 @@ export default function ManagerEarpiece() {
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 
   // -------- Mic permission --------
-  const ensureMicPermission = useCallback(async (): Promise<boolean> => {
+  const canUseMic = useCallback((): boolean => {
     if (!navigator.mediaDevices?.getUserMedia) {
       toast.error("This browser can't access the microphone.");
       return false;
@@ -473,32 +473,17 @@ export default function ManagerEarpiece() {
       toast.error("Mic needs HTTPS. Open the published URL.");
       return false;
     }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => t.stop());
-      return true;
-    } catch (err: unknown) {
-      const name = errorName(err);
-      if (name === "NotAllowedError" || name === "SecurityError") {
-        toast.error("Mic blocked. Tap 🔒 in your browser bar → Site settings → allow Microphone, then retry.", { duration: 7000 });
-      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
-        toast.error("No microphone found on this device.");
-      } else if (name === "NotReadableError") {
-        toast.error("Microphone is in use by another app.");
-      } else {
-        toast.error("Couldn't access the microphone: " + (errorMessage(err) || name));
-      }
-      return false;
-    }
+    return true;
   }, []);
 
   // -------- Public actions --------
   const startCall = async () => {
     if (mode === "call") { endSession(); return; }
-    const ok = await ensureMicPermission();
-    if (!ok) return;
+    if (!canUseMic()) return;
     desiredAlwaysOnRef.current = false;
     stopAudio();
+    const micReady = await startMicStream();
+    if (!micReady) return;
     setMode("call");
     setPhase("listening");
     setPartial("");
@@ -506,15 +491,15 @@ export default function ManagerEarpiece() {
     captureRef.current = { active: true, buffer: "", timer: null };
     const connected = await connectScribe();
     if (!connected) { endSession(); }
-    else { await startMicStream(); }
   };
 
   const toggleAlwaysOn = async () => {
     if (mode === "always_on") { endSession(); return; }
-    const ok = await ensureMicPermission();
-    if (!ok) return;
+    if (!canUseMic()) return;
     desiredAlwaysOnRef.current = true;
     stopAudio();
+    const micReady = await startMicStream();
+    if (!micReady) { desiredAlwaysOnRef.current = false; return; }
     setMode("always_on");
     setPhase("wake_listening");
     setPartial("");
@@ -522,7 +507,6 @@ export default function ManagerEarpiece() {
     captureRef.current = { active: false, buffer: "", timer: null };
     const connected = await connectScribe();
     if (!connected) { endSession(); }
-    else { await startMicStream(); }
   };
 
   const sendTyped = (text: string) => {

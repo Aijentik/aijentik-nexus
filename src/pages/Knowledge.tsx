@@ -204,18 +204,38 @@ export default function Knowledge() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-5 glass rounded-xl p-1 w-fit">
-        {[
-          { k: "knowledge", label: "Knowledge", icon: Sparkles, count: items.length },
-          { k: "menu", label: "Menu", icon: UtensilsCrossed, count: menu.length },
-        ].map((t: any) => (
-          <button key={t.k} onClick={() => setTab(t.k)}
-            className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all ${tab === t.k ? "bg-primary text-primary-foreground shadow-[0_0_20px_hsl(var(--primary)/0.4)]" : "text-muted-foreground hover:text-foreground"}`}>
-            <t.icon className="h-3.5 w-3.5" /> {t.label}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${tab === t.k ? "bg-primary-foreground/20" : "bg-muted"}`}>{t.count}</span>
-          </button>
-        ))}
+      {/* Tabs + search */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
+        <div className="flex gap-1 glass rounded-xl p-1 w-fit shrink-0">
+          {[
+            { k: "knowledge", label: "Knowledge", icon: Sparkles, count: items.length },
+            { k: "menu", label: "Menu", icon: UtensilsCrossed, count: menu.length },
+          ].map((t: any) => (
+            <button key={t.k} onClick={() => setTab(t.k)}
+              className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all ${tab === t.k ? "bg-primary text-primary-foreground shadow-[0_0_20px_hsl(var(--primary)/0.4)]" : "text-muted-foreground hover:text-foreground"}`}>
+              <t.icon className="h-3.5 w-3.5" /> {t.label}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${tab === t.k ? "bg-primary-foreground/20" : "bg-muted"}`}>{t.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1 min-w-0 sm:max-w-md sm:ml-auto">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={tab === "knowledge" ? "Search entries, content or category…" : "Search menu items…"}
+            className="pl-9 pr-9 h-9 bg-white/[0.02] border-white/[0.06] focus-visible:ring-primary/40"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 grid place-items-center rounded text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {tab === "knowledge" && (

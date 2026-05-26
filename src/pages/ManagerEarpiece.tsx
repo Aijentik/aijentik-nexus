@@ -225,12 +225,12 @@ export default function ManagerEarpiece() {
   useEffect(() => { connectScribeRef.current = connectScribe; }, [connectScribe]);
 
   const disconnectScribe = useCallback(async () => {
-    try { await scribe.disconnect(); } catch {}
+    try { await scribe.disconnect(); } catch { console.warn("scribe disconnect failed"); }
   }, [scribe]);
 
   // -------- TTS --------
   const stopAudio = useCallback(() => {
-    try { audioRef.current?.pause(); } catch {}
+    try { audioRef.current?.pause(); } catch { console.warn("audio pause failed"); }
     audioRef.current = null;
     speakingRef.current = false;
   }, []);
@@ -259,7 +259,8 @@ export default function ManagerEarpiece() {
         audio.onerror = () => { speakingRef.current = false; resolve(); };
         audio.play().catch(() => { speakingRef.current = false; resolve(); });
       });
-    } catch {
+    } catch (e: unknown) {
+      console.warn("earpiece TTS failed", e);
       speakingRef.current = false;
     }
   }, [muted]);

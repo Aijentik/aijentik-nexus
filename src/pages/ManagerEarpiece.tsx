@@ -88,6 +88,21 @@ function pcm16ToBase64(samples: Float32Array): string {
   return btoa(binary);
 }
 
+function resampleTo16k(input: Float32Array, inputRate: number): Float32Array {
+  if (inputRate === 16000) return input;
+  const ratio = inputRate / 16000;
+  const outputLength = Math.max(1, Math.round(input.length / ratio));
+  const output = new Float32Array(outputLength);
+  for (let i = 0; i < outputLength; i += 1) {
+    const sourceIndex = i * ratio;
+    const left = Math.floor(sourceIndex);
+    const right = Math.min(input.length - 1, left + 1);
+    const weight = sourceIndex - left;
+    output[i] = input[left] * (1 - weight) + input[right] * weight;
+  }
+  return output;
+}
+
 export default function ManagerEarpiece() {
   const { venue } = useAuth();
   const [mode, setMode] = useState<Mode>("idle");

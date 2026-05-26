@@ -120,11 +120,53 @@ function mergeTranscript(existing: string, incoming: string): string {
   const nb = normalizeVoiceText(b);
   if (na.includes(nb)) return a;
   if (nb.includes(na)) return b;
+
+  const aWords = na.split(" ");
+  const bWords = nb.split(" ");
+  let sharedPrefix = 0;
+  while (aWords[sharedPrefix] && aWords[sharedPrefix] === bWords[sharedPrefix]) sharedPrefix += 1;
+  if (sharedPrefix >= 2 && QUESTION_START_PATTERN.test(na) && bWords.length >= Math.max(3, aWords.length - 1)) return b;
+
+  for (let overlap = Math.min(aWords.length, bWords.length, 8); overlap >= 2; overlap -= 1) {
+    if (aWords.slice(-overlap).join(" ") === bWords.slice(0, overlap).join(" ")) {
+      return `${a} ${b.split(/\s+/).slice(overlap).join(" ")}`.trim();
+    }
+  }
+
   return `${a} ${b}`.trim();
 }
 
+function repairSpeechRevisions(text: string): string {
+  const stripped = stripWake(text).trim();
+  const normalized = normalizeVoiceText(stripped);
+  if (!normalized || !QUESTION_START_PATTERN.test(normalized)) return stripped;
+
+  const words = stripped.split(/\s+/).filter(Boolean);
+  const normalizedWords = normalized.split(" ");
+  if (normalizedWords.length < 5) return stripped;
+
+  for (const anchorSize of [3, 2]) {
+    if (normalizedWords.length <= anchorSize + 2) continue;
+    const anchor = normalizedWords.slice(0, anchorSize).join(" ");
+    const starts: number[] = [];
+    for (let i = 0; i <= normalizedWords.length - anchorSize; i += 1) {
+      if (normalizedWords.slice(i, i + anchorSize).join(" ") === anchor) starts.push(i);
+    }
+
+    const lastStart = starts.length ? starts[starts.length - 1] : 0;
+    const isImmediateRestart = starts.length === 2 && lastStart <= anchorSize + 1;
+    const isRepeatedRevision = starts.length >= 3;
+    if (lastStart > 0 && (isImmediateRestart || isRepeatedRevision)) {
+      const candidate = words.slice(lastStart).join(" ").trim();
+      if (hasUsableCommand(candidate, true)) return candidate;
+    }
+  }
+
+  return stripped;
+}
+
 function captureCandidate(capture: CaptureState): string {
-  return mergeTranscript(capture.buffer, capture.live).trim();
+  return repairSpeechRevisions(mergeTranscript(capture.buffer, capture.live)).trim();
 }
 
 function stripRecentQuestionEcho(text: string, recentQuestions: string[]): string {
@@ -251,6 +293,7 @@ export default function ManagerEarpiece() {
   const transcriptHandlerRef = useRef<(text: string, isFinal: boolean, source: "scribe" | "browser") => void>(() => undefined);
   const lastCommittedQuestionRef = useRef<{ normalized: string; at: number }>({ normalized: "", at: 0 });
   const recentQuestionNormsRef = useRef<string[]>([]);
+  const lastBrowserResultRef = useRef<{ index: number; text: string; isFinal: boolean }>({ index: -1, text: "", isFinal: false });
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -448,6 +491,10 @@ export default function ManagerEarpiece() {
         const result = event.results[i];
         if (phaseRef.current !== "wake_listening") {
           const best = result[0]?.transcript?.trim();
+          if (i === lastBrowserResultRef.current.index
+            && best === lastBrowserResultRef.current.text
+            && result.isFinal === lastBrowserResultRef.current.isFinal) continue;
+          lastBrowserResultRef.current = { index: i, text: best || "", isFinal: result.isFinal };
           if (best) transcriptHandlerRef.current(best, result.isFinal, "browser");
           continue;
         }
@@ -787,6 +834,7 @@ export default function ManagerEarpiece() {
     }
 
     setLivePhase("listening");
+    lastBrowserResultRef.current = { index: -1, text: "", isFinal: false };
     const tail = stripWake(heardText);
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
     // Reset whisper accumulator at the start of each capture window.
@@ -908,7 +956,7 @@ export default function ManagerEarpiece() {
     clearFollowupTimer();
     resetCapture();
 
-    const question = stripRecentQuestionEcho(text, recentQuestionNormsRef.current);
+    const question = repairSpeechRevisions(stripRecentQuestionEcho(text, recentQuestionNormsRef.current));
     if (!hasUsableCommand(question, awaitingFollowupRef.current)) {
       setPartial("");
       if (modeRef.current === "always_on") setLivePhase("wake_listening");

@@ -111,23 +111,47 @@ export default function Analytics() {
             Refresh
           </Button>
         </div>
-        <div className="text-[14px] leading-relaxed text-foreground/85 whitespace-pre-line min-h-[80px] pl-1 border-l-2 border-primary/40 pl-4">
-          {narrative || (busy ? "Analysing your venue's performance…" : "Click refresh to generate a narrative summary.")}
+        <div className="text-[14px] leading-relaxed text-foreground/85 whitespace-pre-line min-h-[80px] pl-4 border-l-2 border-primary/40">
+          {narrative
+            ? narrative
+            : busy
+              ? <span className="text-muted-foreground italic">Analysing your venue's performance…</span>
+              : hasAnyData
+                ? <span className="text-muted-foreground italic">Click <span className="text-foreground font-medium">Refresh</span> to generate a narrative summary from your last 30 days.</span>
+                : <span className="text-muted-foreground italic">No activity yet — your AI will start writing the operational story as soon as calls and bookings flow in.</span>}
         </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="card-cine p-6">
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
-              <div className="label-micro mb-1">14-day trend</div>
+              <div className="label-micro mb-1">{rangeDays}-day trend</div>
               <div className="font-medium text-[15px]">Bookings vs Calls</div>
             </div>
-            <div className="flex items-center gap-3 text-[10px] uppercase tracking-wider">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" /> Bookings</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_8px_hsl(var(--accent))]" /> Calls</span>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                {RANGES.map((r) => (
+                  <button
+                    key={r.k}
+                    onClick={() => setRange(r.k)}
+                    className={`px-2.5 h-7 rounded-md text-[11px] font-medium transition-colors ${
+                      range === r.k
+                        ? "bg-primary/15 text-primary border border-primary/30"
+                        : "text-muted-foreground hover:text-foreground border border-transparent"
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-3 text-[10px] uppercase tracking-wider">
+                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" /> Bookings</span>
+                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_8px_hsl(var(--accent))]" /> Calls</span>
+              </div>
             </div>
           </div>
+
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={days} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <defs>

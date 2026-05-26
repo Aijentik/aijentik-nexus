@@ -604,8 +604,8 @@ export default function ManagerEarpiece() {
     if (phaseRef.current !== "wake_listening") return;
     clearFollowupTimer();
     clearFollowupPromptTimer();
-    phaseRef.current = "listening";
-    setPhase("listening");
+    awaitingFollowupRef.current = false;
+    setLivePhase("listening");
     // If the user packed the question into the same utterance, capture the tail
     const tail = stripWake(heardText);
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
@@ -613,9 +613,9 @@ export default function ManagerEarpiece() {
     if (hasUsableCommand(tail)) {
       scheduleCaptureCommit(650);
     } else {
-      void speak(WAKE_ACK, false);
+      void speakWithBrowser(WAKE_ACK, false);
     }
-  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, speak, startCapture]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, speakWithBrowser, startCapture]);
 
   useEffect(() => {
     transcriptHandlerRef.current = (rawText: string, isFinal: boolean) => {
@@ -634,13 +634,17 @@ export default function ManagerEarpiece() {
       if (captureRef.current.active || phaseRef.current === "listening") {
         clearFollowupTimer();
         clearFollowupPromptTimer();
+        const stripped = stripWake(text);
+        const cleaned = stripRecentQuestionEcho(stripped, recentQuestionNormsRef.current);
+        if (!cleaned && !hasWake(text)) return;
+
         if (hasWake(text) && !captureCandidate(captureRef.current)) {
-          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, stripWake(text));
+          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, cleaned);
         } else if (isFinal) {
-          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, text);
+          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, cleaned);
           captureRef.current.live = "";
         } else {
-          captureRef.current.live = mergeTranscript(captureRef.current.live, text);
+          captureRef.current.live = mergeTranscript(captureRef.current.live, cleaned);
         }
 
         const candidate = captureCandidate(captureRef.current);

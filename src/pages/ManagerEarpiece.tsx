@@ -782,12 +782,9 @@ export default function ManagerEarpiece() {
     awaitingFollowupRef.current = false;
   }, [clearFollowupPromptTimer, clearFollowupTimer, disconnectScribe, resetCapture, setLivePhase, stopAudio, stopBrowserRecognition, stopMicStream]);
 
-  const goSpeakAndFollowup = useCallback(async (answer: string) => {
-    resetCapture();
-    setLivePhase("speaking");
-    await speak(answer);
+  const armFollowup = useCallback(() => {
     if ((modeRef.current as Mode) === "idle") return;
-
+    resetCapture();
     awaitingFollowupRef.current = true;
     setLivePhase("listening");
     setPartial("");

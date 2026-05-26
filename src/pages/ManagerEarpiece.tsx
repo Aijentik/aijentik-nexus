@@ -11,6 +11,7 @@ import { useScribe, CommitStrategy } from "@elevenlabs/react";
 type Turn = { role: "user" | "assistant"; content: string; ts: number };
 type Mode = "idle" | "call" | "always_on";
 type Phase = "idle" | "wake_listening" | "listening" | "thinking" | "speaking";
+type ScribeTranscript = { text?: string };
 
 const QUICK_PROMPTS = [
   "How's tonight looking?",
@@ -20,28 +21,55 @@ const QUICK_PROMPTS = [
   "Any emails I need to handle?",
 ];
 
-// Robust wake patterns — tolerate mishearings of "Aijentik"
+// Robust wake patterns — tolerate common noisy-room / mobile STT mishearings of "Aijentik"
 const WAKE_PATTERNS = [
-  /\bhey[, ]+a?i?\s*j?ent[iy]?k\b/i,
+  /\b(h+ey|hay|hi|okay|ok)[, ]+a?i?\s*j?ent[iy]?k\b/i,
   /\bhey[, ]+agentic\b/i,
   /\bhey[, ]+agent\b/i,
+  /\bhey[, ]+agent\s*tech\b/i,
   /\bhey[, ]+ai\s*gentic\b/i,
+  /\bhey[, ]+ai\s*gen\s*tech\b/i,
   /\bhey[, ]+i[- ]?gentic\b/i,
+  /\bhey[, ]+a[- ]?jentic\b/i,
+  /\bhey[, ]+a[- ]?gentik\b/i,
+  /\bhey[, ]+a[- ]?gen\s*tick\b/i,
   /\bhey[, ]+a[- ]?gen[a-z]*\b/i,
 ];
+const WAKE_KEYTERMS = ["Aijentik", "Hey Aijentik", "Aijentic", "Agentic", "AI Gentic", "Agent Tech"];
 const WAKE_ACKS = ["Yesss?", "Mhm?", "Go on…", "Yep, listening.", "Hit me.", "I'm all ears.", "Yes boss?"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 
+function normalizeVoiceText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Strip the wake phrase off the front of an utterance so "Hey Aijentik, what's tonight?" → "what's tonight?"
 function stripWake(text: string): string {
   let t = text;
   for (const p of WAKE_PATTERNS) t = t.replace(p, "");
+  t = t.replace(/^\s*(h+ey|hay|hi|okay|ok)[,\s-]*(aijentik|aijentic|agentic|agent\s*tech|ai\s*gentic|ai\s*gen\s*tech|a\s*jentic|a\s*gentik|agent)\b/i, "");
   return t.replace(/^[\s,.\-!?:;]+/, "").trim();
 }
 function hasWake(text: string): boolean {
-  return WAKE_PATTERNS.some(p => p.test(text));
+  if (WAKE_PATTERNS.some(p => p.test(text))) return true;
+  const normalized = normalizeVoiceText(text);
+  const compact = normalized.replace(/\s+/g, "");
+  return /\b(hey|hay|hi|okay|ok)\s+(aijentik|aijentic|agentic|agent|ai\s*gentic|a\s*jentic|a\s*gentik|agent\s*tech)\b/.test(normalized)
+    || /(hey|hay|hi|okay|ok)(aijentik|aijentic|agentic|aigentic|ajentic|agentik|agenttech)/.test(compact);
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err || "");
+}
+
+function errorName(err: unknown): string {
+  return err instanceof DOMException ? err.name : err instanceof Error && "name" in err ? err.name : "";
 }
 
 export default function ManagerEarpiece() {
@@ -60,6 +88,12 @@ export default function ManagerEarpiece() {
   const phaseRef = useRef<Phase>("idle");
   const awaitingFollowupRef = useRef(false);
   const speakingRef = useRef(false);
+  const desiredAlwaysOnRef = useRef(false);
+  const connectInFlightRef = useRef<Promise<boolean> | null>(null);
+  const connectScribeRef = useRef<(silent?: boolean) => Promise<boolean>>(async () => false);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const followupTimerRef = useRef<number | null>(null);
+  const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null }>({
     active: false, buffer: "", timer: null,
@@ -69,11 +103,40 @@ export default function ManagerEarpiece() {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: 999999, behavior: "smooth" }); }, [turns, partial]);
 
+  const scheduleScribeReconnect = useCallback(() => {
+    if (!desiredAlwaysOnRef.current || modeRef.current !== "always_on" || reconnectTimerRef.current) return;
+    reconnectTimerRef.current = window.setTimeout(async () => {
+      reconnectTimerRef.current = null;
+      if (!desiredAlwaysOnRef.current || modeRef.current !== "always_on") return;
+      setPhase("wake_listening");
+      setPartial("");
+      await connectScribeRef.current(true);
+    }, 1200);
+  }, []);
+
+  const clearFollowupTimer = useCallback(() => {
+    if (!followupTimerRef.current) return;
+    window.clearTimeout(followupTimerRef.current);
+    followupTimerRef.current = null;
+  }, []);
+
   // -------- Scribe (ElevenLabs realtime STT) --------
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
-    onPartialTranscript: (data: any) => {
+    vadSilenceThresholdSecs: 0.8,
+    vadThreshold: 0.65,
+    minSpeechDurationMs: 120,
+    minSilenceDurationMs: 350,
+    languageCode: "en",
+    keyterms: WAKE_KEYTERMS,
+    noVerbatim: false,
+    onSessionStarted: () => {
+      if (desiredAlwaysOnRef.current && modeRef.current === "always_on" && phaseRef.current === "idle") {
+        setPhase("wake_listening");
+      }
+    },
+    onPartialTranscript: (data: ScribeTranscript) => {
       if (speakingRef.current) return;
       const text = (data?.text || "").trim();
       if (!text) return;
@@ -86,7 +149,7 @@ export default function ManagerEarpiece() {
         handleWakeDetected(text);
       }
     },
-    onCommittedTranscript: (data: any) => {
+    onCommittedTranscript: (data: ScribeTranscript) => {
       if (speakingRef.current) return;
       const text = (data?.text || "").trim();
       if (!text) return;
@@ -99,6 +162,7 @@ export default function ManagerEarpiece() {
 
       // Command capture (call mode OR after wake)
       if (captureRef.current.active || phaseRef.current === "listening") {
+        clearFollowupTimer();
         captureRef.current.buffer = (captureRef.current.buffer + " " + text).trim();
         setPartial(captureRef.current.buffer);
         // Debounce — assume user is done if no new committed segment in 900ms
@@ -107,18 +171,27 @@ export default function ManagerEarpiece() {
           const q = captureRef.current.buffer.trim();
           captureRef.current = { active: false, buffer: "", timer: null };
           setPartial("");
-          if (q) handleUserUtterance(q);
+          if (q) void handleUserUtteranceRef.current(q);
         }, 900);
       }
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       console.error("[scribe]", err);
+      if (desiredAlwaysOnRef.current && modeRef.current === "always_on") scheduleScribeReconnect();
+    },
+    onDisconnect: () => {
+      if (desiredAlwaysOnRef.current && modeRef.current === "always_on") scheduleScribeReconnect();
     },
   });
 
-  const connectScribe = useCallback(async (): Promise<boolean> => {
+  const connectScribe = useCallback(async (silent = false): Promise<boolean> => {
+    if (connectInFlightRef.current) return connectInFlightRef.current;
+    connectInFlightRef.current = (async () => {
     try {
-      if (scribe.isConnected) return true;
+      if (scribe.isConnected || scribe.status === "connecting") return true;
+      if (scribe.status === "error") {
+        try { scribe.disconnect(); } catch { console.warn("scribe disconnect after error failed"); }
+      }
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scribe-token`, {
         method: "POST",
@@ -131,6 +204,14 @@ export default function ManagerEarpiece() {
       if (!json.token) throw new Error(json.error || "no token");
       await scribe.connect({
         token: json.token,
+        commitStrategy: CommitStrategy.VAD,
+        vadSilenceThresholdSecs: 0.8,
+        vadThreshold: 0.65,
+        minSpeechDurationMs: 120,
+        minSilenceDurationMs: 350,
+        languageCode: "en",
+        keyterms: WAKE_KEYTERMS,
+        noVerbatim: false,
         microphone: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -138,20 +219,26 @@ export default function ManagerEarpiece() {
         },
       });
       return true;
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("scribe connect failed", e);
-      toast.error("Voice service couldn't start. " + (e?.message || ""));
+      if (!silent) toast.error("Voice service couldn't start. " + errorMessage(e));
       return false;
+    } finally {
+      connectInFlightRef.current = null;
     }
+    })();
+    return connectInFlightRef.current;
   }, [scribe]);
 
+  useEffect(() => { connectScribeRef.current = connectScribe; }, [connectScribe]);
+
   const disconnectScribe = useCallback(async () => {
-    try { await scribe.disconnect(); } catch {}
+    try { await scribe.disconnect(); } catch { console.warn("scribe disconnect failed"); }
   }, [scribe]);
 
   // -------- TTS --------
   const stopAudio = useCallback(() => {
-    try { audioRef.current?.pause(); } catch {}
+    try { audioRef.current?.pause(); } catch { console.warn("audio pause failed"); }
     audioRef.current = null;
     speakingRef.current = false;
   }, []);
@@ -180,7 +267,8 @@ export default function ManagerEarpiece() {
         audio.onerror = () => { speakingRef.current = false; resolve(); };
         audio.play().catch(() => { speakingRef.current = false; resolve(); });
       });
-    } catch {
+    } catch (e: unknown) {
+      console.warn("earpiece TTS failed", e);
       speakingRef.current = false;
     }
   }, [muted]);
@@ -205,13 +293,19 @@ export default function ManagerEarpiece() {
           const q = captureRef.current.buffer.trim();
           captureRef.current = { active: false, buffer: "", timer: null };
           setPartial("");
-          if (q) handleUserUtterance(q);
+          if (q) void handleUserUtteranceRef.current(q);
         }, 1200);
       }
     });
   }, [speak]);
 
   const endSession = useCallback(async () => {
+    clearFollowupTimer();
+    desiredAlwaysOnRef.current = false;
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
     captureRef.current = { active: false, buffer: "", timer: null };
     await disconnectScribe();
@@ -220,7 +314,7 @@ export default function ManagerEarpiece() {
     setPhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [disconnectScribe, stopAudio]);
+  }, [clearFollowupTimer, disconnectScribe, stopAudio]);
 
   const goSpeakAndFollowup = useCallback(async (answer: string) => {
     setPhase("speaking");
@@ -234,13 +328,25 @@ export default function ManagerEarpiece() {
 
     setPhase("listening");
     captureRef.current = { active: true, buffer: "", timer: null };
-  }, [speak]);
+    if (modeRef.current === "always_on") {
+      clearFollowupTimer();
+      followupTimerRef.current = window.setTimeout(() => {
+        if (modeRef.current !== "always_on" || !awaitingFollowupRef.current) return;
+        awaitingFollowupRef.current = false;
+        captureRef.current = { active: false, buffer: "", timer: null };
+        setPartial("");
+        setPhase("wake_listening");
+        followupTimerRef.current = null;
+      }, 6500);
+    }
+  }, [clearFollowupTimer, speak]);
 
   const handleUserUtterance = useCallback(async (text: string) => {
     if (!venue) return;
 
     if (awaitingFollowupRef.current) {
       awaitingFollowupRef.current = false;
+      clearFollowupTimer();
       if (NEGATIVE_PATTERNS.some(p => p.test(text)) && text.split(/\s+/).length <= 6) {
         setTurns(t => [...t, { role: "user", content: text, ts: Date.now() }, { role: "assistant", content: SIGNOFF, ts: Date.now() }]);
         setPhase("speaking");
@@ -276,11 +382,13 @@ export default function ManagerEarpiece() {
       setTurns(t => [...t, { role: "assistant", content: json.answer, ts: Date.now() }]);
       setCtx(json.context_summary);
       await goSpeakAndFollowup(json.answer);
-    } catch (e: any) {
-      toast.error(e.message || "Ear-piece failed");
+    } catch (e: unknown) {
+      toast.error(errorMessage(e) || "Ear-piece failed");
       setPhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, turns, speak, goSpeakAndFollowup, endSession]);
+  }, [venue, turns, clearFollowupTimer, speak, goSpeakAndFollowup, endSession]);
+
+  useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 
   // -------- Mic permission --------
   const ensureMicPermission = useCallback(async (): Promise<boolean> => {
@@ -296,8 +404,8 @@ export default function ManagerEarpiece() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(t => t.stop());
       return true;
-    } catch (err: any) {
-      const name = err?.name || "";
+    } catch (err: unknown) {
+      const name = errorName(err);
       if (name === "NotAllowedError" || name === "SecurityError") {
         toast.error("Mic blocked. Tap 🔒 in your browser bar → Site settings → allow Microphone, then retry.", { duration: 7000 });
       } else if (name === "NotFoundError" || name === "OverconstrainedError") {
@@ -305,7 +413,7 @@ export default function ManagerEarpiece() {
       } else if (name === "NotReadableError") {
         toast.error("Microphone is in use by another app.");
       } else {
-        toast.error("Couldn't access the microphone: " + (err?.message || name));
+        toast.error("Couldn't access the microphone: " + (errorMessage(err) || name));
       }
       return false;
     }
@@ -316,6 +424,7 @@ export default function ManagerEarpiece() {
     if (mode === "call") { endSession(); return; }
     const ok = await ensureMicPermission();
     if (!ok) return;
+    desiredAlwaysOnRef.current = false;
     stopAudio();
     setMode("call");
     setPhase("listening");
@@ -330,6 +439,7 @@ export default function ManagerEarpiece() {
     if (mode === "always_on") { endSession(); return; }
     const ok = await ensureMicPermission();
     if (!ok) return;
+    desiredAlwaysOnRef.current = true;
     stopAudio();
     setMode("always_on");
     setPhase("wake_listening");

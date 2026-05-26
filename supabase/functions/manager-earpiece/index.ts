@@ -56,6 +56,13 @@ type CtxBundle = {
 };
 const ctxCache = new Map<string, CtxBundle>();
 
+function repairQuestion(q: string): string {
+  const words = q.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const starts = words.map((word, index) => (/^(who|what|when|where|why|how|which|any|is|are|can|could|do|does|did|will|walk|show|tell|check|find|book|seat)$/.test(word) ? index : -1)).filter(i => i >= 0);
+  if (starts.length >= 3) return words.slice(starts[starts.length - 1]).filter(w => w !== "hi" && w !== "hello").join(" ");
+  return words.join(" ");
+}
+
 async function loadContext(supabase: any, venue_id: string): Promise<CtxBundle> {
   const cached = ctxCache.get(venue_id);
   if (cached && Date.now() - cached.ts < CTX_TTL_MS) return cached;
@@ -108,6 +115,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    const cleanedQuestion = repairQuestion(question);
     const { venue, bookings, tables, vips, pendingEmails, recentCalls } = await loadContext(supabase, venue_id);
 
 
@@ -123,7 +131,7 @@ Deno.serve(async (req) => {
     const ctxHeader = btoa(JSON.stringify(ctxSummary));
 
     // ---------- Try intent pre-classifier (skip LLM) ----------
-    const intent = classifyIntent(question);
+    const intent = classifyIntent(cleanedQuestion || question);
     if (intent) {
       let answer = "";
       switch (intent.kind) {
@@ -165,8 +173,8 @@ Deno.serve(async (req) => {
       (async () => {
         try {
           await supabase.from("brain_events").insert({
-            venue_id, title: `Ear-piece: ${question.slice(0, 60)}`, severity: "info",
-            reason: answer.slice(0, 200), meta: { question, answer, kind: "manager_earpiece", intent: intent.kind, fast_path: true, page },
+            venue_id, title: `Ear-piece: ${(cleanedQuestion || question).slice(0, 60)}`, severity: "info",
+            reason: answer.slice(0, 200), meta: { question, cleaned_question: cleanedQuestion, answer, kind: "manager_earpiece", intent: intent.kind, fast_path: true, page },
           });
         } catch (e) { console.warn("log failed", e); }
       })();
@@ -224,7 +232,7 @@ ${pageBias ? `\nCONTEXT BIAS: ${pageBias}\n` : ""}
 LIVE CONTEXT:
 ${context}`,
       },
-      { role: "user", content: question },
+      { role: "user", content: cleanedQuestion || question },
     ];
 
     const apiKey = Deno.env.get("LOVABLE_API_KEY");

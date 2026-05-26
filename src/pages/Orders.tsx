@@ -73,8 +73,8 @@ const NEXT: Record<Order["status"], Order["status"] | null> = {
   ready: "completed", out_for_delivery: "completed", completed: null, cancelled: null,
 };
 
-const money = (cents: number, currency = "GBP") =>
-  new Intl.NumberFormat(undefined, { style: "currency", currency }).format((cents || 0) / 100);
+const money = (cents: number, _currency = "AUD") =>
+  `$${((cents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function Orders() {
   const { venue } = useAuth();

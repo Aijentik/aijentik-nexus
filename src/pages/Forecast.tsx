@@ -99,7 +99,7 @@ export default function Forecast() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Kpi icon={Users} label="Expected covers" value={f.today.expected_show_covers}
               sub={`of ${f.today.covers} booked`} accent="primary" />
-            <Kpi icon={PoundSterling} label="Projected revenue" value={`£${f.today.projected_revenue.toLocaleString()}`}
+            <Kpi icon={PoundSterling} label="Projected revenue" value={`$${f.today.projected_revenue.toLocaleString()}`}
               sub={`vs ${f.history.avg_covers_same_dow} avg covers`} accent="success" />
             <Kpi icon={ConciergeBell} label="FOH staff" value={f.staffing.foh}
               sub={`peak at ${f.staffing.peak_hour ?? "?"}:00`} accent="default" />

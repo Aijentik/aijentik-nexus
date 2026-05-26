@@ -238,10 +238,10 @@ ${context}`,
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-flash-lite",
         messages,
-        temperature: 0.25,
-        max_tokens: 140,
+        temperature: 0.2,
+        max_tokens: 120,
         stream: true,
       }),
     });

@@ -45,12 +45,14 @@ const WAKE_PATTERNS = [
 ];
 const WAKE_KEYTERMS = ["Hey Agentic", "Hey Aijentik", "Agentic", "Aijentik", "AI gentic", "agent", "agent tech", "agent tick", "agent take", "urgent tick", "asian tech"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
-const WAKE_ACK = "Yes?";
+const WAKE_ACK = "Listening";
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
 const MIN_WAKE_RMS = 0.0015;
 const MIN_LISTENING_RMS = 0.003;
+const BARGE_IN_RMS = 0.05;            // user voice loud enough to interrupt the agent
+const BARGE_IN_FRAMES = 3;            // consecutive frames before we cut TTS
 const CAPTURE_IDLE_MS = 850;
 const WAKE_CAPTURE_TIMEOUT_MS = 9500;
 const FOLLOWUP_PROMPT_DELAY_MS = 9000;

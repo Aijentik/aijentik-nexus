@@ -36,6 +36,9 @@ const WAKE_ACKS = ["Yesss?", "Mhm?", "Go on…", "Yep, listening.", "Hit me.", "
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
+const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+const MIN_WAKE_RMS = 0.026;
+const MIN_LISTENING_RMS = 0.018;
 
 function normalizeVoiceText(text: string): string {
   return text
@@ -97,6 +100,12 @@ function resampleTo16k(input: Float32Array, inputRate: number): Float32Array {
     output[i] = input[left] * (1 - weight) + input[right] * weight;
   }
   return output;
+}
+
+function getRms(samples: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
+  return Math.sqrt(sum / Math.max(1, samples.length));
 }
 
 export default function ManagerEarpiece() {

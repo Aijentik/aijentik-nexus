@@ -345,8 +345,36 @@ export default function ManagerEarpiece() {
   // -------- TTS --------
   const stopAudio = useCallback(() => {
     try { audioRef.current?.pause(); } catch { console.warn("audio pause failed"); }
+    try { outputAudioRef.current?.pause(); } catch { console.warn("output audio pause failed"); }
     audioRef.current = null;
     speakingRef.current = false;
+  }, []);
+
+  const unlockAudioOutput = useCallback(() => {
+    if (outputAudioRef.current) return;
+    const audio = new Audio(SILENT_WAV);
+    audio.preload = "auto";
+    audio.volume = 1;
+    outputAudioRef.current = audio;
+    audio.play().then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    }).catch(() => undefined);
+  }, []);
+
+  const speakWithBrowser = useCallback(async (text: string): Promise<void> => {
+    if (!window.speechSynthesis) return;
+    await new Promise<void>((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1;
+      utterance.pitch = 1.05;
+      utterance.volume = 1;
+      speakingRef.current = true;
+      utterance.onend = () => { speakingRef.current = false; resolve(); };
+      utterance.onerror = () => { speakingRef.current = false; resolve(); };
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    });
   }, []);
 
   useEffect(() => {
@@ -371,21 +399,27 @@ export default function ManagerEarpiece() {
         body: JSON.stringify({ text }),
       });
       const json = await res.json();
-      if (!json.audio_base64) return;
+      if (!res.ok || !json.audio_base64) {
+        await speakWithBrowser(text);
+        return;
+      }
       await new Promise<void>((resolve) => {
-        const audio = new Audio(`data:${json.mime};base64,${json.audio_base64}`);
+        const audio = outputAudioRef.current || new Audio();
         audioRef.current?.pause();
+        audio.src = `data:${json.mime || "audio/mpeg"};base64,${json.audio_base64}`;
+        audio.volume = 1;
         audioRef.current = audio;
         speakingRef.current = true;
         audio.onended = () => { speakingRef.current = false; resolve(); };
-        audio.onerror = () => { speakingRef.current = false; resolve(); };
-        audio.play().catch(() => { speakingRef.current = false; resolve(); });
+        audio.onerror = () => { speakingRef.current = false; void speakWithBrowser(text).finally(resolve); };
+        audio.play().catch(() => { speakingRef.current = false; void speakWithBrowser(text).finally(resolve); });
       });
     } catch (e: unknown) {
       console.warn("earpiece TTS failed", e);
       speakingRef.current = false;
+      await speakWithBrowser(text);
     }
-  }, [muted]);
+  }, [muted, speakWithBrowser]);
 
   // -------- Conversation flow --------
   const handleWakeDetected = useCallback((heardText: string) => {

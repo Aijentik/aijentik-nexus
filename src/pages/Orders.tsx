@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import {
   Loader2, Plus, ShoppingBag, Clock, ChefHat, CheckCircle2, Truck, XCircle, MessageCircle,
-  Instagram, Phone, Send, Home, ChevronRight, Trash2, CreditCard,
+  Instagram, Phone, Send, Home, ChevronRight, Trash2, CreditCard, Search, X,
 } from "lucide-react";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { toast } from "sonner";

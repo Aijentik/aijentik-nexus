@@ -13,7 +13,7 @@ import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import {
   Mail, Inbox, Sparkles, ShieldCheck, Crown, AlertTriangle, Check, X, Undo2,
-  Send, Bot, User, Copy, Wand2, RefreshCcw, Settings2, Plug, Hand,
+  Send, Bot, User, Copy, Wand2, RefreshCcw, Settings2, Plug, Hand, Search,
 } from "lucide-react";
 
 type Thread = {
@@ -72,6 +72,7 @@ export default function EmailOps() {
   const [actions, setActions] = useState<AIAction[]>([]);
   const [draft, setDraft] = useState<{ subject: string; body: string; confidence: number; reasoning: string | null; action_id: string | null } | null>(null);
   const [tab, setTab] = useState("approvals");
+  const [threadQuery, setThreadQuery] = useState("");
   const [simOpen, setSimOpen] = useState(false);
   const [simForm, setSimForm] = useState({
     from_name: "Olivia Carter", from_email: "olivia@example.com",
@@ -141,6 +142,14 @@ export default function EmailOps() {
   }, [venue?.id, activeId]);
 
   const pending = useMemo(() => threads.filter(t => t.status === "awaiting_staff"), [threads]);
+  const visibleThreads = useMemo(() => {
+    const base = tab === "approvals" ? pending : threads;
+    const q = threadQuery.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter(t =>
+      `${t.guest_name || ""} ${t.guest_email || ""} ${t.subject || ""}`.toLowerCase().includes(q)
+    );
+  }, [tab, pending, threads, threadQuery]);
   const activeThread = threads.find(t => t.id === activeId);
 
   const callAction = async (action_id: string, decision: "execute" | "reject" | "undo", edits?: { body?: string; subject?: string }) => {
@@ -256,8 +265,14 @@ export default function EmailOps() {
               <TabsTrigger value="approvals">Approvals · {pending.length}</TabsTrigger>
               <TabsTrigger value="all">All · {threads.length}</TabsTrigger>
             </TabsList>
+            <div className="px-2 pb-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input value={threadQuery} onChange={(e) => setThreadQuery(e.target.value)} placeholder="Search threads…" className="pl-8 h-8 text-xs bg-white/[0.02] border-white/[0.06]" />
+              </div>
+            </div>
             <div className="flex-1 overflow-y-auto">
-              {(tab === "approvals" ? pending : threads).map(t => (
+              {visibleThreads.map(t => (
                 <button key={t.id} onClick={() => setActiveId(t.id)}
                   className={`w-full text-left px-3 py-3 border-l-2 transition-all ${activeId === t.id ? "border-primary bg-primary/5" : "border-transparent hover:bg-white/[0.02]"}`}>
                   <div className="flex items-center gap-2 mb-1">

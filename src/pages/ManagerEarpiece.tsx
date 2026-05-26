@@ -604,10 +604,13 @@ export default function ManagerEarpiece() {
 
   // -------- TTS --------
   const stopAudio = useCallback(() => {
+    ttsCancelRef.current.cancelled = true;
+    ttsChainRef.current = Promise.resolve();
     try { audioRef.current?.pause(); } catch { console.warn("audio pause failed"); }
     try { outputAudioRef.current?.pause(); } catch { console.warn("output audio pause failed"); }
     audioRef.current = null;
     speakingRef.current = false;
+    setOutLevel(0);
   }, []);
 
   const unlockAudioOutput = useCallback(() => {
@@ -645,8 +648,8 @@ export default function ManagerEarpiece() {
     };
   }, [disconnectScribe, stopAudio, stopMicStream]);
 
-  const speak = useCallback(async (text: string, suppressInput = true): Promise<void> => {
-    if (muted) return;
+  // Fetches a single TTS chunk (no playback). Used by both one-shot speak and streaming pipeline.
+  const fetchTTSChunk = useCallback(async (text: string): Promise<{ b64: string; mime: string } | null> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/earpiece-tts`, {
@@ -659,27 +662,47 @@ export default function ManagerEarpiece() {
         body: JSON.stringify({ text }),
       });
       const json = await res.json();
-      if (!res.ok || !json.audio_base64) {
-        await speakWithBrowser(text, suppressInput);
-        return;
-      }
-      await new Promise<void>((resolve) => {
-        const audio = outputAudioRef.current || new Audio();
-        audioRef.current?.pause();
-        audio.src = `data:${json.mime || "audio/mpeg"};base64,${json.audio_base64}`;
-        audio.volume = 1;
-        audioRef.current = audio;
-        if (suppressInput) speakingRef.current = true;
-        audio.onended = () => { if (suppressInput) speakingRef.current = false; resolve(); };
-        audio.onerror = () => { if (suppressInput) speakingRef.current = false; void speakWithBrowser(text, suppressInput).finally(resolve); };
-        audio.play().catch(() => { if (suppressInput) speakingRef.current = false; void speakWithBrowser(text, suppressInput).finally(resolve); });
-      });
-    } catch (e: unknown) {
-      console.warn("earpiece TTS failed", e);
-      if (suppressInput) speakingRef.current = false;
-      await speakWithBrowser(text, suppressInput);
-    }
-  }, [muted, speakWithBrowser]);
+      if (!res.ok || !json.audio_base64) return null;
+      return { b64: json.audio_base64, mime: json.mime || "audio/mpeg" };
+    } catch (e) { console.warn("fetchTTSChunk failed", e); return null; }
+  }, []);
+
+  const playB64 = useCallback(async (b64: string, mime: string): Promise<void> => {
+    await new Promise<void>((resolve) => {
+      const audio = outputAudioRef.current || new Audio();
+      try { audioRef.current?.pause(); } catch { /* ignore */ }
+      audio.src = `data:${mime};base64,${b64}`;
+      audio.volume = 1;
+      audioRef.current = audio;
+      audio.onended = () => resolve();
+      audio.onerror = () => resolve();
+      audio.play().catch(() => resolve());
+    });
+  }, []);
+
+  const speak = useCallback(async (text: string, suppressInput = true): Promise<void> => {
+    if (muted) return;
+    const chunk = await fetchTTSChunk(text);
+    if (!chunk) { await speakWithBrowser(text, suppressInput); return; }
+    if (suppressInput) { speakingRef.current = true; setOutLevel(0.6); }
+    try { await playB64(chunk.b64, chunk.mime); }
+    finally { if (suppressInput) { speakingRef.current = false; setOutLevel(0); } }
+  }, [muted, fetchTTSChunk, playB64, speakWithBrowser]);
+
+  // Enqueue a sentence into the sequential TTS chain (parallel fetch, sequential play).
+  const enqueueSentence = useCallback((text: string) => {
+    const cancelHandle = ttsCancelRef.current;
+    const fetchP = muted ? Promise.resolve(null) : fetchTTSChunk(text);
+    ttsChainRef.current = ttsChainRef.current.then(async () => {
+      if (cancelHandle.cancelled || muted) return;
+      const chunk = await fetchP;
+      if (cancelHandle.cancelled) return;
+      if (!chunk) { await speakWithBrowser(text, false); return; }
+      setOutLevel(0.7);
+      await playB64(chunk.b64, chunk.mime);
+      setOutLevel(0.3);
+    }).catch(e => console.warn("tts chain error", e));
+  }, [muted, fetchTTSChunk, playB64, speakWithBrowser]);
 
   // -------- Conversation flow --------
   const handleWakeDetected = useCallback((heardText: string) => {
@@ -688,16 +711,16 @@ export default function ManagerEarpiece() {
     clearFollowupPromptTimer();
     awaitingFollowupRef.current = false;
     setLivePhase("listening");
-    // If the user packed the question into the same utterance, capture the tail
     const tail = stripWake(heardText);
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
     startCapture(tail);
     if (hasUsableCommand(tail)) {
       scheduleCaptureCommit(450);
     } else {
-      void speakWithBrowser(WAKE_ACK, false);
+      playChime("wake"); // instant earcon instead of speaking "Yes?"
     }
-  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, speakWithBrowser, startCapture]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, startCapture, playChime]);
+
 
   useEffect(() => {
     transcriptHandlerRef.current = (rawText: string, isFinal: boolean) => {

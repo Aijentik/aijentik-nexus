@@ -45,12 +45,14 @@ const WAKE_PATTERNS = [
 ];
 const WAKE_KEYTERMS = ["Hey Agentic", "Hey Aijentik", "Agentic", "Aijentik", "AI gentic", "agent", "agent tech", "agent tick", "agent take", "urgent tick", "asian tech"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
-const WAKE_ACK = "Yes?";
+const WAKE_ACK = "Listening";
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
 const MIN_WAKE_RMS = 0.0015;
 const MIN_LISTENING_RMS = 0.003;
+const BARGE_IN_RMS = 0.05;            // user voice loud enough to interrupt the agent
+const BARGE_IN_FRAMES = 3;            // consecutive frames before we cut TTS
 const CAPTURE_IDLE_MS = 850;
 const WAKE_CAPTURE_TIMEOUT_MS = 9500;
 const FOLLOWUP_PROMPT_DELAY_MS = 9000;
@@ -192,6 +194,8 @@ export default function ManagerEarpiece() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [partial, setPartial] = useState("");
   const [ctx, setCtx] = useState<{ bookings: number; covers: number; vips: number; pending_emails: number } | null>(null);
+  const [liveLevel, setLiveLevel] = useState(0);                       // 0..1 mic energy for orb
+  const [outLevel, setOutLevel] = useState(0);                         // 0..1 agent-speaking energy
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -219,6 +223,12 @@ export default function ManagerEarpiece() {
   const browserRecognitionRunningRef = useRef(false);
   const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
   const noiseFloorRef = useRef(0.004);
+  const liveLevelRef = useRef(0);
+  const liveLevelRafRef = useRef<number | null>(null);
+  const bargeFramesRef = useRef(0);
+  const ttsChainRef = useRef<Promise<void>>(Promise.resolve());        // sequential TTS queue
+  const ttsCancelRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const chimeCtxRef = useRef<AudioContext | null>(null);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<CaptureState>({
     active: false, buffer: "", live: "", timer: null, deadline: null,
@@ -232,6 +242,35 @@ export default function ManagerEarpiece() {
     phaseRef.current = next;
     setPhase(next);
   }, []);
+
+  // ---- Sleek earcons (synthesized, instant, no API round-trip) ----
+  const playChime = useCallback((kind: "wake" | "commit" | "end") => {
+    try {
+      const Ctor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctor) return;
+      let ctx = chimeCtxRef.current;
+      if (!ctx || ctx.state === "closed") { ctx = new Ctor(); chimeCtxRef.current = ctx; }
+      if (ctx.state === "suspended") void ctx.resume();
+      const now = ctx.currentTime;
+      const tones = kind === "wake" ? [[880, 1320, 0.10]] :
+                    kind === "commit" ? [[1320, 1760, 0.07]] :
+                    [[660, 440, 0.16]];
+      tones.forEach(([from, to, dur]) => {
+        const osc = ctx!.createOscillator();
+        const gain = ctx!.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(from, now);
+        osc.frequency.exponentialRampToValueAtTime(to, now + dur);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.16, now + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.04);
+        osc.connect(gain).connect(ctx!.destination);
+        osc.start(now);
+        osc.stop(now + dur + 0.08);
+      });
+    } catch (e) { console.warn("chime failed", e); }
+  }, []);
+
 
   const scheduleScribeReconnect = useCallback(() => {
     if (!desiredAlwaysOnRef.current || modeRef.current !== "always_on" || reconnectTimerRef.current) return;
@@ -297,6 +336,28 @@ export default function ManagerEarpiece() {
     }, delayMs);
   }, [resetCapture, setLivePhase]);
 
+  const stopLiveLevelLoop = useCallback(() => {
+    if (liveLevelRafRef.current != null) {
+      cancelAnimationFrame(liveLevelRafRef.current);
+      liveLevelRafRef.current = null;
+    }
+    liveLevelRef.current = 0;
+    setLiveLevel(0);
+  }, []);
+
+  const startLiveLevelLoop = useCallback(() => {
+    if (liveLevelRafRef.current != null) return;
+    let lastFlush = 0;
+    const tick = (t: number) => {
+      if (t - lastFlush > 70) {
+        lastFlush = t;
+        setLiveLevel(liveLevelRef.current);
+      }
+      liveLevelRafRef.current = requestAnimationFrame(tick);
+    };
+    liveLevelRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
   const stopMicStream = useCallback(() => {
     try { micProcessorRef.current?.disconnect(); } catch { console.warn("mic processor disconnect failed"); }
     try { micSourceRef.current?.disconnect(); } catch { console.warn("mic source disconnect failed"); }
@@ -308,7 +369,8 @@ export default function ManagerEarpiece() {
     micSourceRef.current = null;
     micStreamRef.current = null;
     audioContextRef.current = null;
-  }, []);
+    stopLiveLevelLoop();
+  }, [stopLiveLevelLoop]);
 
   const stopBrowserRecognition = useCallback(() => {
     const recognition = browserRecognitionRef.current;
@@ -404,6 +466,25 @@ export default function ManagerEarpiece() {
         try {
           const input = event.inputBuffer.getChannelData(0);
           const rms = getRms(input);
+
+          // Live level for breathing orb (smoothed)
+          liveLevelRef.current = liveLevelRef.current * 0.7 + Math.min(1, rms * 8) * 0.3;
+
+          // Barge-in: user starts speaking while agent is speaking → cut TTS
+          if (speakingRef.current && rms > BARGE_IN_RMS) {
+            bargeFramesRef.current += 1;
+            if (bargeFramesRef.current >= BARGE_IN_FRAMES) {
+              bargeFramesRef.current = 0;
+              ttsCancelRef.current.cancelled = true;
+              try { audioRef.current?.pause(); } catch { /* ignore */ }
+              speakingRef.current = false;
+              setOutLevel(0);
+              setLivePhase("listening");
+            }
+          } else if (rms < BARGE_IN_RMS * 0.5) {
+            bargeFramesRef.current = 0;
+          }
+
           const threshold = phaseRef.current === "wake_listening"
             ? Math.max(0.0006, Math.min(MIN_WAKE_RMS, noiseFloorRef.current * 0.85))
             : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.15);
@@ -425,13 +506,14 @@ export default function ManagerEarpiece() {
       audioContextRef.current = audioContext;
       micSourceRef.current = source;
       micProcessorRef.current = processor;
+      startLiveLevelLoop();
       return true;
     } catch (e) {
       stopMicStream();
       toast.error("Couldn't keep the microphone open: " + errorMessage(e));
       return false;
     }
-  }, [stopMicStream]);
+  }, [stopMicStream, startLiveLevelLoop]);
 
   // -------- Scribe (ElevenLabs realtime STT) --------
   const scribe = useScribe({
@@ -522,10 +604,13 @@ export default function ManagerEarpiece() {
 
   // -------- TTS --------
   const stopAudio = useCallback(() => {
+    ttsCancelRef.current.cancelled = true;
+    ttsChainRef.current = Promise.resolve();
     try { audioRef.current?.pause(); } catch { console.warn("audio pause failed"); }
     try { outputAudioRef.current?.pause(); } catch { console.warn("output audio pause failed"); }
     audioRef.current = null;
     speakingRef.current = false;
+    setOutLevel(0);
   }, []);
 
   const unlockAudioOutput = useCallback(() => {
@@ -563,8 +648,8 @@ export default function ManagerEarpiece() {
     };
   }, [disconnectScribe, stopAudio, stopMicStream]);
 
-  const speak = useCallback(async (text: string, suppressInput = true): Promise<void> => {
-    if (muted) return;
+  // Fetches a single TTS chunk (no playback). Used by both one-shot speak and streaming pipeline.
+  const fetchTTSChunk = useCallback(async (text: string): Promise<{ b64: string; mime: string } | null> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/earpiece-tts`, {
@@ -577,27 +662,47 @@ export default function ManagerEarpiece() {
         body: JSON.stringify({ text }),
       });
       const json = await res.json();
-      if (!res.ok || !json.audio_base64) {
-        await speakWithBrowser(text, suppressInput);
-        return;
-      }
-      await new Promise<void>((resolve) => {
-        const audio = outputAudioRef.current || new Audio();
-        audioRef.current?.pause();
-        audio.src = `data:${json.mime || "audio/mpeg"};base64,${json.audio_base64}`;
-        audio.volume = 1;
-        audioRef.current = audio;
-        if (suppressInput) speakingRef.current = true;
-        audio.onended = () => { if (suppressInput) speakingRef.current = false; resolve(); };
-        audio.onerror = () => { if (suppressInput) speakingRef.current = false; void speakWithBrowser(text, suppressInput).finally(resolve); };
-        audio.play().catch(() => { if (suppressInput) speakingRef.current = false; void speakWithBrowser(text, suppressInput).finally(resolve); });
-      });
-    } catch (e: unknown) {
-      console.warn("earpiece TTS failed", e);
-      if (suppressInput) speakingRef.current = false;
-      await speakWithBrowser(text, suppressInput);
-    }
-  }, [muted, speakWithBrowser]);
+      if (!res.ok || !json.audio_base64) return null;
+      return { b64: json.audio_base64, mime: json.mime || "audio/mpeg" };
+    } catch (e) { console.warn("fetchTTSChunk failed", e); return null; }
+  }, []);
+
+  const playB64 = useCallback(async (b64: string, mime: string): Promise<void> => {
+    await new Promise<void>((resolve) => {
+      const audio = outputAudioRef.current || new Audio();
+      try { audioRef.current?.pause(); } catch { /* ignore */ }
+      audio.src = `data:${mime};base64,${b64}`;
+      audio.volume = 1;
+      audioRef.current = audio;
+      audio.onended = () => resolve();
+      audio.onerror = () => resolve();
+      audio.play().catch(() => resolve());
+    });
+  }, []);
+
+  const speak = useCallback(async (text: string, suppressInput = true): Promise<void> => {
+    if (muted) return;
+    const chunk = await fetchTTSChunk(text);
+    if (!chunk) { await speakWithBrowser(text, suppressInput); return; }
+    if (suppressInput) { speakingRef.current = true; setOutLevel(0.6); }
+    try { await playB64(chunk.b64, chunk.mime); }
+    finally { if (suppressInput) { speakingRef.current = false; setOutLevel(0); } }
+  }, [muted, fetchTTSChunk, playB64, speakWithBrowser]);
+
+  // Enqueue a sentence into the sequential TTS chain (parallel fetch, sequential play).
+  const enqueueSentence = useCallback((text: string) => {
+    const cancelHandle = ttsCancelRef.current;
+    const fetchP = muted ? Promise.resolve(null) : fetchTTSChunk(text);
+    ttsChainRef.current = ttsChainRef.current.then(async () => {
+      if (cancelHandle.cancelled || muted) return;
+      const chunk = await fetchP;
+      if (cancelHandle.cancelled) return;
+      if (!chunk) { await speakWithBrowser(text, false); return; }
+      setOutLevel(0.7);
+      await playB64(chunk.b64, chunk.mime);
+      setOutLevel(0.3);
+    }).catch(e => console.warn("tts chain error", e));
+  }, [muted, fetchTTSChunk, playB64, speakWithBrowser]);
 
   // -------- Conversation flow --------
   const handleWakeDetected = useCallback((heardText: string) => {
@@ -606,16 +711,16 @@ export default function ManagerEarpiece() {
     clearFollowupPromptTimer();
     awaitingFollowupRef.current = false;
     setLivePhase("listening");
-    // If the user packed the question into the same utterance, capture the tail
     const tail = stripWake(heardText);
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
     startCapture(tail);
     if (hasUsableCommand(tail)) {
       scheduleCaptureCommit(450);
     } else {
-      void speakWithBrowser(WAKE_ACK, false);
+      playChime("wake"); // instant earcon instead of speaking "Yes?"
     }
-  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, speakWithBrowser, startCapture]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, startCapture, playChime]);
+
 
   useEffect(() => {
     transcriptHandlerRef.current = (rawText: string, isFinal: boolean) => {
@@ -671,18 +776,16 @@ export default function ManagerEarpiece() {
     stopMicStream();
     await disconnectScribe();
     stopAudio();
+    playChime("end");
     setMode("idle");
     setLivePhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [clearFollowupPromptTimer, clearFollowupTimer, disconnectScribe, resetCapture, setLivePhase, stopAudio, stopBrowserRecognition, stopMicStream]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, disconnectScribe, resetCapture, setLivePhase, stopAudio, stopBrowserRecognition, stopMicStream, playChime]);
 
-  const goSpeakAndFollowup = useCallback(async (answer: string) => {
-    resetCapture();
-    setLivePhase("speaking");
-    await speak(answer);
+  const armFollowup = useCallback(() => {
     if ((modeRef.current as Mode) === "idle") return;
-
+    resetCapture();
     awaitingFollowupRef.current = true;
     setLivePhase("listening");
     setPartial("");
@@ -756,6 +859,28 @@ export default function ManagerEarpiece() {
     setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }]);
     setPartial("");
     setLivePhase("thinking");
+    playChime("commit");
+
+    // Prep a streaming TTS session
+    ttsCancelRef.current = { cancelled: false };
+    const cancelHandle = ttsCancelRef.current;
+    ttsChainRef.current = Promise.resolve();
+    speakingRef.current = true;
+    setOutLevel(0.4);
+
+    let assistantTurnIndex = -1;
+    const appendAssistantDelta = (delta: string) => {
+      setTurns(t => {
+        if (assistantTurnIndex === -1 || t[assistantTurnIndex]?.role !== "assistant") {
+          assistantTurnIndex = t.length;
+          return [...t, { role: "assistant", content: delta, ts: Date.now() }];
+        }
+        const copy = t.slice();
+        copy[assistantTurnIndex] = { ...copy[assistantTurnIndex], content: copy[assistantTurnIndex].content + delta };
+        return copy;
+      });
+    };
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manager-earpiece`, {
@@ -765,22 +890,94 @@ export default function ManagerEarpiece() {
           Authorization: `Bearer ${session?.access_token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({
-          venue_id: venue.id,
-          question,
-          history: [],
-        }),
+        body: JSON.stringify({ venue_id: venue.id, question }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed");
-      setTurns(t => [...t, { role: "assistant", content: json.answer, ts: Date.now() }]);
-      setCtx(json.context_summary);
-      await goSpeakAndFollowup(json.answer);
+      if (!res.ok || !res.body) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Stream failed: ${res.status}`);
+      }
+
+      // Pull the live context summary from response header (base64-encoded JSON)
+      const ctxHeader = res.headers.get("X-Earpiece-Context");
+      if (ctxHeader) { try { setCtx(JSON.parse(atob(ctxHeader))); } catch { /* ignore */ } }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullAnswer = "";
+      let spokenIndex = 0;
+      let firstSpoken = false;
+
+      const flushSentences = (force: boolean) => {
+        // Match through end of sentence (or whole remainder if force)
+        while (true) {
+          const remainder = fullAnswer.slice(spokenIndex);
+          if (!remainder.trim()) return;
+          const m = remainder.match(/^([\s\S]*?[.!?…][\s")\]]*)(\s|$)/);
+          if (m) {
+            const sentence = m[1].trim();
+            spokenIndex += m[0].length;
+            if (sentence) {
+              if (!firstSpoken) { firstSpoken = true; setLivePhase("speaking"); }
+              enqueueSentence(sentence);
+            }
+          } else if (force) {
+            const tail = remainder.trim();
+            if (tail) {
+              if (!firstSpoken) { firstSpoken = true; setLivePhase("speaking"); }
+              enqueueSentence(tail);
+            }
+            spokenIndex = fullAnswer.length;
+            return;
+          } else {
+            return;
+          }
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (cancelHandle.cancelled) { try { reader.cancel(); } catch { /* ignore */ } break; }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const data = trimmed.slice(5).trim();
+          if (!data || data === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(data);
+            const delta: string = parsed.choices?.[0]?.delta?.content || "";
+            if (delta) {
+              fullAnswer += delta;
+              appendAssistantDelta(delta);
+              flushSentences(false);
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+      flushSentences(true);
+
+      // Wait for TTS queue to drain (or barge-in cancellation)
+      await ttsChainRef.current;
+      speakingRef.current = false;
+      setOutLevel(0);
+
+      if (cancelHandle.cancelled) {
+        // User barged in — go straight to listening
+        if (modeRef.current === "always_on") setLivePhase("wake_listening");
+        return;
+      }
+      armFollowup();
     } catch (e: unknown) {
+      speakingRef.current = false;
+      setOutLevel(0);
       toast.error(errorMessage(e) || "Ear-piece failed");
       setLivePhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, goSpeakAndFollowup, endSession]);
+  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, armFollowup, endSession, enqueueSentence, playChime]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 
@@ -901,8 +1098,44 @@ export default function ManagerEarpiece() {
             </div>
           )}
 
+          {mode !== "idle" && (
+            <div className="flex flex-col items-center pt-5 pb-3 select-none">
+              {(() => {
+                const speaking = phase === "speaking";
+                const level = speaking ? Math.max(0.35, outLevel) : liveLevel;
+                const scale = 1 + level * 0.35;
+                const ringOpacity = 0.25 + level * 0.55;
+                return (
+                  <div className="relative w-24 h-24 flex items-center justify-center">
+                    <div
+                      className={`absolute inset-0 rounded-full blur-2xl transition-colors ${speaking ? "bg-accent/40" : "bg-primary/40"}`}
+                      style={{ transform: `scale(${scale * 1.1})`, opacity: 0.35 + level * 0.4 }}
+                    />
+                    <div
+                      className={`absolute inset-0 rounded-full border ${speaking ? "border-accent/60" : "border-primary/60"}`}
+                      style={{ transform: `scale(${scale})`, opacity: ringOpacity, transition: "transform 80ms linear, opacity 80ms linear" }}
+                    />
+                    <div
+                      className={`absolute inset-2 rounded-full ${speaking ? "bg-accent/20" : "bg-primary/20"}`}
+                      style={{ transform: `scale(${1 + level * 0.18})`, transition: "transform 80ms linear" }}
+                    />
+                    <div className={`relative w-12 h-12 rounded-full grid place-items-center ${speaking ? "bg-accent/30 text-accent" : "bg-primary/30 text-primary"}`}>
+                      {phase === "thinking" ? <Loader2 className="w-5 h-5 animate-spin" /> :
+                       speaking ? <Volume2 className="w-5 h-5" /> :
+                       phase === "wake_listening" ? <Ear className="w-5 h-5" /> :
+                       <Mic className="w-5 h-5" />}
+                    </div>
+                  </div>
+                );
+              })()}
+              <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                {statusLabel}
+              </div>
+            </div>
+          )}
+
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4">
-            {!turns.length && (
+            {!turns.length && mode === "idle" && (
               <div className="h-full flex flex-col items-center justify-center text-center py-16">
                 <motion.div
                   initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}

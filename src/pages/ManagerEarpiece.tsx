@@ -506,13 +506,14 @@ export default function ManagerEarpiece() {
       audioContextRef.current = audioContext;
       micSourceRef.current = source;
       micProcessorRef.current = processor;
+      startLiveLevelLoop();
       return true;
     } catch (e) {
       stopMicStream();
       toast.error("Couldn't keep the microphone open: " + errorMessage(e));
       return false;
     }
-  }, [stopMicStream]);
+  }, [stopMicStream, startLiveLevelLoop]);
 
   // -------- Scribe (ElevenLabs realtime STT) --------
   const scribe = useScribe({

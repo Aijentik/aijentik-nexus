@@ -361,11 +361,13 @@ export default function ManagerEarpiece() {
       setTurns(t => [...t, { role: "assistant", content: json.answer, ts: Date.now() }]);
       setCtx(json.context_summary);
       await goSpeakAndFollowup(json.answer);
-    } catch (e: any) {
-      toast.error(e.message || "Ear-piece failed");
+    } catch (e: unknown) {
+      toast.error(errorMessage(e) || "Ear-piece failed");
       setPhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
   }, [venue, turns, speak, goSpeakAndFollowup, endSession]);
+
+  useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 
   // -------- Mic permission --------
   const ensureMicPermission = useCallback(async (): Promise<boolean> => {
@@ -381,8 +383,8 @@ export default function ManagerEarpiece() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(t => t.stop());
       return true;
-    } catch (err: any) {
-      const name = err?.name || "";
+    } catch (err: unknown) {
+      const name = errorName(err);
       if (name === "NotAllowedError" || name === "SecurityError") {
         toast.error("Mic blocked. Tap 🔒 in your browser bar → Site settings → allow Microphone, then retry.", { duration: 7000 });
       } else if (name === "NotFoundError" || name === "OverconstrainedError") {
@@ -390,7 +392,7 @@ export default function ManagerEarpiece() {
       } else if (name === "NotReadableError") {
         toast.error("Microphone is in use by another app.");
       } else {
-        toast.error("Couldn't access the microphone: " + (err?.message || name));
+        toast.error("Couldn't access the microphone: " + (errorMessage(err) || name));
       }
       return false;
     }

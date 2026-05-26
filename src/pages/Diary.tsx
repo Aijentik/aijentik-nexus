@@ -140,13 +140,31 @@ export default function Diary() {
     return null;
   };
 
-  const grouped = bookings.reduce((acc: any, b) => {
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return bookings.filter((b) => {
+      const t = new Date(b.booking_time);
+      if (scope === "today" && !isToday(t)) return false;
+      if (scope === "week" && !isThisWeek(t, { weekStartsOn: 1 })) return false;
+      if (scope === "upcoming" && !isFuture(t) && !isToday(t)) return false;
+      if (scope === "past" && !isPast(t)) return false;
+      if (statusFilter !== "all" && b.status !== statusFilter) return false;
+      if (q) {
+        const hay = `${b.guest_name || ""} ${b.guest_phone || ""} ${b.notes || ""} ${b.source || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [bookings, scope, statusFilter, query]);
+
+  const grouped = filtered.reduce((acc: any, b) => {
     const d = format(new Date(b.booking_time), "EEE d MMM");
     (acc[d] ||= []).push(b);
     return acc;
   }, {});
 
-  const totalCovers = bookings.reduce((s, b) => s + (b.party_size || 0), 0);
+  const totalCovers = filtered.reduce((s, b) => s + (b.party_size || 0), 0);
+  const hasActiveFilters = query.trim() !== "" || statusFilter !== "all" || scope !== "upcoming";
 
   return (
     <>
@@ -154,6 +172,7 @@ export default function Diary() {
         title="Diary"
         subtitle="Your living booking diary. Updates the moment your AI confirms a table — voice, web or SMS."
         actions={
+
           <div className="flex items-center gap-2">
             <Button
               size="lg"

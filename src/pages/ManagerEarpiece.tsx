@@ -184,6 +184,7 @@ export default function ManagerEarpiece() {
   const followupPromptTimerRef = useRef<number | null>(null);
   const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
   const transcriptHandlerRef = useRef<(text: string, isFinal: boolean, source: "scribe" | "browser") => void>(() => undefined);
+  const lastCommittedQuestionRef = useRef<{ normalized: string; at: number }>({ normalized: "", at: 0 });
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -202,6 +203,11 @@ export default function ManagerEarpiece() {
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: 999999, behavior: "smooth" }); }, [turns, partial]);
+
+  const setLivePhase = useCallback((next: Phase) => {
+    phaseRef.current = next;
+    setPhase(next);
+  }, []);
 
   const scheduleScribeReconnect = useCallback(() => {
     if (!desiredAlwaysOnRef.current || modeRef.current !== "always_on" || reconnectTimerRef.current) return;

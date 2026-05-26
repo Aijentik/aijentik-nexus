@@ -243,6 +243,35 @@ export default function ManagerEarpiece() {
     setPhase(next);
   }, []);
 
+  // ---- Sleek earcons (synthesized, instant, no API round-trip) ----
+  const playChime = useCallback((kind: "wake" | "commit" | "end") => {
+    try {
+      const Ctor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctor) return;
+      let ctx = chimeCtxRef.current;
+      if (!ctx || ctx.state === "closed") { ctx = new Ctor(); chimeCtxRef.current = ctx; }
+      if (ctx.state === "suspended") void ctx.resume();
+      const now = ctx.currentTime;
+      const tones = kind === "wake" ? [[880, 1320, 0.10]] :
+                    kind === "commit" ? [[1320, 1760, 0.07]] :
+                    [[660, 440, 0.16]];
+      tones.forEach(([from, to, dur]) => {
+        const osc = ctx!.createOscillator();
+        const gain = ctx!.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(from, now);
+        osc.frequency.exponentialRampToValueAtTime(to, now + dur);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.16, now + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.04);
+        osc.connect(gain).connect(ctx!.destination);
+        osc.start(now);
+        osc.stop(now + dur + 0.08);
+      });
+    } catch (e) { console.warn("chime failed", e); }
+  }, []);
+
+
   const scheduleScribeReconnect = useCallback(() => {
     if (!desiredAlwaysOnRef.current || modeRef.current !== "always_on" || reconnectTimerRef.current) return;
     reconnectTimerRef.current = window.setTimeout(async () => {

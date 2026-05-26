@@ -858,6 +858,28 @@ export default function ManagerEarpiece() {
     setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }]);
     setPartial("");
     setLivePhase("thinking");
+    playChime("commit");
+
+    // Prep a streaming TTS session
+    ttsCancelRef.current = { cancelled: false };
+    const cancelHandle = ttsCancelRef.current;
+    ttsChainRef.current = Promise.resolve();
+    speakingRef.current = true;
+    setOutLevel(0.4);
+
+    let assistantTurnIndex = -1;
+    const appendAssistantDelta = (delta: string) => {
+      setTurns(t => {
+        if (assistantTurnIndex === -1 || t[assistantTurnIndex]?.role !== "assistant") {
+          assistantTurnIndex = t.length;
+          return [...t, { role: "assistant", content: delta, ts: Date.now() }];
+        }
+        const copy = t.slice();
+        copy[assistantTurnIndex] = { ...copy[assistantTurnIndex], content: copy[assistantTurnIndex].content + delta };
+        return copy;
+      });
+    };
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manager-earpiece`, {
@@ -867,22 +889,94 @@ export default function ManagerEarpiece() {
           Authorization: `Bearer ${session?.access_token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({
-          venue_id: venue.id,
-          question,
-          history: [],
-        }),
+        body: JSON.stringify({ venue_id: venue.id, question }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed");
-      setTurns(t => [...t, { role: "assistant", content: json.answer, ts: Date.now() }]);
-      setCtx(json.context_summary);
-      await goSpeakAndFollowup(json.answer);
+      if (!res.ok || !res.body) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Stream failed: ${res.status}`);
+      }
+
+      // Pull the live context summary from response header (base64-encoded JSON)
+      const ctxHeader = res.headers.get("X-Earpiece-Context");
+      if (ctxHeader) { try { setCtx(JSON.parse(atob(ctxHeader))); } catch { /* ignore */ } }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullAnswer = "";
+      let spokenIndex = 0;
+      let firstSpoken = false;
+
+      const flushSentences = (force: boolean) => {
+        // Match through end of sentence (or whole remainder if force)
+        while (true) {
+          const remainder = fullAnswer.slice(spokenIndex);
+          if (!remainder.trim()) return;
+          const m = remainder.match(/^([\s\S]*?[.!?…][\s")\]]*)(\s|$)/);
+          if (m) {
+            const sentence = m[1].trim();
+            spokenIndex += m[0].length;
+            if (sentence) {
+              if (!firstSpoken) { firstSpoken = true; setLivePhase("speaking"); }
+              enqueueSentence(sentence);
+            }
+          } else if (force) {
+            const tail = remainder.trim();
+            if (tail) {
+              if (!firstSpoken) { firstSpoken = true; setLivePhase("speaking"); }
+              enqueueSentence(tail);
+            }
+            spokenIndex = fullAnswer.length;
+            return;
+          } else {
+            return;
+          }
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (cancelHandle.cancelled) { try { reader.cancel(); } catch { /* ignore */ } break; }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const data = trimmed.slice(5).trim();
+          if (!data || data === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(data);
+            const delta: string = parsed.choices?.[0]?.delta?.content || "";
+            if (delta) {
+              fullAnswer += delta;
+              appendAssistantDelta(delta);
+              flushSentences(false);
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+      flushSentences(true);
+
+      // Wait for TTS queue to drain (or barge-in cancellation)
+      await ttsChainRef.current;
+      speakingRef.current = false;
+      setOutLevel(0);
+
+      if (cancelHandle.cancelled) {
+        // User barged in — go straight to listening
+        if (modeRef.current === "always_on") setLivePhase("wake_listening");
+        return;
+      }
+      armFollowup();
     } catch (e: unknown) {
+      speakingRef.current = false;
+      setOutLevel(0);
       toast.error(errorMessage(e) || "Ear-piece failed");
       setLivePhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, goSpeakAndFollowup, endSession]);
+  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, armFollowup, endSession, enqueueSentence, playChime]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 

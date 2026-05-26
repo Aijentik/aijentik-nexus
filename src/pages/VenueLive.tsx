@@ -101,6 +101,7 @@ export default function VenueLive() {
   const [events, setEvents] = useState<BrainEvent[]>([]);
   const [demoOn, setDemoOn] = useState(false);
   const [counters, setCounters] = useState({ calls: 12, bookings: 38, revenue: 7820, vip: 4, waitlist: 12 });
+  const [sevFilter, setSevFilter] = useState<"all" | "success" | "warn" | "critical" | "info">("all");
 
   // load recent events
   useEffect(() => {

@@ -272,8 +272,8 @@ export default function ManagerEarpiece() {
           const input = event.inputBuffer.getChannelData(0);
           const rms = getRms(input);
           const threshold = phaseRef.current === "wake_listening"
-            ? Math.max(MIN_WAKE_RMS, noiseFloorRef.current * 2.6)
-            : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.8);
+            ? MIN_WAKE_RMS
+            : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.4);
 
           if (rms < threshold) {
             noiseFloorRef.current = noiseFloorRef.current * 0.96 + rms * 0.04;

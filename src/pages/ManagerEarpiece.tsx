@@ -13,6 +13,21 @@ type Mode = "idle" | "call" | "always_on";
 type Phase = "idle" | "wake_listening" | "listening" | "thinking" | "speaking";
 type ScribeTranscript = { text?: string };
 type CaptureState = { active: boolean; buffer: string; live: string; timer: number | null; deadline: number | null };
+type BrowserSpeechRecognitionResult = ArrayLike<{ transcript: string; confidence?: number }> & { isFinal: boolean };
+type BrowserSpeechRecognitionEvent = { resultIndex: number; results: ArrayLike<BrowserSpeechRecognitionResult> };
+type BrowserSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+type BrowserSpeechRecognitionCtor = new () => BrowserSpeechRecognition;
 
 const QUICK_PROMPTS = [
   "How's tonight looking?",
@@ -25,23 +40,26 @@ const QUICK_PROMPTS = [
 // Spoken wake phrase uses the real word "Agentic" for STT reliability.
 // Keep the visible brand phrase as "Aijentik" in the UI because it sounds the same.
 const WAKE_PATTERNS = [
-  /\b(h+ey|hay|hi|okay|ok|yo)[,\s-]+(?:agentic|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|a?i?\s*j?ent[iy]?k|asian\s*tech|urgent\s*(?:ic|ick|tick))\b/i,
-  /\b(?:agentic|ai\s*gentic|a\s*gentic|aijentik|aijentic|ajentic)\b/i,
+  /\b(h+ey|hay|hi|okay|ok|yo|oi|aye)[,\s-]+(?:agentic|agents?\s*(?:ic|ik|ick|tick|tech|take)?|ai\s*gentic|a\s*gentic|a?i?\s*j?ent[iy]?k|asian\s*tech|urgent\s*(?:ic|ick|tick|take)|authentic|agenda)\b/i,
+  /\b(?:agentic|ai\s*gentic|a\s*gentic|aijentik|aijentic|ajentic|agent\s*(?:tick|take|tech|ic|ick)|urgent\s*(?:tick|take)|asian\s*tech)\b/i,
 ];
-const WAKE_KEYTERMS = ["Hey Agentic", "Hey Aijentik", "Agentic", "Aijentik", "AI gentic", "agent tech", "agent tick", "agent take"];
+const WAKE_KEYTERMS = ["Hey Agentic", "Hey Aijentik", "Agentic", "Aijentik", "AI gentic", "agent", "agent tech", "agent tick", "agent take", "urgent tick", "asian tech"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
 const WAKE_ACK = "Yes?";
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
-const MIN_WAKE_RMS = 0.006;
-const MIN_LISTENING_RMS = 0.01;
-const CAPTURE_IDLE_MS = 1150;
-const WAKE_CAPTURE_TIMEOUT_MS = 5500;
+const MIN_WAKE_RMS = 0.0015;
+const MIN_LISTENING_RMS = 0.003;
+const CAPTURE_IDLE_MS = 1250;
+const WAKE_CAPTURE_TIMEOUT_MS = 9500;
+const FOLLOWUP_PROMPT_DELAY_MS = 9000;
+const FOLLOWUP_REPLY_TIMEOUT_MS = 12000;
 const FILLER_ONLY_PATTERNS = [
-  /^(hey|hay|hi|okay|ok)\s*(agentic|agent\s*ic|agent\s*tech|ai\s*gentic|a\s*gentic|aijentik|aijentic)?$/i,
+  /^(hey|hay|hi|okay|ok|yo|oi|aye)\s*(agentic|agents?|agent\s*(?:ic|ick|tick|tech|take)?|ai\s*gentic|a\s*gentic|aijentik|aijentic)?$/i,
   /^(yes|yeah|yep|listening|go on|mhm|mm hmm|hello|hi)$/i,
 ];
+const QUESTION_START_PATTERN = /^(who|what|when|where|why|how|which|any|is|are|am|can|could|should|would|do|does|did|will|walk|show|tell|check|find|move|book|seat)\b/i;
 
 function normalizeVoiceText(text: string): string {
   return text
@@ -55,15 +73,17 @@ function normalizeVoiceText(text: string): string {
 function stripWake(text: string): string {
   let t = text;
   for (const p of WAKE_PATTERNS) t = t.replace(p, "");
-  t = t.replace(/^\s*(h+ey|hay|hi|okay|ok|yo)[,\s-]*(agentic|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|aijentik|aijentic|ajentic|asian\s*tech|urgent\s*(?:ic|ick|tick))\b/i, "");
+  t = t.replace(/^\s*(h+ey|hay|hi|okay|ok|yo|oi|aye)[,\s-]*(agentic|agents?\s*(?:ic|ik|ick|tick|tech|take)?|ai\s*gentic|a\s*gentic|aijentik|aijentic|ajentic|asian\s*tech|urgent\s*(?:ic|ick|tick|take)|authentic|agenda)\b/i, "");
   return t.replace(/^[\s,.\-!?:;]+/, "").trim();
 }
 function hasWake(text: string): boolean {
   if (WAKE_PATTERNS.some(p => p.test(text))) return true;
   const normalized = normalizeVoiceText(text);
   const compact = normalized.replace(/\s+/g, "");
-  return /\b(hey|hay|hi|okay|ok|yo)\s+(agentic|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|agent\s*tech|aijentik|aijentic|ajentic|asian\s*tech)\b/.test(normalized)
-    || /(hey|hay|hi|okay|ok|yo)?(agentic|aigentic|agentik|agentick|agenttick|agenttech|agenttake|aijentik|aijentic|ajentic|asiantech|urgentick|urgenttick)/.test(compact);
+  const hasPrefix = /\b(hey|hay|hi|okay|ok|yo|oi|aye)\b/.test(normalized);
+  const hasAgentTerm = /\b(agentic|agents?|agent\s*(?:ic|ik|ick|tick|tech|take)|ai\s*gentic|a\s*gentic|agent\s*tech|aijentik|aijentic|ajentic|asian\s*tech|urgent\s*(?:ick|tick|take)|authentic|agenda)\b/.test(normalized);
+  return (hasPrefix && hasAgentTerm)
+    || /(hey|hay|hi|okay|ok|yo|oi|aye)?(agentic|aigentic|agentik|agentick|agenttick|agenttech|agenttake|agent|agents|aijentik|aijentic|ajentic|asiantech|urgentick|urgenttick|urgenttake)/.test(compact);
 }
 
 function hasUsableCommand(text: string, allowShort = false): boolean {
@@ -72,6 +92,7 @@ function hasUsableCommand(text: string, allowShort = false): boolean {
   if (!normalized) return false;
   if (FILLER_ONLY_PATTERNS.some(p => p.test(normalized))) return false;
   if (allowShort && NEGATIVE_PATTERNS.some(p => p.test(cleaned))) return true;
+  if (QUESTION_START_PATTERN.test(normalized) && normalized.length >= 3) return true;
   return normalized.length >= 4 && /\b[a-z0-9]{3,}\b/i.test(normalized);
 }
 
@@ -160,15 +181,19 @@ export default function ManagerEarpiece() {
   const connectScribeRef = useRef<(silent?: boolean) => Promise<boolean>>(async () => false);
   const reconnectTimerRef = useRef<number | null>(null);
   const followupTimerRef = useRef<number | null>(null);
+  const followupPromptTimerRef = useRef<number | null>(null);
   const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
+  const transcriptHandlerRef = useRef<(text: string, isFinal: boolean, source: "scribe" | "browser") => void>(() => undefined);
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const outputAudioRef = useRef<HTMLAudioElement | null>(null);
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const micProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const browserRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const browserRecognitionRunningRef = useRef(false);
   const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
-  const noiseFloorRef = useRef(0.012);
+  const noiseFloorRef = useRef(0.004);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<CaptureState>({
     active: false, buffer: "", live: "", timer: null, deadline: null,
@@ -193,6 +218,12 @@ export default function ManagerEarpiece() {
     if (!followupTimerRef.current) return;
     window.clearTimeout(followupTimerRef.current);
     followupTimerRef.current = null;
+  }, []);
+
+  const clearFollowupPromptTimer = useCallback(() => {
+    if (!followupPromptTimerRef.current) return;
+    window.clearTimeout(followupPromptTimerRef.current);
+    followupPromptTimerRef.current = null;
   }, []);
 
   const resetCapture = useCallback(() => {
@@ -249,6 +280,78 @@ export default function ManagerEarpiece() {
     audioContextRef.current = null;
   }, []);
 
+  const stopBrowserRecognition = useCallback(() => {
+    const recognition = browserRecognitionRef.current;
+    if (!recognition) return;
+    browserRecognitionRunningRef.current = false;
+    recognition.onend = null;
+    recognition.onerror = null;
+    recognition.onresult = null;
+    try { recognition.abort(); } catch { console.warn("browser speech abort failed"); }
+    browserRecognitionRef.current = null;
+  }, []);
+
+  const startBrowserRecognition = useCallback((): boolean => {
+    const SpeechRecognitionCtor = ((window as Window & {
+      SpeechRecognition?: BrowserSpeechRecognitionCtor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionCtor;
+    }).SpeechRecognition || (window as Window & {
+      webkitSpeechRecognition?: BrowserSpeechRecognitionCtor;
+    }).webkitSpeechRecognition);
+    if (!SpeechRecognitionCtor) return false;
+
+    stopBrowserRecognition();
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 5;
+    recognition.lang = "en-GB";
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (phaseRef.current !== "wake_listening") {
+          const best = result[0]?.transcript?.trim();
+          if (best) transcriptHandlerRef.current(best, result.isFinal, "browser");
+          continue;
+        }
+        for (let j = 0; j < Math.min(result.length, 5); j += 1) {
+          const transcript = result[j]?.transcript?.trim();
+          if (transcript) transcriptHandlerRef.current(transcript, result.isFinal, "browser");
+        }
+      }
+    };
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        browserRecognitionRunningRef.current = false;
+        return;
+      }
+      console.warn("browser speech recognition", event.error);
+    };
+    recognition.onend = () => {
+      browserRecognitionRunningRef.current = false;
+      if (!desiredAlwaysOnRef.current && modeRef.current !== "call") return;
+      window.setTimeout(() => {
+        if (!desiredAlwaysOnRef.current && modeRef.current !== "call") return;
+        try {
+          recognition.start();
+          browserRecognitionRunningRef.current = true;
+        } catch (e) {
+          console.warn("browser speech restart failed", e);
+        }
+      }, 250);
+    };
+
+    browserRecognitionRef.current = recognition;
+    try {
+      recognition.start();
+      browserRecognitionRunningRef.current = true;
+      return true;
+    } catch (e) {
+      console.warn("browser speech start failed", e);
+      return false;
+    }
+  }, [stopBrowserRecognition]);
+
   const startMicStream = useCallback(async (): Promise<boolean> => {
     if (micStreamRef.current) return true;
     try {
@@ -272,8 +375,8 @@ export default function ManagerEarpiece() {
           const input = event.inputBuffer.getChannelData(0);
           const rms = getRms(input);
           const threshold = phaseRef.current === "wake_listening"
-            ? MIN_WAKE_RMS
-            : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.4);
+            ? Math.max(0.0006, Math.min(MIN_WAKE_RMS, noiseFloorRef.current * 0.85))
+            : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.15);
 
           if (rms < threshold) {
             noiseFloorRef.current = noiseFloorRef.current * 0.96 + rms * 0.04;
@@ -320,46 +423,13 @@ export default function ManagerEarpiece() {
       if (speakingRef.current) return;
       const text = (data?.text || "").trim();
       if (!text) return;
-      // Only show partials when we're capturing a question
-      if (captureRef.current.active || phaseRef.current === "listening") {
-        captureRef.current.live = text;
-        const candidate = captureCandidate(captureRef.current);
-        setPartial(candidate || text);
-        if (hasUsableCommand(candidate, awaitingFollowupRef.current)) {
-          scheduleCaptureCommit(950);
-        }
-      }
-      // Allow wake to fire from partials too (faster reaction)
-      if (phaseRef.current === "wake_listening" && hasWake(text)) {
-        console.info("[earpiece] wake detected", text);
-        handleWakeDetected(text);
-      }
+      transcriptHandlerRef.current(text, false, "scribe");
     },
     onCommittedTranscript: (data: ScribeTranscript) => {
       if (speakingRef.current) return;
       const text = (data?.text || "").trim();
       if (!text) return;
-
-      // Always-on wake stage
-      if (phaseRef.current === "wake_listening") {
-        if (hasWake(text)) {
-          console.info("[earpiece] wake detected", text);
-          handleWakeDetected(text);
-        }
-        return;
-      }
-
-      // Command capture (call mode OR after wake)
-      if (captureRef.current.active || phaseRef.current === "listening") {
-        clearFollowupTimer();
-        captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, text);
-        captureRef.current.live = "";
-        setPartial(captureRef.current.buffer);
-        // Debounce — assume user is done if no new committed segment arrives quickly.
-        if (hasUsableCommand(captureRef.current.buffer, awaitingFollowupRef.current)) {
-          scheduleCaptureCommit(650);
-        }
-      }
+      transcriptHandlerRef.current(text, true, "scribe");
     },
     onError: (err: unknown) => {
       console.error("[scribe]", err);
@@ -502,6 +572,8 @@ export default function ManagerEarpiece() {
   // -------- Conversation flow --------
   const handleWakeDetected = useCallback((heardText: string) => {
     if (phaseRef.current !== "wake_listening") return;
+    clearFollowupTimer();
+    clearFollowupPromptTimer();
     phaseRef.current = "listening";
     setPhase("listening");
     // If the user packed the question into the same utterance, capture the tail
@@ -513,16 +585,55 @@ export default function ManagerEarpiece() {
     } else {
       void speak(WAKE_ACK, false);
     }
-  }, [scheduleCaptureCommit, speak, startCapture]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, speak, startCapture]);
+
+  useEffect(() => {
+    transcriptHandlerRef.current = (rawText: string, isFinal: boolean) => {
+      if (speakingRef.current) return;
+      const text = rawText.trim();
+      if (!text) return;
+
+      if (phaseRef.current === "wake_listening") {
+        if (hasWake(text)) {
+          console.info("[earpiece] wake detected", text);
+          handleWakeDetected(text);
+        }
+        return;
+      }
+
+      if (captureRef.current.active || phaseRef.current === "listening") {
+        clearFollowupTimer();
+        clearFollowupPromptTimer();
+        if (hasWake(text) && !captureCandidate(captureRef.current)) {
+          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, stripWake(text));
+        } else if (isFinal) {
+          captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, text);
+          captureRef.current.live = "";
+        } else {
+          captureRef.current.live = mergeTranscript(captureRef.current.live, text);
+        }
+
+        const candidate = captureCandidate(captureRef.current);
+        setPartial(candidate || WAKE_ACK);
+        if (hasUsableCommand(candidate, awaitingFollowupRef.current)) {
+          const normalized = normalizeVoiceText(candidate);
+          const looksComplete = isFinal || normalized.length > 24 || QUESTION_START_PATTERN.test(normalized);
+          scheduleCaptureCommit(looksComplete ? 850 : CAPTURE_IDLE_MS);
+        }
+      }
+    };
+  }, [clearFollowupPromptTimer, clearFollowupTimer, handleWakeDetected, scheduleCaptureCommit]);
 
   const endSession = useCallback(async () => {
     clearFollowupTimer();
+    clearFollowupPromptTimer();
     desiredAlwaysOnRef.current = false;
     if (reconnectTimerRef.current) {
       window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
     resetCapture();
+    stopBrowserRecognition();
     stopMicStream();
     await disconnectScribe();
     stopAudio();
@@ -530,7 +641,7 @@ export default function ManagerEarpiece() {
     setPhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [clearFollowupTimer, disconnectScribe, resetCapture, stopAudio, stopMicStream]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, disconnectScribe, resetCapture, stopAudio, stopBrowserRecognition, stopMicStream]);
 
   const goSpeakAndFollowup = useCallback(async (answer: string) => {
     setPhase("speaking");
@@ -538,27 +649,44 @@ export default function ManagerEarpiece() {
     if ((modeRef.current as Mode) === "idle") return;
 
     awaitingFollowupRef.current = true;
-    setTurns(t => [...t, { role: "assistant", content: FOLLOWUP, ts: Date.now() }]);
-    await speak(FOLLOWUP);
-    if ((modeRef.current as Mode) === "idle") return;
-
     setPhase("listening");
-    startCapture("", 8000);
-    if (modeRef.current === "always_on") {
-      clearFollowupTimer();
-      followupTimerRef.current = window.setTimeout(() => {
-        if (modeRef.current !== "always_on" || !awaitingFollowupRef.current) return;
+    setPartial("");
+    startCapture("", FOLLOWUP_PROMPT_DELAY_MS + FOLLOWUP_REPLY_TIMEOUT_MS + 3500);
+
+    clearFollowupPromptTimer();
+    followupPromptTimerRef.current = window.setTimeout(() => {
+      followupPromptTimerRef.current = null;
+      if ((modeRef.current as Mode) === "idle" || !awaitingFollowupRef.current) return;
+      if (hasUsableCommand(captureCandidate(captureRef.current), true)) return;
+      void (async () => {
+        setTurns(t => [...t, { role: "assistant", content: FOLLOWUP, ts: Date.now() }]);
+        setPhase("speaking");
+        await speak(FOLLOWUP);
+        if ((modeRef.current as Mode) === "idle" || !awaitingFollowupRef.current) return;
+        setPhase("listening");
+        startCapture("", FOLLOWUP_REPLY_TIMEOUT_MS);
+      })();
+    }, FOLLOWUP_PROMPT_DELAY_MS);
+
+    clearFollowupTimer();
+    followupTimerRef.current = window.setTimeout(() => {
+      if (!awaitingFollowupRef.current) return;
+      if (hasUsableCommand(captureCandidate(captureRef.current), true)) return;
+      if (modeRef.current === "always_on") {
         awaitingFollowupRef.current = false;
         resetCapture();
         setPartial("");
         setPhase("wake_listening");
-        followupTimerRef.current = null;
-      }, 6500);
-    }
-  }, [clearFollowupTimer, resetCapture, speak, startCapture]);
+      } else if (modeRef.current === "call") {
+        void endSession();
+      }
+      followupTimerRef.current = null;
+    }, FOLLOWUP_PROMPT_DELAY_MS + FOLLOWUP_REPLY_TIMEOUT_MS + 4500);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, endSession, resetCapture, speak, startCapture]);
 
   const handleUserUtterance = useCallback(async (text: string) => {
     if (!venue) return;
+    clearFollowupPromptTimer();
 
     if (awaitingFollowupRef.current) {
       awaitingFollowupRef.current = false;
@@ -603,7 +731,7 @@ export default function ManagerEarpiece() {
       toast.error(errorMessage(e) || "Ear-piece failed");
       setPhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, turns, clearFollowupTimer, speak, goSpeakAndFollowup, endSession]);
+  }, [venue, turns, clearFollowupPromptTimer, clearFollowupTimer, speak, goSpeakAndFollowup, endSession]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 
@@ -629,8 +757,9 @@ export default function ManagerEarpiece() {
     phaseRef.current = "listening";
     unlockAudioOutput();
     stopAudio();
+    startBrowserRecognition();
     const micReady = await startMicStream();
-    if (!micReady) return;
+    if (!micReady) { stopBrowserRecognition(); return; }
     setMode("call");
     setPhase("listening");
     setPartial("");
@@ -648,8 +777,9 @@ export default function ManagerEarpiece() {
     phaseRef.current = "wake_listening";
     unlockAudioOutput();
     stopAudio();
+    startBrowserRecognition();
     const micReady = await startMicStream();
-    if (!micReady) { desiredAlwaysOnRef.current = false; return; }
+    if (!micReady) { desiredAlwaysOnRef.current = false; stopBrowserRecognition(); return; }
     setMode("always_on");
     setPhase("wake_listening");
     setPartial("");

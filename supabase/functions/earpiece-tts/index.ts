@@ -28,12 +28,12 @@ Deno.serve(async (req) => {
     }
     const vid = voice_id || "EXAVITQu4vr4xnSDxMaL"; // Sarah - warm, calm
 
-    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}?optimize_streaming_latency=3&output_format=mp3_44100_64`, {
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}?optimize_streaming_latency=4&output_format=mp3_22050_32`, {
       method: "POST",
       headers: { "xi-api-key": key, "Content-Type": "application/json" },
       body: JSON.stringify({
         text, model_id: "eleven_turbo_v2_5",
-        voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.25, use_speaker_boost: true },
+        voice_settings: { stability: 0.38, similarity_boost: 0.75, style: 0.18, use_speaker_boost: true, speed: 1.08 },
       }),
     });
     if (!r.ok) {

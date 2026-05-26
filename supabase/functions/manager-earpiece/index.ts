@@ -5,7 +5,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { venue_id, question, history } = await req.json();
+    const { venue_id, question } = await req.json();
     if (!venue_id || !question) {
       return new Response(JSON.stringify({ error: "venue_id and question required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -17,7 +17,6 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Pull live venue context in parallel
     const today = new Date();
     const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
     const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
@@ -66,18 +65,15 @@ ${recentCalls.map((c: any) => `- ${c.caller || "?"}: ${c.outcome}${c.summary ? `
     const messages = [
       {
         role: "system",
-        content: `You are the manager's AI ear-piece — a fast, confident, calm operations co-pilot speaking directly into a venue manager's ear during service. 
+        content: `You are the manager's AI ear-piece — a fast, confident, calm operations co-pilot speaking directly into a venue manager's ear during service.
 
 Style: short, spoken English. 1-2 sentences max. No bullet points, no markdown, no preambles like "Sure" or "Based on the data". Speak like a trusted GM whispering insight. Use the venue's brand voice.
 
-Answer ONLY the newest user question. Do not combine it with earlier questions. Treat history only as light context when the newest question is clearly a follow-up.
-
-You have full live context of today's bookings, VIPs, pending emails, and recent calls below. Answer using ONLY this context. If asked for an action (e.g. "move table 4 to 8pm"), describe what you'd do; do not invent confirmations.
+Answer ONLY the user's question. Use ONLY the live context below. If asked for an action, describe what you'd do; do not invent confirmations.
 
 LIVE CONTEXT:
 ${context}`,
       },
-      ...(history || []).slice(-6),
       { role: "user", content: question },
     ];
 
@@ -88,30 +84,66 @@ ${context}`,
       });
     }
 
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: "google/gemini-2.5-flash", messages, temperature: 0.25, max_tokens: 140 }),
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages,
+        temperature: 0.25,
+        max_tokens: 140,
+        stream: true,
+      }),
     });
 
-    if (!resp.ok) {
-      const txt = await resp.text();
+    if (!upstream.ok || !upstream.body) {
+      const txt = await upstream.text();
       return new Response(JSON.stringify({ error: "AI gateway error", detail: txt }), {
-        status: resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: upstream.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const json = await resp.json();
-    const answer = json.choices?.[0]?.message?.content?.trim() || "I didn't catch that.";
+    // Tee one branch for background logging, one for the client.
+    const [forClient, forLog] = upstream.body.tee();
 
-    // Log to brain_events for transparency
-    await supabase.from("brain_events").insert({
-      venue_id, title: `Ear-piece: ${question.slice(0, 60)}`, severity: "info",
-      reason: answer.slice(0, 200), meta: { question, answer, kind: "manager_earpiece" },
-    });
+    (async () => {
+      try {
+        const reader = forLog.getReader();
+        const dec = new TextDecoder();
+        let buf = ""; let full = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() || "";
+          for (const line of lines) {
+            const t = line.trim();
+            if (!t.startsWith("data:")) continue;
+            const d = t.slice(5).trim();
+            if (!d || d === "[DONE]") continue;
+            try { full += JSON.parse(d).choices?.[0]?.delta?.content || ""; } catch { /* ignore */ }
+          }
+        }
+        if (full.trim()) {
+          await supabase.from("brain_events").insert({
+            venue_id, title: `Ear-piece: ${question.slice(0, 60)}`, severity: "info",
+            reason: full.slice(0, 200), meta: { question, answer: full, kind: "manager_earpiece" },
+          });
+        }
+      } catch (e) { console.warn("log failed", e); }
+    })();
 
-    return new Response(JSON.stringify({ answer, context_summary: { bookings: bookings.length, covers, vips: vips.length, pending_emails: pendingEmails.length } }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const ctxSummary = { bookings: bookings.length, covers, vips: vips.length, pending_emails: pendingEmails.length };
+
+    return new Response(forClient, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "X-Earpiece-Context": btoa(JSON.stringify(ctxSummary)),
+        "Access-Control-Expose-Headers": "X-Earpiece-Context",
+      },
     });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {

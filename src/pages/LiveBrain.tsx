@@ -114,7 +114,12 @@ export default function LiveBrain() {
     }
   };
 
-  const filtered = filter === "all" ? events : events.filter((e) => e.severity === filter);
+  const filtered = (filter === "all" ? events : events.filter((e) => e.severity === filter))
+    .filter((e) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return `${e.title} ${e.reason || ""}`.toLowerCase().includes(q);
+    });
   const counts = events.reduce<Record<string, number>>((acc, e) => {
     acc[e.severity] = (acc[e.severity] || 0) + 1;
     return acc;

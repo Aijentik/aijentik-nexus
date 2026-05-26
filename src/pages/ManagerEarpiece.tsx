@@ -418,46 +418,13 @@ export default function ManagerEarpiece() {
       if (speakingRef.current) return;
       const text = (data?.text || "").trim();
       if (!text) return;
-      // Only show partials when we're capturing a question
-      if (captureRef.current.active || phaseRef.current === "listening") {
-        captureRef.current.live = text;
-        const candidate = captureCandidate(captureRef.current);
-        setPartial(candidate || text);
-        if (hasUsableCommand(candidate, awaitingFollowupRef.current)) {
-          scheduleCaptureCommit(950);
-        }
-      }
-      // Allow wake to fire from partials too (faster reaction)
-      if (phaseRef.current === "wake_listening" && hasWake(text)) {
-        console.info("[earpiece] wake detected", text);
-        handleWakeDetected(text);
-      }
+      transcriptHandlerRef.current(text, false, "scribe");
     },
     onCommittedTranscript: (data: ScribeTranscript) => {
       if (speakingRef.current) return;
       const text = (data?.text || "").trim();
       if (!text) return;
-
-      // Always-on wake stage
-      if (phaseRef.current === "wake_listening") {
-        if (hasWake(text)) {
-          console.info("[earpiece] wake detected", text);
-          handleWakeDetected(text);
-        }
-        return;
-      }
-
-      // Command capture (call mode OR after wake)
-      if (captureRef.current.active || phaseRef.current === "listening") {
-        clearFollowupTimer();
-        captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, text);
-        captureRef.current.live = "";
-        setPartial(captureRef.current.buffer);
-        // Debounce — assume user is done if no new committed segment arrives quickly.
-        if (hasUsableCommand(captureRef.current.buffer, awaitingFollowupRef.current)) {
-          scheduleCaptureCommit(650);
-        }
-      }
+      transcriptHandlerRef.current(text, true, "scribe");
     },
     onError: (err: unknown) => {
       console.error("[scribe]", err);

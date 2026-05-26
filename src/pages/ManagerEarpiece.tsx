@@ -194,6 +194,8 @@ export default function ManagerEarpiece() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [partial, setPartial] = useState("");
   const [ctx, setCtx] = useState<{ bookings: number; covers: number; vips: number; pending_emails: number } | null>(null);
+  const [liveLevel, setLiveLevel] = useState(0);                       // 0..1 mic energy for orb
+  const [outLevel, setOutLevel] = useState(0);                         // 0..1 agent-speaking energy
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);

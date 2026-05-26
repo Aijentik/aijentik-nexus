@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Globe, Loader2, Sparkles, ImageIcon, UtensilsCrossed, Wand2 } from "lucide-react";
+import { Plus, Trash2, Globe, Loader2, Sparkles, ImageIcon, UtensilsCrossed, Wand2, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 

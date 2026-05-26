@@ -12,6 +12,7 @@ type Turn = { role: "user" | "assistant"; content: string; ts: number };
 type Mode = "idle" | "call" | "always_on";
 type Phase = "idle" | "wake_listening" | "listening" | "thinking" | "speaking";
 type ScribeTranscript = { text?: string };
+type CaptureState = { active: boolean; buffer: string; live: string; timer: number | null; deadline: number | null };
 
 const QUICK_PROMPTS = [
   "How's tonight looking?",
@@ -75,6 +76,22 @@ function hasUsableCommand(text: string, allowShort = false): boolean {
   if (FILLER_ONLY_PATTERNS.some(p => p.test(normalized))) return false;
   if (allowShort && NEGATIVE_PATTERNS.some(p => p.test(cleaned))) return true;
   return normalized.length >= 4 && /\b[a-z0-9]{3,}\b/i.test(normalized);
+}
+
+function mergeTranscript(existing: string, incoming: string): string {
+  const a = stripWake(existing).trim();
+  const b = stripWake(incoming).trim();
+  if (!a) return b;
+  if (!b) return a;
+  const na = normalizeVoiceText(a);
+  const nb = normalizeVoiceText(b);
+  if (na.includes(nb)) return a;
+  if (nb.includes(na)) return b;
+  return `${a} ${b}`.trim();
+}
+
+function captureCandidate(capture: CaptureState): string {
+  return mergeTranscript(capture.buffer, capture.live).trim();
 }
 
 function errorMessage(err: unknown): string {

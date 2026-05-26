@@ -20,28 +20,47 @@ const QUICK_PROMPTS = [
   "Any emails I need to handle?",
 ];
 
-// Robust wake patterns — tolerate mishearings of "Aijentik"
+// Robust wake patterns — tolerate common noisy-room / mobile STT mishearings of "Aijentik"
 const WAKE_PATTERNS = [
-  /\bhey[, ]+a?i?\s*j?ent[iy]?k\b/i,
+  /\b(h+ey|hay|hi|okay|ok)[, ]+a?i?\s*j?ent[iy]?k\b/i,
   /\bhey[, ]+agentic\b/i,
   /\bhey[, ]+agent\b/i,
+  /\bhey[, ]+agent\s*tech\b/i,
   /\bhey[, ]+ai\s*gentic\b/i,
+  /\bhey[, ]+ai\s*gen\s*tech\b/i,
   /\bhey[, ]+i[- ]?gentic\b/i,
+  /\bhey[, ]+a[- ]?jentic\b/i,
+  /\bhey[, ]+a[- ]?gentik\b/i,
+  /\bhey[, ]+a[- ]?gen\s*tick\b/i,
   /\bhey[, ]+a[- ]?gen[a-z]*\b/i,
 ];
+const WAKE_KEYTERMS = ["Aijentik", "Hey Aijentik", "Aijentic", "Agentic", "AI Gentic", "Agent Tech"];
 const WAKE_ACKS = ["Yesss?", "Mhm?", "Go on…", "Yep, listening.", "Hit me.", "I'm all ears.", "Yes boss?"];
 const NEGATIVE_PATTERNS = [/\bno\b/i, /\bthat'?s\s+(it|all)\b/i, /\bnothing\b/i, /\bi'?m\s+good\b/i, /\bwe'?re\s+good\b/i, /\bthanks?\b/i, /\bbye\b/i];
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 
+function normalizeVoiceText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Strip the wake phrase off the front of an utterance so "Hey Aijentik, what's tonight?" → "what's tonight?"
 function stripWake(text: string): string {
   let t = text;
   for (const p of WAKE_PATTERNS) t = t.replace(p, "");
+  t = t.replace(/^\s*(h+ey|hay|hi|okay|ok)[,\s-]*(aijentik|aijentic|agentic|agent\s*tech|ai\s*gentic|ai\s*gen\s*tech|a\s*jentic|a\s*gentik|agent)\b/i, "");
   return t.replace(/^[\s,.\-!?:;]+/, "").trim();
 }
 function hasWake(text: string): boolean {
-  return WAKE_PATTERNS.some(p => p.test(text));
+  if (WAKE_PATTERNS.some(p => p.test(text))) return true;
+  const normalized = normalizeVoiceText(text);
+  const compact = normalized.replace(/\s+/g, "");
+  return /\b(hey|hay|hi|okay|ok)\s+(aijentik|aijentic|agentic|agent|ai\s*gentic|a\s*jentic|a\s*gentik|agent\s*tech)\b/.test(normalized)
+    || /(hey|hay|hi|okay|ok)(aijentik|aijentic|agentic|aigentic|ajentic|agentik|agenttech)/.test(compact);
 }
 
 export default function ManagerEarpiece() {
@@ -60,6 +79,10 @@ export default function ManagerEarpiece() {
   const phaseRef = useRef<Phase>("idle");
   const awaitingFollowupRef = useRef(false);
   const speakingRef = useRef(false);
+  const desiredAlwaysOnRef = useRef(false);
+  const connectInFlightRef = useRef<Promise<boolean> | null>(null);
+  const connectScribeRef = useRef<(silent?: boolean) => Promise<boolean>>(async () => false);
+  const reconnectTimerRef = useRef<number | null>(null);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null }>({
     active: false, buffer: "", timer: null,
@@ -69,10 +92,33 @@ export default function ManagerEarpiece() {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: 999999, behavior: "smooth" }); }, [turns, partial]);
 
+  const scheduleScribeReconnect = useCallback(() => {
+    if (!desiredAlwaysOnRef.current || modeRef.current !== "always_on" || reconnectTimerRef.current) return;
+    reconnectTimerRef.current = window.setTimeout(async () => {
+      reconnectTimerRef.current = null;
+      if (!desiredAlwaysOnRef.current || modeRef.current !== "always_on") return;
+      setPhase("wake_listening");
+      setPartial("");
+      await connectScribeRef.current(true);
+    }, 1200);
+  }, []);
+
   // -------- Scribe (ElevenLabs realtime STT) --------
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
+    vadSilenceThresholdSecs: 0.8,
+    vadThreshold: 0.65,
+    minSpeechDurationMs: 120,
+    minSilenceDurationMs: 350,
+    languageCode: "en",
+    keyterms: WAKE_KEYTERMS,
+    noVerbatim: false,
+    onSessionStarted: () => {
+      if (desiredAlwaysOnRef.current && modeRef.current === "always_on" && phaseRef.current === "idle") {
+        setPhase("wake_listening");
+      }
+    },
     onPartialTranscript: (data: any) => {
       if (speakingRef.current) return;
       const text = (data?.text || "").trim();
@@ -113,12 +159,21 @@ export default function ManagerEarpiece() {
     },
     onError: (err: any) => {
       console.error("[scribe]", err);
+      if (desiredAlwaysOnRef.current && modeRef.current === "always_on") scheduleScribeReconnect();
+    },
+    onDisconnect: () => {
+      if (desiredAlwaysOnRef.current && modeRef.current === "always_on") scheduleScribeReconnect();
     },
   });
 
-  const connectScribe = useCallback(async (): Promise<boolean> => {
+  const connectScribe = useCallback(async (silent = false): Promise<boolean> => {
+    if (connectInFlightRef.current) return connectInFlightRef.current;
+    connectInFlightRef.current = (async () => {
     try {
-      if (scribe.isConnected) return true;
+      if (scribe.isConnected || scribe.status === "connecting") return true;
+      if (scribe.status === "error") {
+        try { scribe.disconnect(); } catch {}
+      }
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scribe-token`, {
         method: "POST",
@@ -131,6 +186,14 @@ export default function ManagerEarpiece() {
       if (!json.token) throw new Error(json.error || "no token");
       await scribe.connect({
         token: json.token,
+        commitStrategy: CommitStrategy.VAD,
+        vadSilenceThresholdSecs: 0.8,
+        vadThreshold: 0.65,
+        minSpeechDurationMs: 120,
+        minSilenceDurationMs: 350,
+        languageCode: "en",
+        keyterms: WAKE_KEYTERMS,
+        noVerbatim: false,
         microphone: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -140,10 +203,16 @@ export default function ManagerEarpiece() {
       return true;
     } catch (e: any) {
       console.error("scribe connect failed", e);
-      toast.error("Voice service couldn't start. " + (e?.message || ""));
+      if (!silent) toast.error("Voice service couldn't start. " + (e?.message || ""));
       return false;
+    } finally {
+      connectInFlightRef.current = null;
     }
+    })();
+    return connectInFlightRef.current;
   }, [scribe]);
+
+  useEffect(() => { connectScribeRef.current = connectScribe; }, [connectScribe]);
 
   const disconnectScribe = useCallback(async () => {
     try { await scribe.disconnect(); } catch {}

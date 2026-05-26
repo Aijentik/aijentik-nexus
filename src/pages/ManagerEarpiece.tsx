@@ -54,7 +54,7 @@ const DEFAULT_MIN_WAKE_RMS = 0.0015;
 const MIN_LISTENING_RMS = 0.003;
 const BARGE_IN_RMS = 0.05;            // user voice loud enough to interrupt the agent
 const BARGE_IN_FRAMES = 3;            // consecutive frames before we cut TTS
-const CAPTURE_IDLE_MS = 850;
+const CAPTURE_IDLE_MS = 450;
 const WAKE_CAPTURE_TIMEOUT_MS = 9500;
 const FOLLOWUP_PROMPT_DELAY_MS = 9000;
 const FOLLOWUP_REPLY_TIMEOUT_MS = 12000;
@@ -144,6 +144,15 @@ function repairSpeechRevisions(text: string): string {
   const words = stripped.split(/\s+/).filter(Boolean);
   const normalizedWords = normalized.split(" ");
   if (normalizedWords.length < 5) return stripped;
+
+  const restartIndexes = normalizedWords
+    .map((word, index) => (QUESTION_START_PATTERN.test(word) ? index : -1))
+    .filter(index => index > -1);
+  if (restartIndexes.length >= 3) {
+    const lastRestart = restartIndexes[restartIndexes.length - 1];
+    const candidate = words.slice(lastRestart).join(" ").replace(/\b(hi|hello)\b/gi, " ").replace(/\s+/g, " ").trim();
+    if (candidate.split(/\s+/).length >= 4 && hasUsableCommand(candidate, true)) return candidate;
+  }
 
   for (const anchorSize of [3, 2]) {
     if (normalizedWords.length <= anchorSize + 2) continue;
@@ -489,7 +498,21 @@ export default function ManagerEarpiece() {
     recognition.onresult = (event) => {
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const result = event.results[i];
-        if (phaseRef.current !== "wake_listening") {
+        if (phaseRef.current === "wake_listening") {
+          const alternatives: string[] = [];
+          for (let j = 0; j < Math.min(result.length, 5); j += 1) {
+            const transcript = result[j]?.transcript?.trim();
+            if (transcript) alternatives.push(transcript);
+          }
+          const wakeText = alternatives.find(hasWake);
+          if (wakeText) {
+            transcriptHandlerRef.current(wakeText, result.isFinal, "browser");
+            return;
+          }
+          continue;
+        }
+
+        {
           const best = result[0]?.transcript?.trim();
           if (i === lastBrowserResultRef.current.index
             && best === lastBrowserResultRef.current.text
@@ -497,10 +520,6 @@ export default function ManagerEarpiece() {
           lastBrowserResultRef.current = { index: i, text: best || "", isFinal: result.isFinal };
           if (best) transcriptHandlerRef.current(best, result.isFinal, "browser");
           continue;
-        }
-        for (let j = 0; j < Math.min(result.length, 5); j += 1) {
-          const transcript = result[j]?.transcript?.trim();
-          if (transcript) transcriptHandlerRef.current(transcript, result.isFinal, "browser");
         }
       }
     };
@@ -621,10 +640,10 @@ export default function ManagerEarpiece() {
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
-    vadSilenceThresholdSecs: 0.72,
-    vadThreshold: 0.62,
-    minSpeechDurationMs: 220,
-    minSilenceDurationMs: 350,
+    vadSilenceThresholdSecs: 0.38,
+    vadThreshold: 0.58,
+    minSpeechDurationMs: 160,
+    minSilenceDurationMs: 220,
     languageCode: "en",
     keyterms: WAKE_KEYTERMS,
     noVerbatim: false,
@@ -675,10 +694,10 @@ export default function ManagerEarpiece() {
       await scribe.connect({
         token: json.token,
         commitStrategy: CommitStrategy.VAD,
-        vadSilenceThresholdSecs: 0.72,
-        vadThreshold: 0.62,
-        minSpeechDurationMs: 220,
-        minSilenceDurationMs: 350,
+        vadSilenceThresholdSecs: 0.38,
+        vadThreshold: 0.58,
+        minSpeechDurationMs: 160,
+        minSilenceDurationMs: 220,
         languageCode: "en",
         keyterms: WAKE_KEYTERMS,
         noVerbatim: false,
@@ -843,7 +862,7 @@ export default function ManagerEarpiece() {
     captureWhisperRef.current = false;
     startCapture(tail);
     if (hasUsableCommand(tail)) {
-      scheduleCaptureCommit(450);
+      scheduleCaptureCommit(250);
     } else {
       playChime("wake"); // instant earcon instead of speaking "Yes?"
     }
@@ -885,7 +904,7 @@ export default function ManagerEarpiece() {
         if (hasUsableCommand(candidate, awaitingFollowupRef.current)) {
           const normalized = normalizeVoiceText(candidate);
           const looksComplete = isFinal || normalized.length > 24 || QUESTION_START_PATTERN.test(normalized);
-          scheduleCaptureCommit(looksComplete ? 550 : CAPTURE_IDLE_MS);
+          scheduleCaptureCommit(looksComplete ? 300 : CAPTURE_IDLE_MS);
         }
       }
     };

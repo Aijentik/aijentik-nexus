@@ -137,7 +137,7 @@ export default function LiveBrain() {
         subtitle="Every decision your AI makes — narrated in real time, explainable, reversible."
       />
       <div className="glass-strong rounded-3xl p-4 md:p-6">
-        <div className="flex flex-wrap items-center gap-2 mb-5">
+        <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="flex items-center gap-2 mr-2">
             <BrainIcon className="h-5 w-5 text-primary" />
             <span className="text-sm">
@@ -161,6 +161,11 @@ export default function LiveBrain() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="relative mb-4 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search decisions…" className="pl-9 h-9 bg-white/[0.02] border-white/[0.06]" />
         </div>
 
         <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1 md:pr-2">

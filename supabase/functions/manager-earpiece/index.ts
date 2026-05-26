@@ -46,6 +46,51 @@ function sseStream(text: string): ReadableStream<Uint8Array> {
   });
 }
 
+// ---------- In-memory context cache (per warm isolate) ----------
+// Skips the 6 Supabase queries on repeat questions within the TTL window.
+// This is the single biggest first-token latency win on follow-ups.
+const CTX_TTL_MS = 20_000;
+type CtxBundle = {
+  venue: any; bookings: any[]; tables: any[]; vips: any[];
+  pendingEmails: any[]; recentCalls: any[]; ts: number;
+};
+const ctxCache = new Map<string, CtxBundle>();
+
+async function loadContext(supabase: any, venue_id: string): Promise<CtxBundle> {
+  const cached = ctxCache.get(venue_id);
+  if (cached && Date.now() - cached.ts < CTX_TTL_MS) return cached;
+
+  const today = new Date();
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+  const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+  const endOfTomorrow = new Date(tomorrow.setHours(23, 59, 59, 999)).toISOString();
+
+  const [venueRes, bookingsRes, tablesRes, vipRes, threadsRes, callsRes] = await Promise.all([
+    supabase.from("venues").select("name,cuisine,capacity,brand_voice").eq("id", venue_id).maybeSingle(),
+    supabase.from("bookings").select("guest_name,party_size,booking_time,status,notes,table_id")
+      .eq("venue_id", venue_id).gte("booking_time", startOfDay).lte("booking_time", endOfTomorrow)
+      .order("booking_time").limit(60),
+    supabase.from("tables").select("label,capacity,zone_id").eq("venue_id", venue_id).limit(100),
+    supabase.from("guests").select("name,visit_count,tags,notes").eq("venue_id", venue_id).eq("vip", true).limit(20),
+    supabase.from("email_threads").select("guest_name,subject,intent,status,last_message_at")
+      .eq("venue_id", venue_id).eq("status", "awaiting_staff").limit(10),
+    supabase.from("calls").select("caller,outcome,summary,started_at")
+      .eq("venue_id", venue_id).order("started_at", { ascending: false }).limit(5),
+  ]);
+
+  const bundle: CtxBundle = {
+    venue: venueRes.data,
+    bookings: bookingsRes.data || [],
+    tables: tablesRes.data || [],
+    vips: vipRes.data || [],
+    pendingEmails: threadsRes.data || [],
+    recentCalls: callsRes.data || [],
+    ts: Date.now(),
+  };
+  ctxCache.set(venue_id, bundle);
+  return bundle;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -63,30 +108,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const today = new Date();
-    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-    const endOfTomorrow = new Date(tomorrow.setHours(23, 59, 59, 999)).toISOString();
+    const { venue, bookings, tables, vips, pendingEmails, recentCalls } = await loadContext(supabase, venue_id);
 
-    const [venueRes, bookingsRes, tablesRes, vipRes, threadsRes, callsRes] = await Promise.all([
-      supabase.from("venues").select("name,cuisine,capacity,brand_voice").eq("id", venue_id).maybeSingle(),
-      supabase.from("bookings").select("guest_name,party_size,booking_time,status,notes,table_id")
-        .eq("venue_id", venue_id).gte("booking_time", startOfDay).lte("booking_time", endOfTomorrow)
-        .order("booking_time").limit(60),
-      supabase.from("tables").select("label,capacity,zone_id").eq("venue_id", venue_id).limit(100),
-      supabase.from("guests").select("name,visit_count,tags,notes").eq("venue_id", venue_id).eq("vip", true).limit(20),
-      supabase.from("email_threads").select("guest_name,subject,intent,status,last_message_at")
-        .eq("venue_id", venue_id).eq("status", "awaiting_staff").limit(10),
-      supabase.from("calls").select("caller,outcome,summary,started_at")
-        .eq("venue_id", venue_id).order("started_at", { ascending: false }).limit(5),
-    ]);
-
-    const venue = venueRes.data;
-    const bookings = bookingsRes.data || [];
-    const tables = tablesRes.data || [];
-    const vips = vipRes.data || [];
-    const pendingEmails = threadsRes.data || [];
-    const recentCalls = callsRes.data || [];
 
     const covers = bookings.reduce((s: number, b: any) => s + (b.party_size || 0), 0);
     const totalCap = tables.reduce((s: number, t: any) => s + (t.capacity || 0), 0);

@@ -437,33 +437,41 @@ export default function ManagerEarpiece() {
             )}
           </div>
 
+          {/* Always-on toggle row — clear & discoverable */}
+          {mode !== "call" && (
+            <div className="border-t border-white/[0.06] px-3 py-2.5 flex items-center justify-between gap-3 bg-background/30">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={`w-8 h-8 rounded-full grid place-items-center shrink-0 ${alwaysOn ? "bg-accent/20 text-accent" : "bg-white/[0.04] text-muted-foreground"}`}>
+                  <Ear className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[13px] font-medium leading-tight">Always-on mode</div>
+                  <div className="text-[11px] text-muted-foreground truncate">
+                    {alwaysOn ? 'Say "Hey Aijentik" to wake me' : 'Hands-free — wake with "Hey Aijentik"'}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={toggleAlwaysOn}
+                role="switch"
+                aria-checked={alwaysOn}
+                className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${alwaysOn ? "bg-accent" : "bg-white/10"}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${alwaysOn ? "translate-x-5" : ""}`} />
+              </button>
+            </div>
+          )}
+
           {/* Composer */}
           <div className="border-t border-white/[0.06] p-3 flex items-center gap-2 bg-background/40 backdrop-blur">
-            {/* Always-on toggle */}
-            <button
-              onClick={toggleAlwaysOn}
-              title={alwaysOn ? "Turn off always-on" : 'Always-on — say "Hey Aijentik"'}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all shrink-0 ${
-                alwaysOn
-                  ? "bg-accent/25 text-accent ring-2 ring-accent/50"
-                  : "bg-white/[0.04] text-muted-foreground hover:bg-white/[0.08]"
-              }`}
-            >
-              {alwaysOn && phase === "wake_listening" ? (
-                <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ repeat: Infinity, duration: 1.6 }}>
-                  <Ear className="w-5 h-5" />
-                </motion.div>
-              ) : <Ear className="w-5 h-5" />}
-            </button>
-
-            {/* Call mic */}
+            {/* Call mic — primary action */}
             <button
               onClick={startCall}
               title={callActive ? "End call" : "Start call"}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all shrink-0 ${
+              className={`h-11 rounded-full flex items-center justify-center gap-2 transition-all shrink-0 px-4 ${
                 callActive
                   ? "bg-destructive/20 text-destructive ring-2 ring-destructive/40"
-                  : "bg-primary/15 text-primary hover:bg-primary/25"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
               }`}
             >
               {callActive ? (
@@ -471,6 +479,7 @@ export default function ManagerEarpiece() {
                   <Radio className="w-5 h-5" />
                 </motion.div>
               ) : <Mic className="w-5 h-5" />}
+              <span className="text-[13px] font-medium">{callActive ? "End" : "Call"}</span>
             </button>
 
             <input
@@ -482,12 +491,13 @@ export default function ManagerEarpiece() {
                 phase === "wake_listening" ? 'Say "Hey Aijentik"…' :
                 "Or type a question…"
               }
-              className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground/60"
+              className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground/60 min-w-0"
             />
             <Button size="sm" onClick={() => sendTyped(input)} disabled={!input.trim() || phase === "thinking"}>
               <Send className="w-4 h-4" />
             </Button>
           </div>
+
         </div>
 
         {/* Quick prompts */}

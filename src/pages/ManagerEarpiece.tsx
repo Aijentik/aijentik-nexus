@@ -280,6 +280,73 @@ export default function ManagerEarpiece() {
     audioContextRef.current = null;
   }, []);
 
+  const stopBrowserRecognition = useCallback(() => {
+    const recognition = browserRecognitionRef.current;
+    if (!recognition) return;
+    browserRecognitionRunningRef.current = false;
+    recognition.onend = null;
+    recognition.onerror = null;
+    recognition.onresult = null;
+    try { recognition.abort(); } catch { console.warn("browser speech abort failed"); }
+    browserRecognitionRef.current = null;
+  }, []);
+
+  const startBrowserRecognition = useCallback((): boolean => {
+    const SpeechRecognitionCtor = ((window as Window & {
+      SpeechRecognition?: BrowserSpeechRecognitionCtor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionCtor;
+    }).SpeechRecognition || (window as Window & {
+      webkitSpeechRecognition?: BrowserSpeechRecognitionCtor;
+    }).webkitSpeechRecognition);
+    if (!SpeechRecognitionCtor) return false;
+
+    stopBrowserRecognition();
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 5;
+    recognition.lang = "en-GB";
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        for (let j = 0; j < Math.min(result.length, 5); j += 1) {
+          const transcript = result[j]?.transcript?.trim();
+          if (transcript) transcriptHandlerRef.current(transcript, result.isFinal, "browser");
+        }
+      }
+    };
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        browserRecognitionRunningRef.current = false;
+        return;
+      }
+      console.warn("browser speech recognition", event.error);
+    };
+    recognition.onend = () => {
+      browserRecognitionRunningRef.current = false;
+      if (!desiredAlwaysOnRef.current && modeRef.current !== "call") return;
+      window.setTimeout(() => {
+        if (!desiredAlwaysOnRef.current && modeRef.current !== "call") return;
+        try {
+          recognition.start();
+          browserRecognitionRunningRef.current = true;
+        } catch (e) {
+          console.warn("browser speech restart failed", e);
+        }
+      }, 250);
+    };
+
+    browserRecognitionRef.current = recognition;
+    try {
+      recognition.start();
+      browserRecognitionRunningRef.current = true;
+      return true;
+    } catch (e) {
+      console.warn("browser speech start failed", e);
+      return false;
+    }
+  }, [stopBrowserRecognition]);
+
   const startMicStream = useCallback(async (): Promise<boolean> => {
     if (micStreamRef.current) return true;
     try {

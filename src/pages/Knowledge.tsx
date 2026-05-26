@@ -28,6 +28,8 @@ export default function Knowledge() {
   const [form, setForm] = useState({ category: "policy", title: "", content: "" });
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuForm, setMenuForm] = useState({ name: "", section: "mains", description: "", price: "" });
+  const [query, setQuery] = useState("");
+
 
   const load = async () => {
     if (!venue) return;

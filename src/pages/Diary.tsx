@@ -78,7 +78,7 @@ export default function Diary() {
   useEffect(() => {
     if (!venue) return;
     const ch = supabase
-      .channel("diary:" + venue.id)
+      .channel(`venue:${venue.id}:diary`)
       .on("postgres_changes", { event: "*", schema: "public", table: "bookings", filter: `venue_id=eq.${venue.id}` }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };

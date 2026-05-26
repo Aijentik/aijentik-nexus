@@ -113,7 +113,7 @@ export default function Orders() {
     load();
     if (!venue) return;
     const ch = supabase
-      .channel(`orders:${venue.id}`)
+      .channel(`venue:${venue.id}:orders`)
       .on("postgres_changes",
         { event: "*", schema: "public", table: "orders", filter: `venue_id=eq.${venue.id}` },
         () => load())

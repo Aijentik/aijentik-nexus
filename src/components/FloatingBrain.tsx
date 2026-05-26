@@ -60,7 +60,7 @@ export function FloatingBrain() {
       .order("created_at", { ascending: false }).limit(80)
       .then(({ data }) => { if (active) setEvents((data as any) || []); });
 
-    const ch = supabase.channel(`brain-float:${venue.id}`)
+    const ch = supabase.channel(`venue:${venue.id}:brain-float`)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "brain_events", filter: `venue_id=eq.${venue.id}` },
         (p) => {

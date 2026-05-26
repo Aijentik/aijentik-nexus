@@ -40,7 +40,7 @@ export default function Messages() {
     load();
     if (!venue) return;
     const ch = supabase
-      .channel(`messages:${venue.id}`)
+      .channel(`venue:${venue.id}:messages`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `venue_id=eq.${venue.id}` },

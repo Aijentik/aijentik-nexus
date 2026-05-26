@@ -285,7 +285,7 @@ export default function ManagerEarpiece() {
           const q = captureRef.current.buffer.trim();
           captureRef.current = { active: false, buffer: "", timer: null };
           setPartial("");
-          if (q) handleUserUtterance(q);
+          if (q) void handleUserUtteranceRef.current(q);
         }, 1200);
       }
     });

@@ -511,7 +511,7 @@ export default function ManagerEarpiece() {
     if (hasUsableCommand(tail)) {
       scheduleCaptureCommit(650);
     } else {
-      void speak(WAKE_ACK);
+      void speak(WAKE_ACK, false);
     }
   }, [scheduleCaptureCommit, speak, startCapture]);
 

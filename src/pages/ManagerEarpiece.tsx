@@ -754,7 +754,7 @@ export default function ManagerEarpiece() {
     stopAudio();
     startBrowserRecognition();
     const micReady = await startMicStream();
-    if (!micReady) return;
+    if (!micReady) { stopBrowserRecognition(); return; }
     setMode("call");
     setPhase("listening");
     setPartial("");
@@ -774,7 +774,7 @@ export default function ManagerEarpiece() {
     stopAudio();
     startBrowserRecognition();
     const micReady = await startMicStream();
-    if (!micReady) { desiredAlwaysOnRef.current = false; return; }
+    if (!micReady) { desiredAlwaysOnRef.current = false; stopBrowserRecognition(); return; }
     setMode("always_on");
     setPhase("wake_listening");
     setPartial("");

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Globe, Loader2, Sparkles, ImageIcon, UtensilsCrossed, Wand2 } from "lucide-react";
+import { Plus, Trash2, Globe, Loader2, Sparkles, ImageIcon, UtensilsCrossed, Wand2, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -28,6 +28,8 @@ export default function Knowledge() {
   const [form, setForm] = useState({ category: "policy", title: "", content: "" });
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuForm, setMenuForm] = useState({ name: "", section: "mains", description: "", price: "" });
+  const [query, setQuery] = useState("");
+
 
   const load = async () => {
     if (!venue) return;
@@ -79,13 +81,22 @@ export default function Knowledge() {
     finally { setGenerating((s) => { const n = new Set(s); n.delete(item.id); return n; }); }
   };
 
-  const grouped = items.reduce((a: any, k) => { (a[k.category] ||= []).push(k); return a; }, {});
-  const groupedMenu = menu.reduce((a: Record<string, MenuItem[]>, m) => { (a[m.section] ||= []).push(m); return a; }, {});
+  const q = query.trim().toLowerCase();
+  const filteredItems = q
+    ? items.filter((k: any) => `${k.title || ""} ${k.content || ""} ${k.category || ""}`.toLowerCase().includes(q))
+    : items;
+  const filteredMenu = q
+    ? menu.filter((m) => `${m.name || ""} ${m.description || ""} ${m.section || ""}`.toLowerCase().includes(q))
+    : menu;
+
+  const grouped = filteredItems.reduce((a: any, k) => { (a[k.category] ||= []).push(k); return a; }, {});
+  const groupedMenu = filteredMenu.reduce((a: Record<string, MenuItem[]>, m) => { (a[m.section] ||= []).push(m); return a; }, {});
   const sectionOrder = ["starters", "mains", "sides", "desserts", "brunch", "specials", "kids", "drinks", "cocktails", "wine", "beer"];
   const orderedSections = Object.keys(groupedMenu).sort((a, b) => {
     const ai = sectionOrder.indexOf(a), bi = sectionOrder.indexOf(b);
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
   });
+
 
   const scrape = async () => {
     if (!venue || !scrapeUrl) return;
@@ -193,18 +204,38 @@ export default function Knowledge() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-5 glass rounded-xl p-1 w-fit">
-        {[
-          { k: "knowledge", label: "Knowledge", icon: Sparkles, count: items.length },
-          { k: "menu", label: "Menu", icon: UtensilsCrossed, count: menu.length },
-        ].map((t: any) => (
-          <button key={t.k} onClick={() => setTab(t.k)}
-            className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all ${tab === t.k ? "bg-primary text-primary-foreground shadow-[0_0_20px_hsl(var(--primary)/0.4)]" : "text-muted-foreground hover:text-foreground"}`}>
-            <t.icon className="h-3.5 w-3.5" /> {t.label}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${tab === t.k ? "bg-primary-foreground/20" : "bg-muted"}`}>{t.count}</span>
-          </button>
-        ))}
+      {/* Tabs + search */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
+        <div className="flex gap-1 glass rounded-xl p-1 w-fit shrink-0">
+          {[
+            { k: "knowledge", label: "Knowledge", icon: Sparkles, count: items.length },
+            { k: "menu", label: "Menu", icon: UtensilsCrossed, count: menu.length },
+          ].map((t: any) => (
+            <button key={t.k} onClick={() => setTab(t.k)}
+              className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all ${tab === t.k ? "bg-primary text-primary-foreground shadow-[0_0_20px_hsl(var(--primary)/0.4)]" : "text-muted-foreground hover:text-foreground"}`}>
+              <t.icon className="h-3.5 w-3.5" /> {t.label}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${tab === t.k ? "bg-primary-foreground/20" : "bg-muted"}`}>{t.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1 min-w-0 sm:max-w-md sm:ml-auto">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={tab === "knowledge" ? "Search entries, content or category…" : "Search menu items…"}
+            className="pl-9 pr-9 h-9 bg-white/[0.02] border-white/[0.06] focus-visible:ring-primary/40"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 grid place-items-center rounded text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {tab === "knowledge" && (
@@ -250,20 +281,39 @@ export default function Knowledge() {
                 </div>
               </div>
             ))}
-            {items.length === 0 && <div className="card-cine p-12 text-center text-muted-foreground">No knowledge yet.</div>}
+            {filteredItems.length === 0 && (
+              <div className="card-cine p-12 text-center">
+                <Sparkles className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                <div className="font-medium mb-1">
+                  {items.length === 0 ? "No knowledge yet." : "No entries match your search."}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {items.length === 0
+                    ? "Add an entry or import from your website to teach your AI what it needs to know."
+                    : "Try a different keyword or clear your search."}
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
 
       {tab === "menu" && (
         <div className="space-y-8">
-          {menu.length === 0 && (
+          {filteredMenu.length === 0 && (
             <div className="card-cine p-12 text-center">
               <UtensilsCrossed className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-              <div className="font-medium mb-1">No menu items yet</div>
-              <div className="text-sm text-muted-foreground">Items appear here automatically when a venue is scanned, or add them manually.</div>
+              <div className="font-medium mb-1">
+                {menu.length === 0 ? "No menu items yet" : "No menu items match your search."}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {menu.length === 0
+                  ? "Items appear here automatically when a venue is scanned, or add them manually."
+                  : "Try a different keyword or clear your search."}
+              </div>
             </div>
           )}
+
 
           {orderedSections.map((section) => (
             <div key={section}>

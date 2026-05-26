@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
@@ -8,6 +8,12 @@ import { Sparkles, PhoneIncoming, Users, TrendingUp, Loader2 } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 
+const RANGES = [
+  { k: "7d", label: "7d", days: 7 },
+  { k: "14d", label: "14d", days: 14 },
+  { k: "30d", label: "30d", days: 30 },
+] as const;
+
 export default function Analytics() {
   const { venue } = useAuth();
   const [bookings, setBookings] = useState<any[]>([]);
@@ -15,6 +21,7 @@ export default function Analytics() {
   const [stats, setStats] = useState<any>(null);
   const [narrative, setNarrative] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const [range, setRange] = useState<(typeof RANGES)[number]["k"]>("14d");
 
   useEffect(() => {
     if (!venue) return;
@@ -33,17 +40,23 @@ export default function Analytics() {
     } finally { setBusy(false); }
   };
 
-  const days = Array.from({length: 14}, (_, i) => {
-    const d = subDays(new Date(), 13 - i);
+  const rangeDays = RANGES.find(r => r.k === range)!.days;
+  const days = useMemo(() => Array.from({length: rangeDays}, (_, i) => {
+    const d = subDays(new Date(), rangeDays - 1 - i);
     const k = format(d, "MMM d");
     return {
       day: k,
       bookings: bookings.filter(b => format(new Date(b.created_at), "MMM d") === k).length,
       calls: calls.filter(c => format(new Date(c.started_at), "MMM d") === k).length,
     };
-  });
+  }), [bookings, calls, rangeDays]);
 
-  const sources = Object.entries(bookings.reduce((a: any, b) => { a[b.source || 'unknown'] = (a[b.source||'unknown']||0)+1; return a; }, {})).map(([source, count]) => ({ source, count }));
+  const sources = useMemo(
+    () => Object.entries(bookings.reduce((a: any, b) => { a[b.source || 'unknown'] = (a[b.source||'unknown']||0)+1; return a; }, {})).map(([source, count]) => ({ source, count })),
+    [bookings]
+  );
+
+  const hasAnyData = bookings.length > 0 || calls.length > 0;
 
   const kpis = [
     { icon: PhoneIncoming, label: "Missed calls saved", value: stats?.missed_calls_saved ?? "—", sub: "AI converted to bookings", glow: "hsl(32 96% 58%)" },
@@ -51,6 +64,7 @@ export default function Analytics() {
     { icon: Users,         label: "AI bookings",        value: stats?.ai_bookings ?? "—", sub: `of ${stats?.total_bookings ?? 0} total`, glow: "hsl(28 88% 60%)" },
     { icon: Sparkles,      label: "Avg call",           value: stats ? `${stats.avg_call_seconds}s` : "—", sub: `${stats?.total_calls ?? 0} calls handled`, glow: "hsl(22 88% 52%)" },
   ];
+
 
   return (
     <>
@@ -97,23 +111,47 @@ export default function Analytics() {
             Refresh
           </Button>
         </div>
-        <div className="text-[14px] leading-relaxed text-foreground/85 whitespace-pre-line min-h-[80px] pl-1 border-l-2 border-primary/40 pl-4">
-          {narrative || (busy ? "Analysing your venue's performance…" : "Click refresh to generate a narrative summary.")}
+        <div className="text-[14px] leading-relaxed text-foreground/85 whitespace-pre-line min-h-[80px] pl-4 border-l-2 border-primary/40">
+          {narrative
+            ? narrative
+            : busy
+              ? <span className="text-muted-foreground italic">Analysing your venue's performance…</span>
+              : hasAnyData
+                ? <span className="text-muted-foreground italic">Click <span className="text-foreground font-medium">Refresh</span> to generate a narrative summary from your last 30 days.</span>
+                : <span className="text-muted-foreground italic">No activity yet — your AI will start writing the operational story as soon as calls and bookings flow in.</span>}
         </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="card-cine p-6">
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
             <div>
-              <div className="label-micro mb-1">14-day trend</div>
+              <div className="label-micro mb-1">{rangeDays}-day trend</div>
               <div className="font-medium text-[15px]">Bookings vs Calls</div>
             </div>
-            <div className="flex items-center gap-3 text-[10px] uppercase tracking-wider">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" /> Bookings</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_8px_hsl(var(--accent))]" /> Calls</span>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                {RANGES.map((r) => (
+                  <button
+                    key={r.k}
+                    onClick={() => setRange(r.k)}
+                    className={`px-2.5 h-7 rounded-md text-[11px] font-medium transition-colors ${
+                      range === r.k
+                        ? "bg-primary/15 text-primary border border-primary/30"
+                        : "text-muted-foreground hover:text-foreground border border-transparent"
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-3 text-[10px] uppercase tracking-wider">
+                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" /> Bookings</span>
+                <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_8px_hsl(var(--accent))]" /> Calls</span>
+              </div>
             </div>
           </div>
+
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={days} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <defs>
@@ -140,21 +178,32 @@ export default function Analytics() {
             <div className="label-micro mb-1">Distribution</div>
             <div className="font-medium text-[15px]">Booking sources</div>
           </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={sources} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-              <defs>
-                <linearGradient id="gBar" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(38 100% 70%)" />
-                  <stop offset="100%" stopColor="hsl(22 88% 50%)" />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="2 4" opacity={0.4} />
-              <XAxis dataKey="source" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: "hsl(28 18% 6% / 0.95)", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12, backdropFilter: "blur(12px)" }} cursor={{ fill: "hsl(var(--primary) / 0.06)" }} />
-              <Bar dataKey="count" fill="url(#gBar)" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {sources.length === 0 ? (
+            <div className="h-[260px] grid place-items-center text-center px-6">
+              <div>
+                <Users className="h-7 w-7 text-muted-foreground/30 mx-auto mb-2" />
+                <div className="text-sm font-medium">No bookings recorded yet.</div>
+                <div className="text-xs text-muted-foreground mt-1">As bookings flow in, you'll see the channel split here.</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={sources} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gBar" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(38 100% 70%)" />
+                    <stop offset="100%" stopColor="hsl(22 88% 50%)" />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="2 4" opacity={0.4} />
+                <XAxis dataKey="source" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: "hsl(28 18% 6% / 0.95)", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12, backdropFilter: "blur(12px)" }} cursor={{ fill: "hsl(var(--primary) / 0.06)" }} />
+                <Bar dataKey="count" fill="url(#gBar)" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+
         </div>
       </div>
     </>

@@ -178,21 +178,32 @@ export default function Analytics() {
             <div className="label-micro mb-1">Distribution</div>
             <div className="font-medium text-[15px]">Booking sources</div>
           </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={sources} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-              <defs>
-                <linearGradient id="gBar" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(38 100% 70%)" />
-                  <stop offset="100%" stopColor="hsl(22 88% 50%)" />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="2 4" opacity={0.4} />
-              <XAxis dataKey="source" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: "hsl(28 18% 6% / 0.95)", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12, backdropFilter: "blur(12px)" }} cursor={{ fill: "hsl(var(--primary) / 0.06)" }} />
-              <Bar dataKey="count" fill="url(#gBar)" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {sources.length === 0 ? (
+            <div className="h-[260px] grid place-items-center text-center px-6">
+              <div>
+                <Users className="h-7 w-7 text-muted-foreground/30 mx-auto mb-2" />
+                <div className="text-sm font-medium">No bookings recorded yet.</div>
+                <div className="text-xs text-muted-foreground mt-1">As bookings flow in, you'll see the channel split here.</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={sources} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gBar" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(38 100% 70%)" />
+                    <stop offset="100%" stopColor="hsl(22 88% 50%)" />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="2 4" opacity={0.4} />
+                <XAxis dataKey="source" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: "hsl(28 18% 6% / 0.95)", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12, backdropFilter: "blur(12px)" }} cursor={{ fill: "hsl(var(--primary) / 0.06)" }} />
+                <Bar dataKey="count" fill="url(#gBar)" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+
         </div>
       </div>
     </>

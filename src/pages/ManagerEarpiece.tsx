@@ -220,6 +220,12 @@ export default function ManagerEarpiece() {
     followupTimerRef.current = null;
   }, []);
 
+  const clearFollowupPromptTimer = useCallback(() => {
+    if (!followupPromptTimerRef.current) return;
+    window.clearTimeout(followupPromptTimerRef.current);
+    followupPromptTimerRef.current = null;
+  }, []);
+
   const resetCapture = useCallback(() => {
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
     if (captureRef.current.deadline) window.clearTimeout(captureRef.current.deadline);

@@ -153,7 +153,7 @@ function repairSpeechRevisions(text: string): string {
       if (normalizedWords.slice(i, i + anchorSize).join(" ") === anchor) starts.push(i);
     }
 
-    const lastStart = starts.at(-1) ?? 0;
+    const lastStart = starts.length ? starts[starts.length - 1] : 0;
     const isImmediateRestart = starts.length === 2 && lastStart <= anchorSize + 1;
     const isRepeatedRevision = starts.length >= 3;
     if (lastStart > 0 && (isImmediateRestart || isRepeatedRevision)) {

@@ -142,6 +142,14 @@ export default function EmailOps() {
   }, [venue?.id, activeId]);
 
   const pending = useMemo(() => threads.filter(t => t.status === "awaiting_staff"), [threads]);
+  const visibleThreads = useMemo(() => {
+    const base = tab === "approvals" ? pending : threads;
+    const q = threadQuery.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter(t =>
+      `${t.guest_name || ""} ${t.guest_email || ""} ${t.subject || ""}`.toLowerCase().includes(q)
+    );
+  }, [tab, pending, threads, threadQuery]);
   const activeThread = threads.find(t => t.id === activeId);
 
   const callAction = async (action_id: string, decision: "execute" | "reject" | "undo", edits?: { body?: string; subject?: string }) => {

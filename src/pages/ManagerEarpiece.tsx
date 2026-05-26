@@ -559,6 +559,7 @@ export default function ManagerEarpiece() {
     desiredAlwaysOnRef.current = false;
     modeRef.current = "call";
     phaseRef.current = "listening";
+    unlockAudioOutput();
     stopAudio();
     const micReady = await startMicStream();
     if (!micReady) return;
@@ -577,6 +578,7 @@ export default function ManagerEarpiece() {
     desiredAlwaysOnRef.current = true;
     modeRef.current = "always_on";
     phaseRef.current = "wake_listening";
+    unlockAudioOutput();
     stopAudio();
     const micReady = await startMicStream();
     if (!micReady) { desiredAlwaysOnRef.current = false; return; }

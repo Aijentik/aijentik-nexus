@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { Headphones, Mic, Volume2, VolumeX, Sparkles, Send, Loader2, Radio, Ear, PhoneOff } from "lucide-react";
 import { toast } from "sonner";
-import { useScribe, CommitStrategy } from "@elevenlabs/react";
+import { useScribe, CommitStrategy, AudioFormat } from "@elevenlabs/react";
 
 type Turn = { role: "user" | "assistant"; content: string; ts: number };
 type Mode = "idle" | "call" | "always_on";
@@ -94,6 +94,11 @@ export default function ManagerEarpiece() {
   const reconnectTimerRef = useRef<number | null>(null);
   const followupTimerRef = useRef<number | null>(null);
   const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const micProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
   // Buffer for the user's question after wake detection
   const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null }>({
     active: false, buffer: "", timer: null,

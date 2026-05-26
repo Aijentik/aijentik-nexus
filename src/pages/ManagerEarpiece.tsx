@@ -51,7 +51,7 @@ const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
 const MIN_WAKE_RMS = 0.0015;
 const MIN_LISTENING_RMS = 0.003;
-const CAPTURE_IDLE_MS = 1250;
+const CAPTURE_IDLE_MS = 850;
 const WAKE_CAPTURE_TIMEOUT_MS = 9500;
 const FOLLOWUP_PROMPT_DELAY_MS = 9000;
 const FOLLOWUP_REPLY_TIMEOUT_MS = 12000;
@@ -611,7 +611,7 @@ export default function ManagerEarpiece() {
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
     startCapture(tail);
     if (hasUsableCommand(tail)) {
-      scheduleCaptureCommit(650);
+      scheduleCaptureCommit(450);
     } else {
       void speakWithBrowser(WAKE_ACK, false);
     }
@@ -652,7 +652,7 @@ export default function ManagerEarpiece() {
         if (hasUsableCommand(candidate, awaitingFollowupRef.current)) {
           const normalized = normalizeVoiceText(candidate);
           const looksComplete = isFinal || normalized.length > 24 || QUESTION_START_PATTERN.test(normalized);
-          scheduleCaptureCommit(looksComplete ? 850 : CAPTURE_IDLE_MS);
+          scheduleCaptureCommit(looksComplete ? 550 : CAPTURE_IDLE_MS);
         }
       }
     };

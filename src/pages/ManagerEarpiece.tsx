@@ -185,6 +185,7 @@ export default function ManagerEarpiece() {
   const handleUserUtteranceRef = useRef<(text: string) => Promise<void>>(async () => undefined);
   const transcriptHandlerRef = useRef<(text: string, isFinal: boolean, source: "scribe" | "browser") => void>(() => undefined);
   const lastCommittedQuestionRef = useRef<{ normalized: string; at: number }>({ normalized: "", at: 0 });
+  const recentQuestionNormsRef = useRef<string[]>([]);
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);

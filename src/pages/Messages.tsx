@@ -123,59 +123,16 @@ export default function Messages() {
           </div>
         </div>
 
-        <div className="card-cine flex flex-col max-h-[70vh]">
-          <div className="p-5 border-b border-white/[0.05] flex items-center justify-between">
-            <div>
-              <div className="label-micro">Conversations</div>
-              <div className="font-medium text-[15px]">Recent · {msgs.length}</div>
-            </div>
-            <span className="pulse-dot" />
-          </div>
-          <div className="flex-1 overflow-y-auto divide-y divide-white/[0.04]">
-            {loading && msgs.length === 0 && (
-              <div className="p-12 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-              </div>
-            )}
-            {!loading && msgs.length === 0 && (
-              <div className="p-12 text-center">
-                <MessageSquare className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-                <div className="text-sm font-medium mb-1">No messages yet.</div>
-                <div className="text-xs text-muted-foreground">Confirmations, reminders and replies will appear here in real time.</div>
-              </div>
-            )}
-            <AnimatePresence initial={false}>
-              {msgs.map((m, i) => (
-                <motion.div
-                  key={m.id}
-                  layout
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ delay: Math.min(i * 0.015, 0.2) }}
-                  className="p-4 hover:bg-white/[0.02] transition-colors"
-                >
-                  <div className="flex items-center justify-between text-[11px] mb-1.5">
-                    <div className="flex items-center gap-2">
-                      {m.direction === "outbound"
-                        ? <ArrowUpRight className="h-3 w-3 text-primary" />
-                        : <ArrowDownLeft className="h-3 w-3 text-[hsl(var(--success))]" />}
-                      <span className="font-mono text-foreground/80">{m.contact}</span>
-                      <span className="px-1.5 py-0.5 rounded-md bg-white/[0.04] text-muted-foreground uppercase tracking-wider text-[9px]">{m.channel}</span>
-                      {m.status === "failed" && (
-                        <span className="px-1.5 py-0.5 rounded-md bg-[hsl(0_80%_50%_/_0.15)] text-[hsl(0_80%_75%)] uppercase tracking-wider text-[9px] border border-[hsl(0_80%_50%_/_0.3)]">
-                          failed
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-muted-foreground">{format(new Date(m.created_at), "d MMM HH:mm")}</span>
-                  </div>
-                  <div className="text-sm leading-relaxed">{m.body}</div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        </div>
+        <MessagesList
+          msgs={msgs}
+          loading={loading}
+          query={query}
+          setQuery={setQuery}
+          dirFilter={dirFilter}
+          setDirFilter={setDirFilter}
+          onPickContact={(c) => setContact(c)}
+        />
+
       </div>
     </>
   );

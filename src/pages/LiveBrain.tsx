@@ -22,6 +22,7 @@ export default function LiveBrain() {
   const [events, setEvents] = useState<Ev[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "info" | "warn" | "critical" | "success">("all");
+  const [query, setQuery] = useState("");
   const [explainOpen, setExplainOpen] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, "explain" | "undo" | null>>({});
   const [undone, setUndone] = useState<Record<string, boolean>>({});

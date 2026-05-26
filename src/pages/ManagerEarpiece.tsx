@@ -1005,11 +1005,17 @@ export default function ManagerEarpiece() {
       let firstSpoken = false;
 
       const flushSentences = (force: boolean) => {
-        // Match through end of sentence (or whole remainder if force)
+        // Speak as soon as we have a meaningful clause so the first audio
+        // arrives before the LLM finishes the full sentence.
+        // - For the very first chunk, flush at the first comma/clause-end ≥ 18 chars.
+        // - After that, flush on sentence-ending punctuation as normal.
         while (true) {
           const remainder = fullAnswer.slice(spokenIndex);
           if (!remainder.trim()) return;
-          const m = remainder.match(/^([\s\S]*?[.!?…][\s")\]]*)(\s|$)/);
+          const earlyPattern = !firstSpoken
+            ? /^([\s\S]{18,}?[,;:.!?…])(\s|$)/
+            : /^([\s\S]*?[.!?…][\s")\]]*)(\s|$)/;
+          const m = remainder.match(earlyPattern);
           if (m) {
             const sentence = m[1].trim();
             spokenIndex += m[0].length;
@@ -1030,6 +1036,7 @@ export default function ManagerEarpiece() {
           }
         }
       };
+
 
       while (true) {
         const { done, value } = await reader.read();

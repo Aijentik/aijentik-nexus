@@ -386,7 +386,7 @@ export default function ManagerEarpiece() {
       toast.error(errorMessage(e) || "Ear-piece failed");
       setPhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, turns, speak, goSpeakAndFollowup, endSession]);
+  }, [venue, turns, clearFollowupTimer, speak, goSpeakAndFollowup, endSession]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 

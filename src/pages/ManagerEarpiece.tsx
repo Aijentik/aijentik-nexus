@@ -390,6 +390,7 @@ export default function ManagerEarpiece() {
     if (mode === "call") { endSession(); return; }
     const ok = await ensureMicPermission();
     if (!ok) return;
+    desiredAlwaysOnRef.current = false;
     stopAudio();
     setMode("call");
     setPhase("listening");

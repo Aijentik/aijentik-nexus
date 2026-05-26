@@ -16,7 +16,7 @@ type Intent =
 function classifyIntent(q: string): Intent {
   const t = q.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   if (/(how many|whats|what is|tell me).*(cover|covers)|covers (tonight|today)|^covers\b/.test(t)) return { kind: "covers" };
-  if (/(how many|count).*(booking|reservation)|bookings? (tonight|today)|^bookings?$/.test(t)) return { kind: "bookings_count" };
+  if (/(how many|count|what|which).*(booking|reservation)|bookings? (tonight|today)|bookings?.*(coming|got|have|tonight|today)|^bookings?$/.test(t)) return { kind: "bookings_count" };
   if (/\bvips?\b|any vip|big spenders|regulars in/.test(t)) return { kind: "vips" };
   if (/\bemail/.test(t) && /(handle|reply|pending|awaiting|need)/.test(t)) return { kind: "pending_emails" };
   if (/\bnext (booking|reservation|guest)|whats next|who is next/.test(t)) return { kind: "next_booking" };

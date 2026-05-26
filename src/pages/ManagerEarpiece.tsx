@@ -986,7 +986,7 @@ export default function ManagerEarpiece() {
           Authorization: `Bearer ${session?.access_token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({ venue_id: venue.id, question }),
+        body: JSON.stringify({ venue_id: venue.id, question, page: pageRef.current }),
       });
       if (!res.ok || !res.body) {
         const errJson = await res.json().catch(() => ({}));

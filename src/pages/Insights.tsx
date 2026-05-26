@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Loader2, TrendingUp, AlertTriangle, Zap } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Sparkles, Loader2, TrendingUp, AlertTriangle, Zap, Search, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 const impactStyle = (impact?: string) => {
   switch ((impact || "").toLowerCase()) {

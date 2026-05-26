@@ -222,6 +222,9 @@ function logWakeTelemetry(entry: { ts: number; rms: number; threshold: number; t
 
 export default function ManagerEarpiece() {
   const { venue } = useAuth();
+  const location = useLocation();
+  const pageRef = useRef<string>(location.pathname);
+  useEffect(() => { pageRef.current = location.pathname; }, [location.pathname]);
   const [mode, setMode] = useState<Mode>("idle");
   const [phase, setPhase] = useState<Phase>("idle");
   const [muted, setMuted] = useState(false);

@@ -300,6 +300,7 @@ export default function ManagerEarpiece() {
   }, [speak]);
 
   const endSession = useCallback(async () => {
+    clearFollowupTimer();
     desiredAlwaysOnRef.current = false;
     if (reconnectTimerRef.current) {
       window.clearTimeout(reconnectTimerRef.current);
@@ -313,7 +314,7 @@ export default function ManagerEarpiece() {
     setPhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [disconnectScribe, stopAudio]);
+  }, [clearFollowupTimer, disconnectScribe, stopAudio]);
 
   const goSpeakAndFollowup = useCallback(async (answer: string) => {
     setPhase("speaking");
@@ -327,13 +328,25 @@ export default function ManagerEarpiece() {
 
     setPhase("listening");
     captureRef.current = { active: true, buffer: "", timer: null };
-  }, [speak]);
+    if (modeRef.current === "always_on") {
+      clearFollowupTimer();
+      followupTimerRef.current = window.setTimeout(() => {
+        if (modeRef.current !== "always_on" || !awaitingFollowupRef.current) return;
+        awaitingFollowupRef.current = false;
+        captureRef.current = { active: false, buffer: "", timer: null };
+        setPartial("");
+        setPhase("wake_listening");
+        followupTimerRef.current = null;
+      }, 6500);
+    }
+  }, [clearFollowupTimer, speak]);
 
   const handleUserUtterance = useCallback(async (text: string) => {
     if (!venue) return;
 
     if (awaitingFollowupRef.current) {
       awaitingFollowupRef.current = false;
+      clearFollowupTimer();
       if (NEGATIVE_PATTERNS.some(p => p.test(text)) && text.split(/\s+/).length <= 6) {
         setTurns(t => [...t, { role: "user", content: text, ts: Date.now() }, { role: "assistant", content: SIGNOFF, ts: Date.now() }]);
         setPhase("speaking");

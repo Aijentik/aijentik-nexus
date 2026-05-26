@@ -117,7 +117,7 @@ export default function VenueLive() {
     })();
 
     const ch = supabase
-      .channel(`brain_events:${venue.id}`)
+      .channel(`venue:${venue.id}:brain-events`)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "brain_events", filter: `venue_id=eq.${venue.id}` },
         (p) => setEvents((prev) => [p.new as any, ...prev].slice(0, 40)))

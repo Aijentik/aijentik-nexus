@@ -129,7 +129,7 @@ export default function EmailOps() {
   // Realtime
   useEffect(() => {
     if (!venue) return;
-    const ch = supabase.channel(`email-ops-${venue.id}`)
+    const ch = supabase.channel(`venue:${venue.id}:email-ops`)
       .on("postgres_changes", { event: "*", schema: "public", table: "email_threads", filter: `venue_id=eq.${venue.id}` }, () => loadThreads())
       .on("postgres_changes", { event: "*", schema: "public", table: "email_messages", filter: `venue_id=eq.${venue.id}` }, (p: any) => {
         if (p.new?.thread_id === activeId) loadActive(activeId);

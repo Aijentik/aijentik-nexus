@@ -43,7 +43,7 @@ export default function LiveBrain() {
         setLoading(false);
       });
     const ch = supabase
-      .channel("brain:" + venue.id)
+      .channel(`venue:${venue.id}:brain`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "brain_events", filter: `venue_id=eq.${venue.id}` },

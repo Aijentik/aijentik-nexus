@@ -43,7 +43,7 @@ export default function Dashboard() {
       setEvents(ev || []);
     })();
 
-    const ch = supabase.channel("dash:" + venue.id)
+    const ch = supabase.channel(`venue:${venue.id}:dash`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "brain_events", filter: `venue_id=eq.${venue.id}` }, (p) => setEvents(e => [p.new, ...e].slice(0, 6)))
       .subscribe();
     return () => { active = false; supabase.removeChannel(ch); };

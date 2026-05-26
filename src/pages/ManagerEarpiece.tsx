@@ -183,13 +183,13 @@ export default function ManagerEarpiece() {
       });
       const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextCtor) throw new Error("This browser can't start live microphone audio.");
-      const audioContext = new AudioContextCtor({ sampleRate: 16000 });
+      const audioContext = new AudioContextCtor();
       const source = audioContext.createMediaStreamSource(stream);
       const processor = audioContext.createScriptProcessor(4096, 1, 1);
       processor.onaudioprocess = event => {
         if (!desiredAlwaysOnRef.current && modeRef.current !== "call") return;
         try {
-          sendAudioRef.current(pcm16ToBase64(event.inputBuffer.getChannelData(0)));
+          sendAudioRef.current(pcm16ToBase64(resampleTo16k(event.inputBuffer.getChannelData(0), audioContext.sampleRate)));
         } catch (e) {
           console.warn("mic chunk send failed", e);
         }

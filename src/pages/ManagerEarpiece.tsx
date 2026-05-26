@@ -304,10 +304,10 @@ export default function ManagerEarpiece() {
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
-    vadSilenceThresholdSecs: 0.95,
-    vadThreshold: 0.72,
+    vadSilenceThresholdSecs: 0.72,
+    vadThreshold: 0.62,
     minSpeechDurationMs: 220,
-    minSilenceDurationMs: 500,
+    minSilenceDurationMs: 350,
     languageCode: "en",
     keyterms: WAKE_KEYTERMS,
     noVerbatim: false,
@@ -322,7 +322,12 @@ export default function ManagerEarpiece() {
       if (!text) return;
       // Only show partials when we're capturing a question
       if (captureRef.current.active || phaseRef.current === "listening") {
-        setPartial(text);
+        captureRef.current.live = text;
+        const candidate = captureCandidate(captureRef.current);
+        setPartial(candidate || text);
+        if (hasUsableCommand(candidate, awaitingFollowupRef.current)) {
+          scheduleCaptureCommit(950);
+        }
       }
       // Allow wake to fire from partials too (faster reaction)
       if (phaseRef.current === "wake_listening" && hasWake(text)) {
@@ -343,11 +348,12 @@ export default function ManagerEarpiece() {
       // Command capture (call mode OR after wake)
       if (captureRef.current.active || phaseRef.current === "listening") {
         clearFollowupTimer();
-        captureRef.current.buffer = (captureRef.current.buffer + " " + text).trim();
+        captureRef.current.buffer = mergeTranscript(captureRef.current.buffer, text);
+        captureRef.current.live = "";
         setPartial(captureRef.current.buffer);
         // Debounce — assume user is done if no new committed segment arrives quickly.
         if (hasUsableCommand(captureRef.current.buffer, awaitingFollowupRef.current)) {
-          scheduleCaptureCommit();
+          scheduleCaptureCommit(650);
         }
       }
     },
@@ -381,10 +387,10 @@ export default function ManagerEarpiece() {
       await scribe.connect({
         token: json.token,
         commitStrategy: CommitStrategy.VAD,
-        vadSilenceThresholdSecs: 0.95,
-        vadThreshold: 0.72,
+        vadSilenceThresholdSecs: 0.72,
+        vadThreshold: 0.62,
         minSpeechDurationMs: 220,
-        minSilenceDurationMs: 500,
+        minSilenceDurationMs: 350,
         languageCode: "en",
         keyterms: WAKE_KEYTERMS,
         noVerbatim: false,

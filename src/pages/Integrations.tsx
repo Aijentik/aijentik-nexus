@@ -26,6 +26,7 @@ export default function Integrations() {
   const [conns, setConns] = useState<Record<string, Conn>>({});
   const [query, setQuery] = useState("");
   const [activeCat, setActiveCat] = useState<string>("All");
+  const [connectedOnly, setConnectedOnly] = useState(false);
   const [connectTarget, setConnectTarget] = useState<Integration | null>(null);
   const [manageTarget, setManageTarget] = useState<Integration | null>(null);
   const [reload, setReload] = useState(0);
@@ -43,10 +44,24 @@ export default function Integrations() {
   }, [venue?.id, reload]);
 
   const categories = useMemo(() => ["All", ...Array.from(new Set(INTEGRATIONS.map(i => i.category)))], []);
-  const filtered = INTEGRATIONS.filter(i =>
-    (activeCat === "All" || i.category === activeCat) &&
-    (!query || i.name.toLowerCase().includes(query.toLowerCase()) || i.desc.toLowerCase().includes(query.toLowerCase()))
-  );
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = INTEGRATIONS.filter(i =>
+      (activeCat === "All" || i.category === activeCat) &&
+      (!q || i.name.toLowerCase().includes(q) || i.desc.toLowerCase().includes(q)) &&
+      (!connectedOnly || !!conns[i.id]?.connected)
+    );
+    // Connected first, then highlighted, then alpha
+    return [...list].sort((a, b) => {
+      const ac = conns[a.id]?.connected ? 1 : 0;
+      const bc = conns[b.id]?.connected ? 1 : 0;
+      if (ac !== bc) return bc - ac;
+      const ah = a.highlight ? 1 : 0;
+      const bh = b.highlight ? 1 : 0;
+      if (ah !== bh) return bh - ah;
+      return a.name.localeCompare(b.name);
+    });
+  }, [query, activeCat, connectedOnly, conns]);
 
   const connectedCount = Object.values(conns).filter(c => c.connected).length;
 

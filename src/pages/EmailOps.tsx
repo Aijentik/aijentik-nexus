@@ -13,7 +13,7 @@ import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import {
   Mail, Inbox, Sparkles, ShieldCheck, Crown, AlertTriangle, Check, X, Undo2,
-  Send, Bot, User, Copy, Wand2, RefreshCcw, Settings2, Plug, Hand,
+  Send, Bot, User, Copy, Wand2, RefreshCcw, Settings2, Plug, Hand, Search,
 } from "lucide-react";
 
 type Thread = {

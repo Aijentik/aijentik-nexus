@@ -109,13 +109,47 @@ export function Sidebar() {
 
   const initials = (user?.email?.[0] || "?").toUpperCase();
 
+  // Mobile drawer state — toggled by Layout's hamburger via window event
+  const [mobileOpen, setMobileOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setMobileOpen(true);
+    const close = () => setMobileOpen(false);
+    const toggle = () => setMobileOpen(o => !o);
+    window.addEventListener("aijentik:sidebar-open", open);
+    window.addEventListener("aijentik:sidebar-close", close);
+    window.addEventListener("aijentik:sidebar-toggle", toggle);
+    return () => {
+      window.removeEventListener("aijentik:sidebar-open", open);
+      window.removeEventListener("aijentik:sidebar-close", close);
+      window.removeEventListener("aijentik:sidebar-toggle", toggle);
+    };
+  }, []);
+  // Close on route change (mobile)
+  useEffect(() => { setMobileOpen(false); }, [loc.pathname]);
+
   return (
+    <>
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="lg:hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm animate-in fade-in-0"
+          aria-hidden
+        />
+      )}
     <aside
       style={{ width: collapsed ? 76 : 260 }}
-      className="shrink-0 h-screen sticky top-0 z-20 flex flex-col relative
-        bg-[hsl(28_22%_3.5%/0.96)] transition-[width] duration-300 ease-out
-        border-r border-white/[0.04]
-        shadow-[1px_0_0_0_hsl(36_100%_80%_/_0.03)_inset,_8px_0_40px_-12px_hsl(0_0%_0%_/_0.6)]"
+      className={cn(
+        "shrink-0 h-screen flex flex-col relative",
+        "bg-[hsl(28_22%_3.5%/0.96)] transition-[width,transform] duration-300 ease-out",
+        "border-r border-white/[0.04]",
+        "shadow-[1px_0_0_0_hsl(36_100%_80%_/_0.03)_inset,_8px_0_40px_-12px_hsl(0_0%_0%_/_0.6)]",
+        // Desktop: sticky in flex flow
+        "lg:sticky lg:top-0 lg:z-20 lg:translate-x-0",
+        // Mobile: fixed drawer
+        "fixed inset-y-0 left-0 z-50 lg:relative",
+        mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+      )}
     >
       {/* Ambient lighting */}
       <div

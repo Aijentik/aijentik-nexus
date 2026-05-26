@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
@@ -8,6 +8,12 @@ import { Sparkles, PhoneIncoming, Users, TrendingUp, Loader2 } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 
+const RANGES = [
+  { k: "7d", label: "7d", days: 7 },
+  { k: "14d", label: "14d", days: 14 },
+  { k: "30d", label: "30d", days: 30 },
+] as const;
+
 export default function Analytics() {
   const { venue } = useAuth();
   const [bookings, setBookings] = useState<any[]>([]);
@@ -15,6 +21,7 @@ export default function Analytics() {
   const [stats, setStats] = useState<any>(null);
   const [narrative, setNarrative] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const [range, setRange] = useState<(typeof RANGES)[number]["k"]>("14d");
 
   useEffect(() => {
     if (!venue) return;
@@ -33,17 +40,23 @@ export default function Analytics() {
     } finally { setBusy(false); }
   };
 
-  const days = Array.from({length: 14}, (_, i) => {
-    const d = subDays(new Date(), 13 - i);
+  const rangeDays = RANGES.find(r => r.k === range)!.days;
+  const days = useMemo(() => Array.from({length: rangeDays}, (_, i) => {
+    const d = subDays(new Date(), rangeDays - 1 - i);
     const k = format(d, "MMM d");
     return {
       day: k,
       bookings: bookings.filter(b => format(new Date(b.created_at), "MMM d") === k).length,
       calls: calls.filter(c => format(new Date(c.started_at), "MMM d") === k).length,
     };
-  });
+  }), [bookings, calls, rangeDays]);
 
-  const sources = Object.entries(bookings.reduce((a: any, b) => { a[b.source || 'unknown'] = (a[b.source||'unknown']||0)+1; return a; }, {})).map(([source, count]) => ({ source, count }));
+  const sources = useMemo(
+    () => Object.entries(bookings.reduce((a: any, b) => { a[b.source || 'unknown'] = (a[b.source||'unknown']||0)+1; return a; }, {})).map(([source, count]) => ({ source, count })),
+    [bookings]
+  );
+
+  const hasAnyData = bookings.length > 0 || calls.length > 0;
 
   const kpis = [
     { icon: PhoneIncoming, label: "Missed calls saved", value: stats?.missed_calls_saved ?? "—", sub: "AI converted to bookings", glow: "hsl(32 96% 58%)" },
@@ -51,6 +64,7 @@ export default function Analytics() {
     { icon: Users,         label: "AI bookings",        value: stats?.ai_bookings ?? "—", sub: `of ${stats?.total_bookings ?? 0} total`, glow: "hsl(28 88% 60%)" },
     { icon: Sparkles,      label: "Avg call",           value: stats ? `${stats.avg_call_seconds}s` : "—", sub: `${stats?.total_calls ?? 0} calls handled`, glow: "hsl(22 88% 52%)" },
   ];
+
 
   return (
     <>

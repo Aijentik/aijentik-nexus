@@ -380,13 +380,14 @@ export default function ManagerEarpiece() {
     }
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
     captureRef.current = { active: false, buffer: "", timer: null };
+    stopMicStream();
     await disconnectScribe();
     stopAudio();
     setMode("idle");
     setPhase("idle");
     setPartial("");
     awaitingFollowupRef.current = false;
-  }, [clearFollowupTimer, disconnectScribe, stopAudio]);
+  }, [clearFollowupTimer, disconnectScribe, stopAudio, stopMicStream]);
 
   const goSpeakAndFollowup = useCallback(async (answer: string) => {
     setPhase("speaking");

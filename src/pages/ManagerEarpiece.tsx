@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
@@ -49,7 +50,7 @@ const WAKE_ACK = "Listening";
 const FOLLOWUP = "Anything else I can help with?";
 const SIGNOFF = "Okay — I'm here when you need me.";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
-const MIN_WAKE_RMS = 0.0015;
+const DEFAULT_MIN_WAKE_RMS = 0.0015;
 const MIN_LISTENING_RMS = 0.003;
 const BARGE_IN_RMS = 0.05;            // user voice loud enough to interrupt the agent
 const BARGE_IN_FRAMES = 3;            // consecutive frames before we cut TTS
@@ -57,6 +58,15 @@ const CAPTURE_IDLE_MS = 850;
 const WAKE_CAPTURE_TIMEOUT_MS = 9500;
 const FOLLOWUP_PROMPT_DELAY_MS = 9000;
 const FOLLOWUP_REPLY_TIMEOUT_MS = 12000;
+// Whisper-mode threshold: if the average mic RMS during capture is below this,
+// the agent responds at a lower volume so it stays subtle on the service floor.
+const WHISPER_RMS_AVG = 0.012;
+const WHISPER_VOLUME = 0.45;
+const NORMAL_VOLUME = 1.0;
+// Personalised voice profile — adaptive wake threshold persisted per device.
+const WAKE_PROFILE_KEY = "aijentik.earpiece.wakeProfile.v1";
+const WAKE_TELEMETRY_KEY = "aijentik.earpiece.wakeTelemetry.v1";
+const WAKE_TELEMETRY_MAX = 50;
 const FILLER_ONLY_PATTERNS = [
   /^(hey|hay|hi|okay|ok|yo|oi|aye)\s*(agentic|agents?|agent\s*(?:ic|ick|tick|tech|take)?|ai\s*gentic|a\s*gentic|aijentik|aijentic)?$/i,
   /^(yes|yeah|yep|listening|go on|mhm|mm hmm|hello|hi)$/i,
@@ -185,8 +195,36 @@ function getRms(samples: Float32Array): number {
   return Math.sqrt(sum / Math.max(1, samples.length));
 }
 
+// ---- Personalised voice profile (adaptive wake threshold) ----
+function loadWakeProfile(): { minWakeRms: number } {
+  try {
+    const raw = localStorage.getItem(WAKE_PROFILE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const v = Number(parsed?.minWakeRms);
+      if (Number.isFinite(v) && v > 0.0003 && v < 0.01) return { minWakeRms: v };
+    }
+  } catch { /* ignore */ }
+  return { minWakeRms: DEFAULT_MIN_WAKE_RMS };
+}
+function saveWakeProfile(p: { minWakeRms: number }) {
+  try { localStorage.setItem(WAKE_PROFILE_KEY, JSON.stringify(p)); } catch { /* ignore */ }
+}
+function logWakeTelemetry(entry: { ts: number; rms: number; threshold: number; text: string; accepted: boolean }) {
+  try {
+    const raw = localStorage.getItem(WAKE_TELEMETRY_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    arr.push(entry);
+    while (arr.length > WAKE_TELEMETRY_MAX) arr.shift();
+    localStorage.setItem(WAKE_TELEMETRY_KEY, JSON.stringify(arr));
+  } catch { /* ignore */ }
+}
+
 export default function ManagerEarpiece() {
   const { venue } = useAuth();
+  const location = useLocation();
+  const pageRef = useRef<string>(location.pathname);
+  useEffect(() => { pageRef.current = location.pathname; }, [location.pathname]);
   const [mode, setMode] = useState<Mode>("idle");
   const [phase, setPhase] = useState<Phase>("idle");
   const [muted, setMuted] = useState(false);
@@ -229,6 +267,13 @@ export default function ManagerEarpiece() {
   const ttsChainRef = useRef<Promise<void>>(Promise.resolve());        // sequential TTS queue
   const ttsCancelRef = useRef<{ cancelled: boolean }>({ cancelled: false });
   const chimeCtxRef = useRef<AudioContext | null>(null);
+  // Personalised voice profile — adaptive wake threshold per device.
+  const wakeProfileRef = useRef<{ minWakeRms: number }>(loadWakeProfile());
+  // Whisper-mode detector: rolling RMS samples during a capture window.
+  const captureRmsSumRef = useRef(0);
+  const captureRmsCountRef = useRef(0);
+  const captureWhisperRef = useRef(false);
+  const lastWakeMeasurementRef = useRef<{ rms: number; threshold: number }>({ rms: 0, threshold: DEFAULT_MIN_WAKE_RMS });
   // Buffer for the user's question after wake detection
   const captureRef = useRef<CaptureState>({
     active: false, buffer: "", live: "", timer: null, deadline: null,
@@ -486,12 +531,22 @@ export default function ManagerEarpiece() {
           }
 
           const threshold = phaseRef.current === "wake_listening"
-            ? Math.max(0.0006, Math.min(MIN_WAKE_RMS, noiseFloorRef.current * 0.85))
+            ? Math.max(0.0006, Math.min(wakeProfileRef.current.minWakeRms, noiseFloorRef.current * 0.85))
             : Math.max(MIN_LISTENING_RMS, noiseFloorRef.current * 1.15);
 
           if (rms < threshold) {
             noiseFloorRef.current = noiseFloorRef.current * 0.96 + rms * 0.04;
             return;
+          }
+
+          // Record loudness for whisper-mode detection while we're capturing a user question.
+          if (captureRef.current.active || phaseRef.current === "listening") {
+            captureRmsSumRef.current += rms;
+            captureRmsCountRef.current += 1;
+          }
+          // Snapshot the latest above-threshold mic energy for wake telemetry.
+          if (phaseRef.current === "wake_listening") {
+            lastWakeMeasurementRef.current = { rms, threshold };
           }
 
           sendAudioRef.current(pcm16ToBase64(resampleTo16k(input, audioContext.sampleRate)));
@@ -650,6 +705,8 @@ export default function ManagerEarpiece() {
 
   // Fetches a single TTS chunk (no playback). Used by both one-shot speak and streaming pipeline.
   const fetchTTSChunk = useCallback(async (text: string): Promise<{ b64: string; mime: string } | null> => {
+    // Offline fallback: skip the network round-trip entirely so the agent still acks instantly.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return null;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/earpiece-tts`, {
@@ -672,7 +729,8 @@ export default function ManagerEarpiece() {
       const audio = outputAudioRef.current || new Audio();
       try { audioRef.current?.pause(); } catch { /* ignore */ }
       audio.src = `data:${mime};base64,${b64}`;
-      audio.volume = 1;
+      // Whisper-mode: if the user spoke softly, the agent responds softly too.
+      audio.volume = captureWhisperRef.current ? WHISPER_VOLUME : NORMAL_VOLUME;
       audioRef.current = audio;
       audio.onended = () => resolve();
       audio.onerror = () => resolve();
@@ -710,9 +768,31 @@ export default function ManagerEarpiece() {
     clearFollowupTimer();
     clearFollowupPromptTimer();
     awaitingFollowupRef.current = false;
+
+    // ---- Wake telemetry + adaptive voice profile ----
+    const { rms: wakeRms, threshold: wakeThreshold } = lastWakeMeasurementRef.current;
+    logWakeTelemetry({
+      ts: Date.now(),
+      rms: Number(wakeRms.toFixed(5)),
+      threshold: Number(wakeThreshold.toFixed(5)),
+      text: heardText.slice(0, 80),
+      accepted: true,
+    });
+    // If the manager regularly fires the wake word at a quieter level than our threshold,
+    // gently lower the threshold so they don't have to project. Clamp to a safe floor.
+    if (wakeRms > 0 && wakeRms < wakeProfileRef.current.minWakeRms * 0.85) {
+      const next = Math.max(0.0006, wakeProfileRef.current.minWakeRms * 0.92);
+      wakeProfileRef.current = { minWakeRms: next };
+      saveWakeProfile(wakeProfileRef.current);
+    }
+
     setLivePhase("listening");
     const tail = stripWake(heardText);
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
+    // Reset whisper accumulator at the start of each capture window.
+    captureRmsSumRef.current = 0;
+    captureRmsCountRef.current = 0;
+    captureWhisperRef.current = false;
     startCapture(tail);
     if (hasUsableCommand(tail)) {
       scheduleCaptureCommit(450);
@@ -856,10 +936,26 @@ export default function ManagerEarpiece() {
       }
     }
 
+    // Finalise whisper-mode decision from the rolling RMS over this capture window.
+    const avgRms = captureRmsCountRef.current > 0
+      ? captureRmsSumRef.current / captureRmsCountRef.current
+      : 0;
+    captureWhisperRef.current = avgRms > 0 && avgRms < WHISPER_RMS_AVG;
+
     setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }]);
     setPartial("");
     setLivePhase("thinking");
     playChime("commit");
+
+    // Offline fallback: if there's no network, ack via local TTS and bail gracefully.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      const offlineMsg = "I'm offline right now — I'll catch up the moment we're back.";
+      setTurns(t => [...t, { role: "assistant", content: offlineMsg, ts: Date.now() }]);
+      setLivePhase("speaking");
+      await speakWithBrowser(offlineMsg, true);
+      armFollowup();
+      return;
+    }
 
     // Prep a streaming TTS session
     ttsCancelRef.current = { cancelled: false };
@@ -890,7 +986,7 @@ export default function ManagerEarpiece() {
           Authorization: `Bearer ${session?.access_token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({ venue_id: venue.id, question }),
+        body: JSON.stringify({ venue_id: venue.id, question, page: pageRef.current }),
       });
       if (!res.ok || !res.body) {
         const errJson = await res.json().catch(() => ({}));
@@ -977,7 +1073,7 @@ export default function ManagerEarpiece() {
       toast.error(errorMessage(e) || "Ear-piece failed");
       setLivePhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, armFollowup, endSession, enqueueSentence, playChime]);
+  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, speakWithBrowser, armFollowup, endSession, enqueueSentence, playChime]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 

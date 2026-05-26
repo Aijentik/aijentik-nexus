@@ -1,11 +1,57 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
+// ---------- Intent pre-classifier ----------
+// If the question maps cleanly to a fast data lookup, we answer with deterministic text
+// derived from the live context and skip the LLM entirely (sub-second response).
+type Intent =
+  | { kind: "covers" }
+  | { kind: "bookings_count" }
+  | { kind: "vips" }
+  | { kind: "pending_emails" }
+  | { kind: "next_booking" }
+  | { kind: "capacity" }
+  | null;
+
+function classifyIntent(q: string): Intent {
+  const t = q.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (/(how many|whats|what is|tell me).*(cover|covers)|covers (tonight|today)|^covers\b/.test(t)) return { kind: "covers" };
+  if (/(how many|count).*(booking|reservation)|bookings? (tonight|today)|^bookings?$/.test(t)) return { kind: "bookings_count" };
+  if (/\bvips?\b|any vip|big spenders|regulars in/.test(t)) return { kind: "vips" };
+  if (/\bemail/.test(t) && /(handle|reply|pending|awaiting|need)/.test(t)) return { kind: "pending_emails" };
+  if (/\bnext (booking|reservation|guest)|whats next|who is next/.test(t)) return { kind: "next_booking" };
+  if (/(capacity|how full|how busy|utilisation|utilization)/.test(t)) return { kind: "capacity" };
+  return null;
+}
+
+function sseStream(text: string): ReadableStream<Uint8Array> {
+  // Split into ~12-char chunks for natural streaming feel; client groups by sentence anyway.
+  const enc = new TextEncoder();
+  const chunks: string[] = [];
+  let remainder = text;
+  while (remainder.length > 0) {
+    const take = Math.min(remainder.length, 18 + Math.floor(Math.random() * 12));
+    chunks.push(remainder.slice(0, take));
+    remainder = remainder.slice(take);
+  }
+  return new ReadableStream({
+    async start(controller) {
+      for (const c of chunks) {
+        controller.enqueue(enc.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: c } }] })}\n\n`));
+        await new Promise(r => setTimeout(r, 12));
+      }
+      controller.enqueue(enc.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { venue_id, question } = await req.json();
+    const body = await req.json();
+    const { venue_id, question, page } = body as { venue_id: string; question: string; page?: string };
     if (!venue_id || !question) {
       return new Response(JSON.stringify({ error: "venue_id and question required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -44,6 +90,87 @@ Deno.serve(async (req) => {
 
     const covers = bookings.reduce((s: number, b: any) => s + (b.party_size || 0), 0);
     const totalCap = tables.reduce((s: number, t: any) => s + (t.capacity || 0), 0);
+    const nowMs = Date.now();
+    const upcoming = bookings.filter((b: any) => new Date(b.booking_time).getTime() >= nowMs - 5 * 60 * 1000);
+    const next = upcoming[0];
+
+    const ctxSummary = {
+      bookings: bookings.length, covers, vips: vips.length, pending_emails: pendingEmails.length,
+    };
+    const ctxHeader = btoa(JSON.stringify(ctxSummary));
+
+    // ---------- Try intent pre-classifier (skip LLM) ----------
+    const intent = classifyIntent(question);
+    if (intent) {
+      let answer = "";
+      switch (intent.kind) {
+        case "covers":
+          answer = bookings.length
+            ? `${covers} covers across ${bookings.length} bookings${totalCap ? `, against ${totalCap} seats` : ""}.`
+            : "No covers on the book yet for today.";
+          break;
+        case "bookings_count":
+          answer = bookings.length
+            ? `${bookings.length} bookings on the book, ${covers} covers total.`
+            : "Nothing booked in yet for today.";
+          break;
+        case "vips":
+          answer = vips.length
+            ? `${vips.length} VIPs flagged. Top one: ${vips[0].name}${vips[0].visit_count ? ` (${vips[0].visit_count} visits)` : ""}.`
+            : "No VIPs flagged on the book right now.";
+          break;
+        case "pending_emails":
+          answer = pendingEmails.length
+            ? `${pendingEmails.length} emails awaiting you. First up: ${pendingEmails[0].guest_name || "guest"} — ${pendingEmails[0].subject}.`
+            : "Inbox is clear, nothing waiting on you.";
+          break;
+        case "next_booking":
+          answer = next
+            ? `Next is ${next.guest_name}, party of ${next.party_size}, at ${new Date(next.booking_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`
+            : "Nothing more on the book today.";
+          break;
+        case "capacity": {
+          const pct = totalCap ? Math.round((covers / totalCap) * 100) : 0;
+          answer = totalCap
+            ? `Sitting at ${pct}% of capacity — ${covers} of ${totalCap} seats.`
+            : `${covers} covers booked. Capacity not set up yet.`;
+          break;
+        }
+      }
+
+      // Log fast-path response too
+      (async () => {
+        try {
+          await supabase.from("brain_events").insert({
+            venue_id, title: `Ear-piece: ${question.slice(0, 60)}`, severity: "info",
+            reason: answer.slice(0, 200), meta: { question, answer, kind: "manager_earpiece", intent: intent.kind, fast_path: true, page },
+          });
+        } catch (e) { console.warn("log failed", e); }
+      })();
+
+      return new Response(sseStream(answer), {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "X-Earpiece-Context": ctxHeader,
+          "X-Earpiece-FastPath": intent.kind,
+          "Access-Control-Expose-Headers": "X-Earpiece-Context, X-Earpiece-FastPath",
+        },
+      });
+    }
+
+    // ---------- Context-aware bias from current page ----------
+    const pageBias = (() => {
+      if (!page) return "";
+      const p = page.toLowerCase();
+      if (p.includes("booking")) return "The manager is on the Bookings screen — assume bookings/seating questions unless stated otherwise.";
+      if (p.includes("email") || p.includes("inbox")) return "The manager is on the Inbox/Emails screen — assume email/reply questions unless stated otherwise.";
+      if (p.includes("guest")) return "The manager is on the Guests screen — assume guest/VIP questions unless stated otherwise.";
+      if (p.includes("call")) return "The manager is on the Calls screen — assume call/phone questions unless stated otherwise.";
+      if (p.includes("dashboard") || p === "/" || p.includes("index")) return "The manager is on the Dashboard — assume high-level service status questions.";
+      return "";
+    })();
 
     const context = `
 VENUE: ${venue?.name || "Unknown"} (${venue?.cuisine || "—"}, capacity ${venue?.capacity || "?"})
@@ -70,7 +197,7 @@ ${recentCalls.map((c: any) => `- ${c.caller || "?"}: ${c.outcome}${c.summary ? `
 Style: short, spoken English. 1-2 sentences max. No bullet points, no markdown, no preambles like "Sure" or "Based on the data". Speak like a trusted GM whispering insight. Use the venue's brand voice.
 
 Answer ONLY the user's question. Use ONLY the live context below. If asked for an action, describe what you'd do; do not invent confirmations.
-
+${pageBias ? `\nCONTEXT BIAS: ${pageBias}\n` : ""}
 LIVE CONTEXT:
 ${context}`,
       },
@@ -103,7 +230,6 @@ ${context}`,
       });
     }
 
-    // Tee one branch for background logging, one for the client.
     const [forClient, forLog] = upstream.body.tee();
 
     (async () => {
@@ -128,20 +254,18 @@ ${context}`,
         if (full.trim()) {
           await supabase.from("brain_events").insert({
             venue_id, title: `Ear-piece: ${question.slice(0, 60)}`, severity: "info",
-            reason: full.slice(0, 200), meta: { question, answer: full, kind: "manager_earpiece" },
+            reason: full.slice(0, 200), meta: { question, answer: full, kind: "manager_earpiece", page },
           });
         }
       } catch (e) { console.warn("log failed", e); }
     })();
-
-    const ctxSummary = { bookings: bookings.length, covers, vips: vips.length, pending_emails: pendingEmails.length };
 
     return new Response(forClient, {
       headers: {
         ...corsHeaders,
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "X-Earpiece-Context": btoa(JSON.stringify(ctxSummary)),
+        "X-Earpiece-Context": ctxHeader,
         "Access-Control-Expose-Headers": "X-Earpiece-Context",
       },
     });

@@ -40,6 +40,10 @@ const statusStyle = (s: string): { color: string; bg: string; border: string } =
   }
 };
 
+type Scope = "upcoming" | "today" | "week" | "past" | "all";
+const SCOPE_LABEL: Record<Scope, string> = { upcoming: "Upcoming", today: "Today", week: "This week", past: "Past", all: "All" };
+const STATUS_OPTS = ["all", "pending", "confirmed", "seated", "completed", "cancelled", "no_show"] as const;
+
 export default function Diary() {
   const { venue } = useAuth();
   const [bookings, setBookings] = useState<any[]>([]);
@@ -49,6 +53,10 @@ export default function Diary() {
   const [dialogInitial, setDialogInitial] = useState<any | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [runSheetOpen, setRunSheetOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<Scope>("upcoming");
+  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTS)[number]>("all");
+
 
   const load = async () => {
     if (!venue) return;

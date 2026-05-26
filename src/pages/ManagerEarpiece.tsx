@@ -286,11 +286,8 @@ export default function ManagerEarpiece() {
         languageCode: "en",
         keyterms: WAKE_KEYTERMS,
         noVerbatim: false,
-        microphone: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audioFormat: AudioFormat.PCM_16000,
+        sampleRate: 16000,
       });
       return true;
     } catch (e: unknown) {
@@ -305,6 +302,7 @@ export default function ManagerEarpiece() {
   }, [scribe]);
 
   useEffect(() => { connectScribeRef.current = connectScribe; }, [connectScribe]);
+  useEffect(() => { sendAudioRef.current = scribe.sendAudio; }, [scribe.sendAudio]);
 
   const disconnectScribe = useCallback(async () => {
     try { await scribe.disconnect(); } catch { console.warn("scribe disconnect failed"); }

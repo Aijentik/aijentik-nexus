@@ -195,6 +195,31 @@ function getRms(samples: Float32Array): number {
   return Math.sqrt(sum / Math.max(1, samples.length));
 }
 
+// ---- Personalised voice profile (adaptive wake threshold) ----
+function loadWakeProfile(): { minWakeRms: number } {
+  try {
+    const raw = localStorage.getItem(WAKE_PROFILE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const v = Number(parsed?.minWakeRms);
+      if (Number.isFinite(v) && v > 0.0003 && v < 0.01) return { minWakeRms: v };
+    }
+  } catch { /* ignore */ }
+  return { minWakeRms: DEFAULT_MIN_WAKE_RMS };
+}
+function saveWakeProfile(p: { minWakeRms: number }) {
+  try { localStorage.setItem(WAKE_PROFILE_KEY, JSON.stringify(p)); } catch { /* ignore */ }
+}
+function logWakeTelemetry(entry: { ts: number; rms: number; threshold: number; text: string; accepted: boolean }) {
+  try {
+    const raw = localStorage.getItem(WAKE_TELEMETRY_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    arr.push(entry);
+    while (arr.length > WAKE_TELEMETRY_MAX) arr.shift();
+    localStorage.setItem(WAKE_TELEMETRY_KEY, JSON.stringify(arr));
+  } catch { /* ignore */ }
+}
+
 export default function ManagerEarpiece() {
   const { venue } = useAuth();
   const [mode, setMode] = useState<Mode>("idle");

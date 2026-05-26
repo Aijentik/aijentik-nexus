@@ -3,8 +3,9 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { motion, AnimatePresence } from "framer-motion";
-import { Brain as BrainIcon, Sparkles, Undo2, Loader2, ShieldCheck } from "lucide-react";
+import { Brain as BrainIcon, Sparkles, Undo2, Loader2, ShieldCheck, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 type Ev = {

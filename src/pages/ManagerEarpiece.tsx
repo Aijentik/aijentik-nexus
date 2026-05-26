@@ -82,8 +82,11 @@ function hasUsableCommand(text: string, allowShort = false): boolean {
 function mergeTranscript(existing: string, incoming: string): string {
   const a = stripWake(existing).trim();
   const b = stripWake(incoming).trim();
-  if (!a) return b;
-  if (!b) return a;
+  const aFiller = !a || FILLER_ONLY_PATTERNS.some(p => p.test(normalizeVoiceText(a)));
+  const bFiller = !b || FILLER_ONLY_PATTERNS.some(p => p.test(normalizeVoiceText(b)));
+  if (aFiller && bFiller) return "";
+  if (bFiller) return a;
+  if (aFiller) return b;
   const na = normalizeVoiceText(a);
   const nb = normalizeVoiceText(b);
   if (na.includes(nb)) return a;

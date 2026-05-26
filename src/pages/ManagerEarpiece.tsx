@@ -154,8 +154,8 @@ export default function ManagerEarpiece() {
   const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
   const noiseFloorRef = useRef(0.012);
   // Buffer for the user's question after wake detection
-  const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null }>({
-    active: false, buffer: "", timer: null,
+  const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null; deadline: number | null }>({
+    active: false, buffer: "", timer: null, deadline: null,
   });
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -178,6 +178,41 @@ export default function ManagerEarpiece() {
     window.clearTimeout(followupTimerRef.current);
     followupTimerRef.current = null;
   }, []);
+
+  const resetCapture = useCallback(() => {
+    if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
+    if (captureRef.current.deadline) window.clearTimeout(captureRef.current.deadline);
+    captureRef.current = { active: false, buffer: "", timer: null, deadline: null };
+  }, []);
+
+  const startCapture = useCallback((initial = "", timeoutMs = WAKE_CAPTURE_TIMEOUT_MS) => {
+    resetCapture();
+    captureRef.current = { active: true, buffer: initial.trim(), timer: null, deadline: null };
+    captureRef.current.deadline = window.setTimeout(() => {
+      const q = captureRef.current.buffer.trim();
+      resetCapture();
+      setPartial("");
+      if (hasUsableCommand(q, awaitingFollowupRef.current)) {
+        void handleUserUtteranceRef.current(stripWake(q));
+        return;
+      }
+      if (modeRef.current === "always_on") setPhase("wake_listening");
+    }, timeoutMs);
+  }, [resetCapture]);
+
+  const scheduleCaptureCommit = useCallback((delayMs = CAPTURE_IDLE_MS) => {
+    if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
+    captureRef.current.timer = window.setTimeout(() => {
+      const q = captureRef.current.buffer.trim();
+      resetCapture();
+      setPartial("");
+      if (hasUsableCommand(q, awaitingFollowupRef.current)) {
+        void handleUserUtteranceRef.current(stripWake(q));
+      } else if (modeRef.current === "always_on") {
+        setPhase("wake_listening");
+      }
+    }, delayMs);
+  }, [resetCapture]);
 
   const stopMicStream = useCallback(() => {
     try { micProcessorRef.current?.disconnect(); } catch { console.warn("mic processor disconnect failed"); }

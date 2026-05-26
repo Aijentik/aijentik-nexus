@@ -309,6 +309,11 @@ export default function ManagerEarpiece() {
     recognition.onresult = (event) => {
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const result = event.results[i];
+        if (phaseRef.current !== "wake_listening") {
+          const best = result[0]?.transcript?.trim();
+          if (best) transcriptHandlerRef.current(best, result.isFinal, "browser");
+          continue;
+        }
         for (let j = 0; j < Math.min(result.length, 5); j += 1) {
           const transcript = result[j]?.transcript?.trim();
           if (transcript) transcriptHandlerRef.current(transcript, result.isFinal, "browser");

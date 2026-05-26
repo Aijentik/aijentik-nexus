@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { Headphones, Mic, Volume2, VolumeX, Sparkles, Send, Loader2, Radio, Ear, PhoneOff } from "lucide-react";
 import { toast } from "sonner";
+import "@elevenlabs/client/platform/web";
 import { useScribe, CommitStrategy } from "@elevenlabs/react";
 
 type Turn = { role: "user" | "assistant"; content: string; ts: number };

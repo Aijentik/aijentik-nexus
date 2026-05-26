@@ -170,8 +170,8 @@ export default function ManagerEarpiece() {
   const sendAudioRef = useRef<(audioBase64: string) => void>(() => undefined);
   const noiseFloorRef = useRef(0.012);
   // Buffer for the user's question after wake detection
-  const captureRef = useRef<{ active: boolean; buffer: string; timer: number | null; deadline: number | null }>({
-    active: false, buffer: "", timer: null, deadline: null,
+  const captureRef = useRef<CaptureState>({
+    active: false, buffer: "", live: "", timer: null, deadline: null,
   });
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -198,20 +198,21 @@ export default function ManagerEarpiece() {
   const resetCapture = useCallback(() => {
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
     if (captureRef.current.deadline) window.clearTimeout(captureRef.current.deadline);
-    captureRef.current = { active: false, buffer: "", timer: null, deadline: null };
+    captureRef.current = { active: false, buffer: "", live: "", timer: null, deadline: null };
   }, []);
 
   const startCapture = useCallback((initial = "", timeoutMs = WAKE_CAPTURE_TIMEOUT_MS) => {
     resetCapture();
-    captureRef.current = { active: true, buffer: initial.trim(), timer: null, deadline: null };
+    captureRef.current = { active: true, buffer: initial.trim(), live: "", timer: null, deadline: null };
     captureRef.current.deadline = window.setTimeout(() => {
-      const q = captureRef.current.buffer.trim();
+      const q = captureCandidate(captureRef.current);
       resetCapture();
-      setPartial("");
       if (hasUsableCommand(q, awaitingFollowupRef.current)) {
+        setPartial(q);
         void handleUserUtteranceRef.current(stripWake(q));
         return;
       }
+      setPartial("");
       if (modeRef.current === "always_on") {
         awaitingFollowupRef.current = false;
         setPhase("wake_listening");
@@ -222,12 +223,13 @@ export default function ManagerEarpiece() {
   const scheduleCaptureCommit = useCallback((delayMs = CAPTURE_IDLE_MS) => {
     if (captureRef.current.timer) window.clearTimeout(captureRef.current.timer);
     captureRef.current.timer = window.setTimeout(() => {
-      const q = captureRef.current.buffer.trim();
+      const q = captureCandidate(captureRef.current);
       resetCapture();
-      setPartial("");
       if (hasUsableCommand(q, awaitingFollowupRef.current)) {
+        setPartial(q);
         void handleUserUtteranceRef.current(stripWake(q));
       } else if (modeRef.current === "always_on") {
+        setPartial("");
         awaitingFollowupRef.current = false;
         setPhase("wake_listening");
       }

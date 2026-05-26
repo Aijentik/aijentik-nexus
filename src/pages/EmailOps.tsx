@@ -72,6 +72,7 @@ export default function EmailOps() {
   const [actions, setActions] = useState<AIAction[]>([]);
   const [draft, setDraft] = useState<{ subject: string; body: string; confidence: number; reasoning: string | null; action_id: string | null } | null>(null);
   const [tab, setTab] = useState("approvals");
+  const [threadQuery, setThreadQuery] = useState("");
   const [simOpen, setSimOpen] = useState(false);
   const [simForm, setSimForm] = useState({
     from_name: "Olivia Carter", from_email: "olivia@example.com",

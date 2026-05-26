@@ -11,24 +11,34 @@ import { format } from "date-fns";
 
 export default function Dashboard() {
   const { venue } = useAuth();
-  const [stats, setStats] = useState({ bookings: 0, calls: 0, covers: 0, agents: 0 });
+  const [stats, setStats] = useState({ bookings: 0, calls: 0, covers: 0, agents: 0, bookingsToday: 0, callsToday: 0, coversToday: 0 });
   const [events, setEvents] = useState<any[]>([]);
   const [upcoming, setUpcoming] = useState<any[]>([]);
 
   useEffect(() => {
     if (!venue) return;
     let active = true;
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
     (async () => {
-      const [{ count: bk }, { count: cl }, { data: bks }, { data: ag }, { data: ev }] = await Promise.all([
+      const [{ count: bk }, { count: cl }, { data: bks }, { data: ag }, { data: ev }, { count: bkToday }, { count: clToday }, { data: bksToday }] = await Promise.all([
         supabase.from("bookings").select("*", { count: "exact", head: true }).eq("venue_id", venue.id),
         supabase.from("calls").select("*", { count: "exact", head: true }).eq("venue_id", venue.id),
         supabase.from("bookings").select("*").eq("venue_id", venue.id).gte("booking_time", new Date().toISOString()).order("booking_time").limit(6),
         supabase.from("agents").select("id,status").eq("venue_id", venue.id),
         supabase.from("brain_events").select("*").eq("venue_id", venue.id).order("created_at", { ascending: false }).limit(6),
+        supabase.from("bookings").select("*", { count: "exact", head: true }).eq("venue_id", venue.id).gte("booking_time", todayStart.toISOString()).lte("booking_time", todayEnd.toISOString()),
+        supabase.from("calls").select("*", { count: "exact", head: true }).eq("venue_id", venue.id).gte("started_at", todayStart.toISOString()),
+        supabase.from("bookings").select("party_size").eq("venue_id", venue.id).gte("booking_time", todayStart.toISOString()).lte("booking_time", todayEnd.toISOString()),
       ]);
       if (!active) return;
       const covers = (bks || []).reduce((s, b: any) => s + (b.party_size || 0), 0);
-      setStats({ bookings: bk || 0, calls: cl || 0, covers, agents: (ag || []).filter((a: any) => a.status === "active").length });
+      const coversToday = (bksToday || []).reduce((s, b: any) => s + (b.party_size || 0), 0);
+      setStats({
+        bookings: bk || 0, calls: cl || 0, covers,
+        agents: (ag || []).filter((a: any) => a.status === "active").length,
+        bookingsToday: bkToday || 0, callsToday: clToday || 0, coversToday,
+      });
       setUpcoming(bks || []);
       setEvents(ev || []);
     })();
@@ -40,9 +50,9 @@ export default function Dashboard() {
   }, [venue]);
 
   const cards = [
-    { label: "Bookings", value: stats.bookings, icon: CalendarDays, hint: "All time", glow: "hsl(32 96% 58%)" },
-    { label: "Calls handled", value: stats.calls, icon: Phone, hint: "AI voice", glow: "hsl(22 88% 52%)" },
-    { label: "Covers upcoming", value: stats.covers, icon: Users, hint: "Next sessions", glow: "hsl(38 100% 70%)" },
+    { label: "Bookings", value: stats.bookings, icon: CalendarDays, hint: `${stats.bookingsToday} today`, glow: "hsl(32 96% 58%)" },
+    { label: "Calls handled", value: stats.calls, icon: Phone, hint: `${stats.callsToday} today`, glow: "hsl(22 88% 52%)" },
+    { label: "Covers upcoming", value: stats.covers, icon: Users, hint: `${stats.coversToday} today`, glow: "hsl(38 100% 70%)" },
     { label: "Active agents", value: stats.agents, icon: Sparkles, hint: "Online now", glow: "hsl(28 88% 60%)" },
   ];
 

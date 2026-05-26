@@ -3,8 +3,9 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { motion, AnimatePresence } from "framer-motion";
-import { Brain as BrainIcon, Sparkles, Undo2, Loader2, ShieldCheck } from "lucide-react";
+import { Brain as BrainIcon, Sparkles, Undo2, Loader2, ShieldCheck, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 type Ev = {
@@ -21,6 +22,7 @@ export default function LiveBrain() {
   const [events, setEvents] = useState<Ev[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "info" | "warn" | "critical" | "success">("all");
+  const [query, setQuery] = useState("");
   const [explainOpen, setExplainOpen] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, "explain" | "undo" | null>>({});
   const [undone, setUndone] = useState<Record<string, boolean>>({});
@@ -112,7 +114,12 @@ export default function LiveBrain() {
     }
   };
 
-  const filtered = filter === "all" ? events : events.filter((e) => e.severity === filter);
+  const filtered = (filter === "all" ? events : events.filter((e) => e.severity === filter))
+    .filter((e) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return `${e.title} ${e.reason || ""}`.toLowerCase().includes(q);
+    });
   const counts = events.reduce<Record<string, number>>((acc, e) => {
     acc[e.severity] = (acc[e.severity] || 0) + 1;
     return acc;
@@ -130,7 +137,7 @@ export default function LiveBrain() {
         subtitle="Every decision your AI makes — narrated in real time, explainable, reversible."
       />
       <div className="glass-strong rounded-3xl p-4 md:p-6">
-        <div className="flex flex-wrap items-center gap-2 mb-5">
+        <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="flex items-center gap-2 mr-2">
             <BrainIcon className="h-5 w-5 text-primary" />
             <span className="text-sm">
@@ -154,6 +161,11 @@ export default function LiveBrain() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="relative mb-4 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search decisions…" className="pl-9 h-9 bg-white/[0.02] border-white/[0.06]" />
         </div>
 
         <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1 md:pr-2">

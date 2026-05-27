@@ -1102,7 +1102,14 @@ export default function ManagerEarpiece() {
           Authorization: `Bearer ${session?.access_token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({ venue_id: venue.id, question, page: pageRef.current }),
+        body: JSON.stringify({
+          venue_id: venue.id,
+          question,
+          page: pageRef.current,
+          // Last few turns so follow-ups like "and tomorrow?" still have context
+          // even though the websocket closed between questions.
+          history: turnsRef.current.slice(-8).map(t => ({ role: t.role, content: t.content })),
+        }),
       });
       if (!res.ok || !res.body) {
         const errJson = await res.json().catch(() => ({}));

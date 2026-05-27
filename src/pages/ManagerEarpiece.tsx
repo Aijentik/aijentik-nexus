@@ -871,10 +871,7 @@ export default function ManagerEarpiece() {
     clearFollowupPromptTimer();
     awaitingFollowupRef.current = false;
 
-    // Reconnect the scribe websocket for this question (closed after the last answer).
-    if (modeRef.current === "always_on" && !scribe.isConnected && scribe.status !== "connecting") {
-      void connectScribeRef.current(true);
-    }
+
 
     // ---- Wake telemetry + adaptive voice profile ----
     const { rms: wakeRms, threshold: wakeThreshold } = lastWakeMeasurementRef.current;

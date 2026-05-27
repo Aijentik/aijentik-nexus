@@ -58,6 +58,9 @@ const CAPTURE_IDLE_MS = 450;
 const WAKE_CAPTURE_TIMEOUT_MS = 9500;
 const FOLLOWUP_PROMPT_DELAY_MS = 9000;
 const FOLLOWUP_REPLY_TIMEOUT_MS = 12000;
+const SPEECH_ECHO_SUPPRESS_MS = 1400;
+const ASSISTANT_ECHO_MEMORY_MS = 45_000;
+const DUPLICATE_QUESTION_SUPPRESS_MS = 12_000;
 // Whisper-mode threshold: if the average mic RMS during capture is below this,
 // the agent responds at a lower volume so it stays subtle on the service floor.
 const WHISPER_RMS_AVG = 0.012;
@@ -201,6 +204,31 @@ function stripRecentQuestionEcho(text: string, recentQuestions: string[]): strin
   return normalized;
 }
 
+function isLikelyAssistantEcho(text: string, assistantEchoes: { normalized: string; at: number }[]): boolean {
+  const normalized = normalizeVoiceText(stripWake(text));
+  if (!normalized || normalized.split(" ").length < 3) return false;
+  const now = Date.now();
+  return assistantEchoes.some(entry => {
+    if (now - entry.at > ASSISTANT_ECHO_MEMORY_MS) return false;
+    if (entry.normalized === normalized) return true;
+    if (entry.normalized.includes(normalized) && normalized.length >= 12) return true;
+    return normalized.includes(entry.normalized) && entry.normalized.length >= 12;
+  });
+}
+
+function rememberAssistantEcho(text: string, assistantEchoes: { normalized: string; at: number }[]) {
+  const normalized = normalizeVoiceText(text);
+  if (!normalized) return assistantEchoes;
+  const now = Date.now();
+  const words = normalized.split(" ");
+  const snippets = words.length > 6
+    ? Array.from({ length: Math.max(0, words.length - 5) }, (_, i) => words.slice(i, i + 6).join(" "))
+    : [];
+  return [{ normalized, at: now }, ...snippets.map(phrase => ({ normalized: phrase, at: now })), ...assistantEchoes]
+    .filter((entry, index, all) => now - entry.at <= ASSISTANT_ECHO_MEMORY_MS && all.findIndex(e => e.normalized === entry.normalized) === index)
+    .slice(0, 12);
+}
+
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err || "");
 }
@@ -302,6 +330,9 @@ export default function ManagerEarpiece() {
   const transcriptHandlerRef = useRef<(text: string, isFinal: boolean, source: "scribe" | "browser") => void>(() => undefined);
   const lastCommittedQuestionRef = useRef<{ normalized: string; at: number }>({ normalized: "", at: 0 });
   const recentQuestionNormsRef = useRef<string[]>([]);
+  const recentAssistantEchoesRef = useRef<{ normalized: string; at: number }[]>([]);
+  const ignoreSpeechUntilRef = useRef(0);
+  const responseInFlightRef = useRef(false);
   const lastBrowserResultRef = useRef<{ index: number; text: string; isFinal: boolean }>({ index: -1, text: "", isFinal: false });
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -634,7 +665,7 @@ export default function ManagerEarpiece() {
       toast.error("Couldn't keep the microphone open: " + errorMessage(e));
       return false;
     }
-  }, [stopMicStream, startLiveLevelLoop]);
+  }, [setLivePhase, stopMicStream, startLiveLevelLoop]);
 
   // -------- Scribe (ElevenLabs realtime STT) --------
   const scribe = useScribe({
@@ -727,6 +758,7 @@ export default function ManagerEarpiece() {
   const stopAudio = useCallback(() => {
     ttsCancelRef.current.cancelled = true;
     ttsChainRef.current = Promise.resolve();
+    ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS;
     try { audioRef.current?.pause(); } catch { console.warn("audio pause failed"); }
     try { outputAudioRef.current?.pause(); } catch { console.warn("output audio pause failed"); }
     audioRef.current = null;
@@ -754,8 +786,9 @@ export default function ManagerEarpiece() {
       utterance.pitch = 1.05;
       utterance.volume = 1;
       if (suppressInput) speakingRef.current = true;
-      utterance.onend = () => { if (suppressInput) speakingRef.current = false; resolve(); };
-      utterance.onerror = () => { if (suppressInput) speakingRef.current = false; resolve(); };
+      ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS;
+      utterance.onend = () => { ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS; if (suppressInput) speakingRef.current = false; resolve(); };
+      utterance.onerror = () => { ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS; if (suppressInput) speakingRef.current = false; resolve(); };
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     });
@@ -794,12 +827,13 @@ export default function ManagerEarpiece() {
     await new Promise<void>((resolve) => {
       const audio = outputAudioRef.current || new Audio();
       try { audioRef.current?.pause(); } catch { /* ignore */ }
+      ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS;
       audio.src = `data:${mime};base64,${b64}`;
       // Whisper-mode: if the user spoke softly, the agent responds softly too.
       audio.volume = captureWhisperRef.current ? WHISPER_VOLUME : NORMAL_VOLUME;
       audioRef.current = audio;
-      audio.onended = () => resolve();
-      audio.onerror = () => resolve();
+      audio.onended = () => { ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS; resolve(); };
+      audio.onerror = () => { ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS; resolve(); };
       audio.play().catch(() => resolve());
     });
   }, []);
@@ -874,6 +908,11 @@ export default function ManagerEarpiece() {
       if (speakingRef.current) return;
       const text = rawText.trim();
       if (!text) return;
+      const normalizedIncoming = normalizeVoiceText(stripWake(text));
+      const looksLikeFreshQuestion = hasWake(text) || QUESTION_START_PATTERN.test(normalizedIncoming);
+      if (isLikelyAssistantEcho(text, recentAssistantEchoesRef.current)) return;
+      if (Date.now() < ignoreSpeechUntilRef.current && !looksLikeFreshQuestion) return;
+      if (responseInFlightRef.current && !looksLikeFreshQuestion) return;
 
       if (phaseRef.current === "wake_listening") {
         if (hasWake(text)) {
@@ -946,6 +985,7 @@ export default function ManagerEarpiece() {
       void (async () => {
         setTurns(t => [...t, { role: "assistant", content: FOLLOWUP, ts: Date.now() }]);
         setLivePhase("speaking");
+        recentAssistantEchoesRef.current = rememberAssistantEcho(FOLLOWUP, recentAssistantEchoesRef.current);
         await speak(FOLLOWUP);
         if ((modeRef.current as Mode) === "idle" || !awaitingFollowupRef.current) return;
         setLivePhase("listening");
@@ -984,7 +1024,7 @@ export default function ManagerEarpiece() {
 
     const normalizedQuestion = normalizeVoiceText(question);
     const now = Date.now();
-    if (lastCommittedQuestionRef.current.normalized === normalizedQuestion && now - lastCommittedQuestionRef.current.at < 3500) return;
+    if (lastCommittedQuestionRef.current.normalized === normalizedQuestion && now - lastCommittedQuestionRef.current.at < DUPLICATE_QUESTION_SUPPRESS_MS) return;
     lastCommittedQuestionRef.current = { normalized: normalizedQuestion, at: now };
     recentQuestionNormsRef.current = [normalizedQuestion, ...recentQuestionNormsRef.current.filter(q => q !== normalizedQuestion)].slice(0, 4);
 
@@ -993,7 +1033,9 @@ export default function ManagerEarpiece() {
       if (NEGATIVE_PATTERNS.some(p => p.test(question)) && question.split(/\s+/).length <= 6) {
         setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }, { role: "assistant", content: SIGNOFF, ts: Date.now() }]);
         setLivePhase("speaking");
+        recentAssistantEchoesRef.current = rememberAssistantEcho(SIGNOFF, recentAssistantEchoesRef.current);
         await speak(SIGNOFF);
+        responseInFlightRef.current = false;
         if (modeRef.current === "always_on") {
           setLivePhase("wake_listening");
         } else {
@@ -1012,6 +1054,7 @@ export default function ManagerEarpiece() {
     setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }]);
     setPartial("");
     setLivePhase("thinking");
+    responseInFlightRef.current = true;
     playChime("commit");
 
     // Offline fallback: if there's no network, ack via local TTS and bail gracefully.
@@ -1019,7 +1062,9 @@ export default function ManagerEarpiece() {
       const offlineMsg = "I'm offline right now — I'll catch up the moment we're back.";
       setTurns(t => [...t, { role: "assistant", content: offlineMsg, ts: Date.now() }]);
       setLivePhase("speaking");
+      recentAssistantEchoesRef.current = rememberAssistantEcho(offlineMsg, recentAssistantEchoesRef.current);
       await speakWithBrowser(offlineMsg, true);
+      responseInFlightRef.current = false;
       armFollowup();
       return;
     }
@@ -1129,6 +1174,7 @@ export default function ManagerEarpiece() {
         }
       }
       flushSentences(true);
+      recentAssistantEchoesRef.current = rememberAssistantEcho(fullAnswer, recentAssistantEchoesRef.current);
 
       // Wait for TTS queue to drain (or barge-in cancellation)
       await ttsChainRef.current;
@@ -1137,12 +1183,15 @@ export default function ManagerEarpiece() {
 
       if (cancelHandle.cancelled) {
         // User barged in — go straight to listening
+        responseInFlightRef.current = false;
         if (modeRef.current === "always_on") setLivePhase("wake_listening");
         return;
       }
+      responseInFlightRef.current = false;
       armFollowup();
     } catch (e: unknown) {
       speakingRef.current = false;
+      responseInFlightRef.current = false;
       setOutLevel(0);
       toast.error(errorMessage(e) || "Ear-piece failed");
       setLivePhase(modeRef.current === "always_on" ? "wake_listening" : "idle");

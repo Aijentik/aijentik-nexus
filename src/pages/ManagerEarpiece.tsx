@@ -907,6 +907,11 @@ export default function ManagerEarpiece() {
       if (speakingRef.current) return;
       const text = rawText.trim();
       if (!text) return;
+      const normalizedIncoming = normalizeVoiceText(stripWake(text));
+      const looksLikeFreshQuestion = hasWake(text) || QUESTION_START_PATTERN.test(normalizedIncoming);
+      if (isLikelyAssistantEcho(text, recentAssistantEchoesRef.current)) return;
+      if (Date.now() < ignoreSpeechUntilRef.current && !looksLikeFreshQuestion) return;
+      if (responseInFlightRef.current && !looksLikeFreshQuestion) return;
 
       if (phaseRef.current === "wake_listening") {
         if (hasWake(text)) {

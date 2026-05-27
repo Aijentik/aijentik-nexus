@@ -1198,16 +1198,17 @@ export default function ManagerEarpiece() {
         if (modeRef.current === "always_on") setLivePhase("wake_listening");
         return;
       }
-      responseInFlightRef.current = false;
+      responseInFlightRef.current = true; // suppress stray transcripts during reset
       if (modeRef.current === "always_on") {
-        // Close the websocket between questions. Wake word stays armed via the browser
-        // recogniser; saying "Hey Aijentik" again reconnects the scribe socket.
+        // Don't auto-arm a follow-up — manager must say "Hey Aijentik" again.
+        // Scribe stays connected so wake detection remains reliable.
         resetCapture();
         awaitingFollowupRef.current = false;
         setPartial("");
-        try { await disconnectScribe(); } catch { /* ignore */ }
         setLivePhase("wake_listening");
+        responseInFlightRef.current = false;
       } else {
+        responseInFlightRef.current = false;
         armFollowup();
       }
     } catch (e: unknown) {

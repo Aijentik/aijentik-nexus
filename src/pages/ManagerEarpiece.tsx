@@ -871,10 +871,7 @@ export default function ManagerEarpiece() {
     clearFollowupPromptTimer();
     awaitingFollowupRef.current = false;
 
-    // Reconnect the scribe websocket for this question (closed after the last answer).
-    if (modeRef.current === "always_on" && !scribe.isConnected && scribe.status !== "connecting") {
-      void connectScribeRef.current(true);
-    }
+
 
     // ---- Wake telemetry + adaptive voice profile ----
     const { rms: wakeRms, threshold: wakeThreshold } = lastWakeMeasurementRef.current;
@@ -904,7 +901,7 @@ export default function ManagerEarpiece() {
     } else {
       playChime("wake"); // instant earcon instead of speaking "Yes?"
     }
-  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, startCapture, playChime, scribe.isConnected, scribe.status]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, startCapture, playChime]);
 
 
   useEffect(() => {
@@ -1198,16 +1195,17 @@ export default function ManagerEarpiece() {
         if (modeRef.current === "always_on") setLivePhase("wake_listening");
         return;
       }
-      responseInFlightRef.current = false;
+      responseInFlightRef.current = true; // suppress stray transcripts during reset
       if (modeRef.current === "always_on") {
-        // Close the websocket between questions. Wake word stays armed via the browser
-        // recogniser; saying "Hey Aijentik" again reconnects the scribe socket.
+        // Don't auto-arm a follow-up — manager must say "Hey Aijentik" again.
+        // Scribe stays connected so wake detection remains reliable.
         resetCapture();
         awaitingFollowupRef.current = false;
         setPartial("");
-        try { await disconnectScribe(); } catch { /* ignore */ }
         setLivePhase("wake_listening");
+        responseInFlightRef.current = false;
       } else {
+        responseInFlightRef.current = false;
         armFollowup();
       }
     } catch (e: unknown) {
@@ -1271,8 +1269,8 @@ export default function ManagerEarpiece() {
     setPartial("");
     awaitingFollowupRef.current = false;
     resetCapture();
-    // Don't connect scribe until the wake word fires — saves resources and avoids
-    // the websocket staying open between questions.
+    const connected = await connectScribe();
+    if (!connected) { endSession(); }
   };
 
   const sendTyped = (text: string) => {

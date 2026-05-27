@@ -1190,7 +1190,17 @@ export default function ManagerEarpiece() {
         return;
       }
       responseInFlightRef.current = false;
-      armFollowup();
+      if (modeRef.current === "always_on") {
+        // Close the websocket between questions. Wake word stays armed via the browser
+        // recogniser; saying "Hey Aijentik" again reconnects the scribe socket.
+        resetCapture();
+        awaitingFollowupRef.current = false;
+        setPartial("");
+        try { await disconnectScribe(); } catch { /* ignore */ }
+        setLivePhase("wake_listening");
+      } else {
+        armFollowup();
+      }
     } catch (e: unknown) {
       speakingRef.current = false;
       responseInFlightRef.current = false;
@@ -1198,7 +1208,7 @@ export default function ManagerEarpiece() {
       toast.error(errorMessage(e) || "Ear-piece failed");
       setLivePhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, speakWithBrowser, armFollowup, endSession, enqueueSentence, playChime]);
+  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, speakWithBrowser, armFollowup, endSession, enqueueSentence, playChime, disconnectScribe]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 

@@ -831,8 +831,8 @@ export default function ManagerEarpiece() {
       // Whisper-mode: if the user spoke softly, the agent responds softly too.
       audio.volume = captureWhisperRef.current ? WHISPER_VOLUME : NORMAL_VOLUME;
       audioRef.current = audio;
-      audio.onended = () => resolve();
-      audio.onerror = () => resolve();
+      audio.onended = () => { ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS; resolve(); };
+      audio.onerror = () => { ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS; resolve(); };
       audio.play().catch(() => resolve());
     });
   }, []);

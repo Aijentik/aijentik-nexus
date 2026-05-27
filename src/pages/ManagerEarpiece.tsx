@@ -901,7 +901,7 @@ export default function ManagerEarpiece() {
     } else {
       playChime("wake"); // instant earcon instead of speaking "Yes?"
     }
-  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, startCapture, playChime, scribe.isConnected, scribe.status]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, startCapture, playChime]);
 
 
   useEffect(() => {

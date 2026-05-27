@@ -665,7 +665,7 @@ export default function ManagerEarpiece() {
       toast.error("Couldn't keep the microphone open: " + errorMessage(e));
       return false;
     }
-  }, [stopMicStream, startLiveLevelLoop]);
+  }, [setLivePhase, stopMicStream, startLiveLevelLoop]);
 
   // -------- Scribe (ElevenLabs realtime STT) --------
   const scribe = useScribe({

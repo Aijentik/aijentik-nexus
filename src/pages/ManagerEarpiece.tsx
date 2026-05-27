@@ -1031,7 +1031,9 @@ export default function ManagerEarpiece() {
       if (NEGATIVE_PATTERNS.some(p => p.test(question)) && question.split(/\s+/).length <= 6) {
         setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }, { role: "assistant", content: SIGNOFF, ts: Date.now() }]);
         setLivePhase("speaking");
+        recentAssistantEchoesRef.current = rememberAssistantEcho(SIGNOFF, recentAssistantEchoesRef.current);
         await speak(SIGNOFF);
+        responseInFlightRef.current = false;
         if (modeRef.current === "always_on") {
           setLivePhase("wake_listening");
         } else {
@@ -1050,6 +1052,7 @@ export default function ManagerEarpiece() {
     setTurns(t => [...t, { role: "user", content: question, ts: Date.now() }]);
     setPartial("");
     setLivePhase("thinking");
+    responseInFlightRef.current = true;
     playChime("commit");
 
     // Offline fallback: if there's no network, ack via local TTS and bail gracefully.
@@ -1057,7 +1060,9 @@ export default function ManagerEarpiece() {
       const offlineMsg = "I'm offline right now — I'll catch up the moment we're back.";
       setTurns(t => [...t, { role: "assistant", content: offlineMsg, ts: Date.now() }]);
       setLivePhase("speaking");
+      recentAssistantEchoesRef.current = rememberAssistantEcho(offlineMsg, recentAssistantEchoesRef.current);
       await speakWithBrowser(offlineMsg, true);
+      responseInFlightRef.current = false;
       armFollowup();
       return;
     }
@@ -1167,6 +1172,7 @@ export default function ManagerEarpiece() {
         }
       }
       flushSentences(true);
+      recentAssistantEchoesRef.current = rememberAssistantEcho(fullAnswer, recentAssistantEchoesRef.current);
 
       // Wait for TTS queue to drain (or barge-in cancellation)
       await ttsChainRef.current;
@@ -1175,12 +1181,15 @@ export default function ManagerEarpiece() {
 
       if (cancelHandle.cancelled) {
         // User barged in — go straight to listening
+        responseInFlightRef.current = false;
         if (modeRef.current === "always_on") setLivePhase("wake_listening");
         return;
       }
+      responseInFlightRef.current = false;
       armFollowup();
     } catch (e: unknown) {
       speakingRef.current = false;
+      responseInFlightRef.current = false;
       setOutLevel(0);
       toast.error(errorMessage(e) || "Ear-piece failed");
       setLivePhase(modeRef.current === "always_on" ? "wake_listening" : "idle");

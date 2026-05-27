@@ -60,6 +60,7 @@ const FOLLOWUP_PROMPT_DELAY_MS = 9000;
 const FOLLOWUP_REPLY_TIMEOUT_MS = 12000;
 const SPEECH_ECHO_SUPPRESS_MS = 1400;
 const ASSISTANT_ECHO_MEMORY_MS = 45_000;
+const DUPLICATE_QUESTION_SUPPRESS_MS = 12_000;
 // Whisper-mode threshold: if the average mic RMS during capture is below this,
 // the agent responds at a lower volume so it stays subtle on the service floor.
 const WHISPER_RMS_AVG = 0.012;
@@ -1023,7 +1024,7 @@ export default function ManagerEarpiece() {
 
     const normalizedQuestion = normalizeVoiceText(question);
     const now = Date.now();
-    if (lastCommittedQuestionRef.current.normalized === normalizedQuestion && now - lastCommittedQuestionRef.current.at < 3500) return;
+    if (lastCommittedQuestionRef.current.normalized === normalizedQuestion && now - lastCommittedQuestionRef.current.at < DUPLICATE_QUESTION_SUPPRESS_MS) return;
     lastCommittedQuestionRef.current = { normalized: normalizedQuestion, at: now };
     recentQuestionNormsRef.current = [normalizedQuestion, ...recentQuestionNormsRef.current.filter(q => q !== normalizedQuestion)].slice(0, 4);
 

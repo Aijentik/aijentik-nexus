@@ -871,6 +871,11 @@ export default function ManagerEarpiece() {
     clearFollowupPromptTimer();
     awaitingFollowupRef.current = false;
 
+    // Reconnect the scribe websocket for this question (closed after the last answer).
+    if (modeRef.current === "always_on" && !scribe.isConnected && scribe.status !== "connecting") {
+      void connectScribeRef.current(true);
+    }
+
     // ---- Wake telemetry + adaptive voice profile ----
     const { rms: wakeRms, threshold: wakeThreshold } = lastWakeMeasurementRef.current;
     logWakeTelemetry({
@@ -880,8 +885,6 @@ export default function ManagerEarpiece() {
       text: heardText.slice(0, 80),
       accepted: true,
     });
-    // If the manager regularly fires the wake word at a quieter level than our threshold,
-    // gently lower the threshold so they don't have to project. Clamp to a safe floor.
     if (wakeRms > 0 && wakeRms < wakeProfileRef.current.minWakeRms * 0.85) {
       const next = Math.max(0.0006, wakeProfileRef.current.minWakeRms * 0.92);
       wakeProfileRef.current = { minWakeRms: next };
@@ -892,7 +895,6 @@ export default function ManagerEarpiece() {
     lastBrowserResultRef.current = { index: -1, text: "", isFinal: false };
     const tail = stripWake(heardText);
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
-    // Reset whisper accumulator at the start of each capture window.
     captureRmsSumRef.current = 0;
     captureRmsCountRef.current = 0;
     captureWhisperRef.current = false;
@@ -902,7 +904,7 @@ export default function ManagerEarpiece() {
     } else {
       playChime("wake"); // instant earcon instead of speaking "Yes?"
     }
-  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, startCapture, playChime]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, startCapture, playChime, scribe.isConnected, scribe.status]);
 
 
   useEffect(() => {

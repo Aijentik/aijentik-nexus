@@ -219,11 +219,11 @@ function rememberAssistantEcho(text: string, assistantEchoes: { normalized: stri
   const normalized = normalizeVoiceText(text);
   if (!normalized) return assistantEchoes;
   const now = Date.now();
-  const phrases = normalized
-    .split(/(?<=\b(?:today|tonight|seats|visits|staff|now|clear|booked|total))\s+/)
-    .map(phrase => phrase.trim())
-    .filter(phrase => phrase.length >= 12);
-  return [{ normalized, at: now }, ...phrases.map(phrase => ({ normalized: phrase, at: now })), ...assistantEchoes]
+  const words = normalized.split(" ");
+  const snippets = words.length > 6
+    ? Array.from({ length: Math.max(0, words.length - 5) }, (_, i) => words.slice(i, i + 6).join(" "))
+    : [];
+  return [{ normalized, at: now }, ...snippets.map(phrase => ({ normalized: phrase, at: now })), ...assistantEchoes]
     .filter((entry, index, all) => now - entry.at <= ASSISTANT_ECHO_MEMORY_MS && all.findIndex(e => e.normalized === entry.normalized) === index)
     .slice(0, 12);
 }

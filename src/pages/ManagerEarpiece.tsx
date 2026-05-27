@@ -331,6 +331,7 @@ export default function ManagerEarpiece() {
   const recentQuestionNormsRef = useRef<string[]>([]);
   const recentAssistantEchoesRef = useRef<{ normalized: string; at: number }[]>([]);
   const ignoreSpeechUntilRef = useRef(0);
+  const responseInFlightRef = useRef(false);
   const lastBrowserResultRef = useRef<{ index: number; text: string; isFinal: boolean }>({ index: -1, text: "", isFinal: false });
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);

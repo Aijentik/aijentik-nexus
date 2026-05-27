@@ -1264,8 +1264,8 @@ export default function ManagerEarpiece() {
     setPartial("");
     awaitingFollowupRef.current = false;
     resetCapture();
-    const connected = await connectScribe();
-    if (!connected) { endSession(); }
+    // Don't connect scribe until the wake word fires — saves resources and avoids
+    // the websocket staying open between questions.
   };
 
   const sendTyped = (text: string) => {

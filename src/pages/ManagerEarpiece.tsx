@@ -58,6 +58,8 @@ const CAPTURE_IDLE_MS = 450;
 const WAKE_CAPTURE_TIMEOUT_MS = 9500;
 const FOLLOWUP_PROMPT_DELAY_MS = 9000;
 const FOLLOWUP_REPLY_TIMEOUT_MS = 12000;
+const SPEECH_ECHO_SUPPRESS_MS = 1400;
+const ASSISTANT_ECHO_MEMORY_MS = 45_000;
 // Whisper-mode threshold: if the average mic RMS during capture is below this,
 // the agent responds at a lower volume so it stays subtle on the service floor.
 const WHISPER_RMS_AVG = 0.012;
@@ -302,6 +304,8 @@ export default function ManagerEarpiece() {
   const transcriptHandlerRef = useRef<(text: string, isFinal: boolean, source: "scribe" | "browser") => void>(() => undefined);
   const lastCommittedQuestionRef = useRef<{ normalized: string; at: number }>({ normalized: "", at: 0 });
   const recentQuestionNormsRef = useRef<string[]>([]);
+  const recentAssistantEchoesRef = useRef<{ normalized: string; at: number }[]>([]);
+  const ignoreSpeechUntilRef = useRef(0);
   const lastBrowserResultRef = useRef<{ index: number; text: string; isFinal: boolean }>({ index: -1, text: "", isFinal: false });
   const cleanupRef = useRef<() => void>(() => undefined);
   const micStreamRef = useRef<MediaStream | null>(null);

@@ -239,10 +239,12 @@ ${recentCalls.map((c: any) => `- ${c.caller || "?"}: ${c.outcome}${c.summary ? `
 Style: short, spoken English. 1-2 sentences max. No bullet points, no markdown, no preambles like "Sure" or "Based on the data". Speak like a trusted GM whispering insight. Use the venue's brand voice.
 
 Answer ONLY the user's question. Use ONLY the live context below. If asked for an action, describe what you'd do; do not invent confirmations.
+The connection closes between questions, so prior turns are provided for context — use them if the new question is a follow-up (e.g. "and tomorrow?"), otherwise ignore them.
 ${pageBias ? `\nCONTEXT BIAS: ${pageBias}\n` : ""}
 LIVE CONTEXT:
 ${context}`,
       },
+      ...safeHistory,
       { role: "user", content: cleanedQuestion || question },
     ];
 

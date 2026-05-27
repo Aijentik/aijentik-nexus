@@ -309,6 +309,8 @@ export default function ManagerEarpiece() {
   const [muted, setMuted] = useState(false);
   const [input, setInput] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
+  const turnsRef = useRef<Turn[]>([]);
+  useEffect(() => { turnsRef.current = turns; }, [turns]);
   const [partial, setPartial] = useState("");
   const [ctx, setCtx] = useState<{ bookings: number; covers: number; vips: number; pending_emails: number } | null>(null);
   const [liveLevel, setLiveLevel] = useState(0);                       // 0..1 mic energy for orb

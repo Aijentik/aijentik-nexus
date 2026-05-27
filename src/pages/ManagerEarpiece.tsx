@@ -785,8 +785,9 @@ export default function ManagerEarpiece() {
       utterance.pitch = 1.05;
       utterance.volume = 1;
       if (suppressInput) speakingRef.current = true;
-      utterance.onend = () => { if (suppressInput) speakingRef.current = false; resolve(); };
-      utterance.onerror = () => { if (suppressInput) speakingRef.current = false; resolve(); };
+      ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS;
+      utterance.onend = () => { ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS; if (suppressInput) speakingRef.current = false; resolve(); };
+      utterance.onerror = () => { ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS; if (suppressInput) speakingRef.current = false; resolve(); };
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     });

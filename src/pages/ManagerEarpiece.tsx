@@ -984,6 +984,7 @@ export default function ManagerEarpiece() {
       void (async () => {
         setTurns(t => [...t, { role: "assistant", content: FOLLOWUP, ts: Date.now() }]);
         setLivePhase("speaking");
+        recentAssistantEchoesRef.current = rememberAssistantEcho(FOLLOWUP, recentAssistantEchoesRef.current);
         await speak(FOLLOWUP);
         if ((modeRef.current as Mode) === "idle" || !awaitingFollowupRef.current) return;
         setLivePhase("listening");

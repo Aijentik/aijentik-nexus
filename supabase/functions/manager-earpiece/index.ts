@@ -103,12 +103,23 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { venue_id, question, page } = body as { venue_id: string; question: string; page?: string };
+    const { venue_id, question, page, history } = body as {
+      venue_id: string;
+      question: string;
+      page?: string;
+      history?: { role: "user" | "assistant"; content: string }[];
+    };
     if (!venue_id || !question) {
       return new Response(JSON.stringify({ error: "venue_id and question required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const safeHistory = Array.isArray(history)
+      ? history
+          .filter(m => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
+          .slice(-8)
+          .map(m => ({ role: m.role, content: m.content.slice(0, 600) }))
+      : [];
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

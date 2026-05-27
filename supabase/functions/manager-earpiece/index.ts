@@ -103,12 +103,23 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { venue_id, question, page } = body as { venue_id: string; question: string; page?: string };
+    const { venue_id, question, page, history } = body as {
+      venue_id: string;
+      question: string;
+      page?: string;
+      history?: { role: "user" | "assistant"; content: string }[];
+    };
     if (!venue_id || !question) {
       return new Response(JSON.stringify({ error: "venue_id and question required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const safeHistory = Array.isArray(history)
+      ? history
+          .filter(m => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
+          .slice(-8)
+          .map(m => ({ role: m.role, content: m.content.slice(0, 600) }))
+      : [];
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -228,10 +239,12 @@ ${recentCalls.map((c: any) => `- ${c.caller || "?"}: ${c.outcome}${c.summary ? `
 Style: short, spoken English. 1-2 sentences max. No bullet points, no markdown, no preambles like "Sure" or "Based on the data". Speak like a trusted GM whispering insight. Use the venue's brand voice.
 
 Answer ONLY the user's question. Use ONLY the live context below. If asked for an action, describe what you'd do; do not invent confirmations.
+The connection closes between questions, so prior turns are provided for context — use them if the new question is a follow-up (e.g. "and tomorrow?"), otherwise ignore them.
 ${pageBias ? `\nCONTEXT BIAS: ${pageBias}\n` : ""}
 LIVE CONTEXT:
 ${context}`,
       },
+      ...safeHistory,
       { role: "user", content: cleanedQuestion || question },
     ];
 

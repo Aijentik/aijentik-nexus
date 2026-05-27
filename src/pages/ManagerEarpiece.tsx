@@ -309,6 +309,8 @@ export default function ManagerEarpiece() {
   const [muted, setMuted] = useState(false);
   const [input, setInput] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
+  const turnsRef = useRef<Turn[]>([]);
+  useEffect(() => { turnsRef.current = turns; }, [turns]);
   const [partial, setPartial] = useState("");
   const [ctx, setCtx] = useState<{ bookings: number; covers: number; vips: number; pending_emails: number } | null>(null);
   const [liveLevel, setLiveLevel] = useState(0);                       // 0..1 mic energy for orb
@@ -869,6 +871,11 @@ export default function ManagerEarpiece() {
     clearFollowupPromptTimer();
     awaitingFollowupRef.current = false;
 
+    // Reconnect the scribe websocket for this question (closed after the last answer).
+    if (modeRef.current === "always_on" && !scribe.isConnected && scribe.status !== "connecting") {
+      void connectScribeRef.current(true);
+    }
+
     // ---- Wake telemetry + adaptive voice profile ----
     const { rms: wakeRms, threshold: wakeThreshold } = lastWakeMeasurementRef.current;
     logWakeTelemetry({
@@ -878,8 +885,6 @@ export default function ManagerEarpiece() {
       text: heardText.slice(0, 80),
       accepted: true,
     });
-    // If the manager regularly fires the wake word at a quieter level than our threshold,
-    // gently lower the threshold so they don't have to project. Clamp to a safe floor.
     if (wakeRms > 0 && wakeRms < wakeProfileRef.current.minWakeRms * 0.85) {
       const next = Math.max(0.0006, wakeProfileRef.current.minWakeRms * 0.92);
       wakeProfileRef.current = { minWakeRms: next };
@@ -890,7 +895,6 @@ export default function ManagerEarpiece() {
     lastBrowserResultRef.current = { index: -1, text: "", isFinal: false };
     const tail = stripWake(heardText);
     setPartial(hasUsableCommand(tail) ? tail : WAKE_ACK);
-    // Reset whisper accumulator at the start of each capture window.
     captureRmsSumRef.current = 0;
     captureRmsCountRef.current = 0;
     captureWhisperRef.current = false;
@@ -900,7 +904,7 @@ export default function ManagerEarpiece() {
     } else {
       playChime("wake"); // instant earcon instead of speaking "Yes?"
     }
-  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, startCapture, playChime]);
+  }, [clearFollowupPromptTimer, clearFollowupTimer, scheduleCaptureCommit, setLivePhase, startCapture, playChime, scribe.isConnected, scribe.status]);
 
 
   useEffect(() => {
@@ -1098,7 +1102,14 @@ export default function ManagerEarpiece() {
           Authorization: `Bearer ${session?.access_token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({ venue_id: venue.id, question, page: pageRef.current }),
+        body: JSON.stringify({
+          venue_id: venue.id,
+          question,
+          page: pageRef.current,
+          // Last few turns so follow-ups like "and tomorrow?" still have context
+          // even though the websocket closed between questions.
+          history: turnsRef.current.slice(-8).map(t => ({ role: t.role, content: t.content })),
+        }),
       });
       if (!res.ok || !res.body) {
         const errJson = await res.json().catch(() => ({}));
@@ -1188,7 +1199,17 @@ export default function ManagerEarpiece() {
         return;
       }
       responseInFlightRef.current = false;
-      armFollowup();
+      if (modeRef.current === "always_on") {
+        // Close the websocket between questions. Wake word stays armed via the browser
+        // recogniser; saying "Hey Aijentik" again reconnects the scribe socket.
+        resetCapture();
+        awaitingFollowupRef.current = false;
+        setPartial("");
+        try { await disconnectScribe(); } catch { /* ignore */ }
+        setLivePhase("wake_listening");
+      } else {
+        armFollowup();
+      }
     } catch (e: unknown) {
       speakingRef.current = false;
       responseInFlightRef.current = false;
@@ -1196,7 +1217,7 @@ export default function ManagerEarpiece() {
       toast.error(errorMessage(e) || "Ear-piece failed");
       setLivePhase(modeRef.current === "always_on" ? "wake_listening" : "idle");
     }
-  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, speakWithBrowser, armFollowup, endSession, enqueueSentence, playChime]);
+  }, [venue, clearFollowupPromptTimer, clearFollowupTimer, resetCapture, setLivePhase, speak, speakWithBrowser, armFollowup, endSession, enqueueSentence, playChime, disconnectScribe]);
 
   useEffect(() => { handleUserUtteranceRef.current = handleUserUtterance; }, [handleUserUtterance]);
 
@@ -1250,8 +1271,8 @@ export default function ManagerEarpiece() {
     setPartial("");
     awaitingFollowupRef.current = false;
     resetCapture();
-    const connected = await connectScribe();
-    if (!connected) { endSession(); }
+    // Don't connect scribe until the wake word fires — saves resources and avoids
+    // the websocket staying open between questions.
   };
 
   const sendTyped = (text: string) => {

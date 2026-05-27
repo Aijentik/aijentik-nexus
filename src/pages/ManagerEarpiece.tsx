@@ -757,6 +757,7 @@ export default function ManagerEarpiece() {
   const stopAudio = useCallback(() => {
     ttsCancelRef.current.cancelled = true;
     ttsChainRef.current = Promise.resolve();
+    ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS;
     try { audioRef.current?.pause(); } catch { console.warn("audio pause failed"); }
     try { outputAudioRef.current?.pause(); } catch { console.warn("output audio pause failed"); }
     audioRef.current = null;
@@ -824,6 +825,7 @@ export default function ManagerEarpiece() {
     await new Promise<void>((resolve) => {
       const audio = outputAudioRef.current || new Audio();
       try { audioRef.current?.pause(); } catch { /* ignore */ }
+      ignoreSpeechUntilRef.current = Date.now() + SPEECH_ECHO_SUPPRESS_MS;
       audio.src = `data:${mime};base64,${b64}`;
       // Whisper-mode: if the user spoke softly, the agent responds softly too.
       audio.volume = captureWhisperRef.current ? WHISPER_VOLUME : NORMAL_VOLUME;

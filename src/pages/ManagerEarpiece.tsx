@@ -203,6 +203,31 @@ function stripRecentQuestionEcho(text: string, recentQuestions: string[]): strin
   return normalized;
 }
 
+function isLikelyAssistantEcho(text: string, assistantEchoes: { normalized: string; at: number }[]): boolean {
+  const normalized = normalizeVoiceText(stripWake(text));
+  if (!normalized || normalized.split(" ").length < 3) return false;
+  const now = Date.now();
+  return assistantEchoes.some(entry => {
+    if (now - entry.at > ASSISTANT_ECHO_MEMORY_MS) return false;
+    if (entry.normalized === normalized) return true;
+    if (entry.normalized.includes(normalized) && normalized.length >= 12) return true;
+    return normalized.includes(entry.normalized) && entry.normalized.length >= 12;
+  });
+}
+
+function rememberAssistantEcho(text: string, assistantEchoes: { normalized: string; at: number }[]) {
+  const normalized = normalizeVoiceText(text);
+  if (!normalized) return assistantEchoes;
+  const now = Date.now();
+  const phrases = normalized
+    .split(/(?<=\b(?:today|tonight|seats|visits|staff|now|clear|booked|total))\s+/)
+    .map(phrase => phrase.trim())
+    .filter(phrase => phrase.length >= 12);
+  return [{ normalized, at: now }, ...phrases.map(phrase => ({ normalized: phrase, at: now })), ...assistantEchoes]
+    .filter((entry, index, all) => now - entry.at <= ASSISTANT_ECHO_MEMORY_MS && all.findIndex(e => e.normalized === entry.normalized) === index)
+    .slice(0, 12);
+}
+
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err || "");
 }

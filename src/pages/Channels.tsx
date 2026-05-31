@@ -32,7 +32,7 @@ const CHANNELS: {
   { key: "email",     name: "Email",        blurb: "Inbox triage and intelligent replies", icon: Mail,        color: "hsl(28 88% 60%)",   setupHint: "Forward your inbox to your Aijentik mailbox." },
 ];
 
-type ChannelState = { connected: boolean; handlingPct?: number; escalationPct?: number; avgMs?: number };
+type ChannelState = { connected: boolean; handlingPct?: number; escalationPct?: number; avgMs?: number; sender?: string };
 type ChannelsMap = Partial<Record<ChannelKey, ChannelState>>;
 
 export default function Channels() {

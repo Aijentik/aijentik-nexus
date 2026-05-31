@@ -37,15 +37,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshVenues = async () => {
     if (venueRefreshPromise) return venueRefreshPromise;
     venueRefreshPromise = (async () => {
-    const { data: { user: u } } = await supabase.auth.getUser();
-    if (!u) { setVenues([]); setVenue(null); setVenuesLoaded(true); return; }
-    const { data: vs } = await supabase.from("venues").select("id,name,venue_type,status,features").order("created_at", { ascending: true });
-    setVenues(vs || []);
-    const { data: prof } = await supabase.from("profiles").select("current_venue_id").eq("user_id", u.id).maybeSingle();
-    const active = (vs || []).find(v => v.id === prof?.current_venue_id) || (vs || [])[0] || null;
-    setVenue(active);
-    setVenuesLoaded(true);
-    })().finally(() => { venueRefreshPromise = null; });
+      // Use the cached session user instead of getUser() to avoid an extra
+      // network round-trip that can fail with transient "Load failed" errors
+      // right after sign-in and leave us in a half-loaded state.
+      const { data: { session: s } } = await supabase.auth.getSession();
+      const u = s?.user ?? null;
+      if (!u) { setVenues([]); setVenue(null); setVenuesLoaded(true); return; }
+      // Retry once on transient failure so we never wipe state from a flaky request.
+      const fetchVenues = async () => {
+        for (let i = 0; i < 2; i++) {
+          const { data, error } = await supabase
+            .from("venues")
+            .select("id,name,venue_type,status,features")
+            .order("created_at", { ascending: true });
+          if (!error) return data || [];
+          await new Promise(r => setTimeout(r, 400));
+        }
+        return null; // signal failure (vs empty)
+      };
+      const vs = await fetchVenues();
+      if (vs === null) {
+        // Transient failure — keep prior state; just mark loaded so UI doesn't spin forever.
+        setVenuesLoaded(true);
+        return;
+      }
+      setVenues(vs);
+      const { data: prof } = await supabase
+        .from("profiles").select("current_venue_id").eq("user_id", u.id).maybeSingle();
+      const active = vs.find(v => v.id === prof?.current_venue_id) || vs[0] || null;
+      setVenue(active);
+      setVenuesLoaded(true);
+    })().catch(() => { setVenuesLoaded(true); }).finally(() => { venueRefreshPromise = null; });
     return venueRefreshPromise;
   };
 

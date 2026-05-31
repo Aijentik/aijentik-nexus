@@ -34,8 +34,38 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "check_availability",
+      description: "Check whether a requested date/time has capacity. Returns availability for the requested slot plus nearby alternative slots before and after. ALWAYS call this before promising a time or creating a booking.",
+      parameters: {
+        type: "object",
+        properties: {
+          booking_time: { type: "string", description: "Requested ISO 8601 datetime with timezone offset, e.g. 2026-06-05T19:00:00+10:00" },
+          party_size: { type: "integer", minimum: 1 },
+        },
+        required: ["booking_time", "party_size"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "find_booking",
+      description: "Find an existing booking when the caller's phone doesn't match any on file. Search by guest_name, short booking reference (first 8 chars of id), or an alternate phone the booking might be under.",
+      parameters: {
+        type: "object",
+        properties: {
+          guest_name: { type: "string" },
+          booking_ref: { type: "string", description: "Short reference, e.g. first 8 chars of booking id" },
+          alternate_phone: { type: "string" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_booking",
-      description: "Create a new reservation. Only call after confirming name, party size, date, time (ISO 8601 with TZ), and phone.",
+      description: "Create a new reservation. Only call after check_availability confirms the slot is free AND you have confirmed name, party size, date, time (ISO 8601 with TZ).",
       parameters: {
         type: "object",
         properties: {
@@ -52,7 +82,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "update_booking",
-      description: "Modify an existing reservation (date/time, party size, or notes). booking_id comes from CALLER CONTEXT.",
+      description: "Modify an existing reservation (date/time, party size, or notes). booking_id comes from CALLER CONTEXT or find_booking. If changing time, call check_availability first.",
       parameters: {
         type: "object",
         properties: {
@@ -78,6 +108,7 @@ const TOOLS = [
     },
   },
 ];
+
 
 async function execTool(sb: any, venue: any, guestPhone: string, guestId: string | null, name: string, args: any) {
   try {

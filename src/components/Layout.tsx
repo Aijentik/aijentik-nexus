@@ -46,12 +46,14 @@ function SignInLoader({ label = "Signing you in" }: { label?: string }) {
 }
 
 export function ProtectedLayout() {
-  const { user, loading, venue, venuesLoaded } = useAuth();
+  const { user, loading, venue, venues, venuesLoaded } = useAuth();
   if (loading) return <SignInLoader />;
   if (!user) return <Navigate to="/auth" replace />;
   if (!venuesLoaded) return <SignInLoader label="Waking up your venue" />;
-  if (!venue) return <Navigate to="/onboarding" replace />;
-  return (
+  // Only send to onboarding when we confirmed the account has zero venues.
+  // If a transient fetch error left `venue` null but venues exist, keep them in the app.
+  if (!venue && venues.length === 0) return <Navigate to="/onboarding" replace />;
+  if (!venue) return <SignInLoader label="Reconnecting your venue" />;
     <div className="flex min-h-screen relative">
       {/* Cinematic ambient room — soft drifting amber light behind everything */}
       <div className="ambient-room" aria-hidden />

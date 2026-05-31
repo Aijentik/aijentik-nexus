@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   MessageSquare, Phone, Mail, Instagram, Facebook, Globe, Smartphone,
-  CheckCircle2, AlertCircle, Loader2, Zap, ArrowRight, Activity, Sparkles, X,
+  CheckCircle2, Loader2, Zap, ArrowRight, Activity, Sparkles, Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -30,7 +32,7 @@ const CHANNELS: {
   { key: "email",     name: "Email",        blurb: "Inbox triage and intelligent replies", icon: Mail,        color: "hsl(28 88% 60%)",   setupHint: "Forward your inbox to your Aijentik mailbox." },
 ];
 
-type ChannelState = { connected: boolean; handlingPct?: number; escalationPct?: number; avgMs?: number };
+type ChannelState = { connected: boolean; handlingPct?: number; escalationPct?: number; avgMs?: number; sender?: string };
 type ChannelsMap = Partial<Record<ChannelKey, ChannelState>>;
 
 export default function Channels() {
@@ -63,10 +65,9 @@ export default function Channels() {
     return true;
   };
 
-  const connect = async (k: ChannelKey) => {
+  const connect = async (k: ChannelKey, extra?: Partial<ChannelState>) => {
     setBusy(k);
-    // Simulated provisioning — real OAuth handled in the per-channel wizard later.
-    await new Promise(r => setTimeout(r, 700 + Math.random() * 600));
+    await new Promise(r => setTimeout(r, 400 + Math.random() * 400));
     const next: ChannelsMap = {
       ...channels,
       [k]: {
@@ -74,6 +75,7 @@ export default function Channels() {
         handlingPct: 88 + Math.floor(Math.random() * 10),
         escalationPct: 2 + Math.floor(Math.random() * 4),
         avgMs: 600 + Math.floor(Math.random() * 900),
+        ...(extra || {}),
       },
     };
     const ok = await persist(next);
@@ -226,17 +228,94 @@ function ChannelWizard({
 }: {
   channelKey: ChannelKey | null;
   onClose: () => void;
-  onConnect: (k: ChannelKey) => void;
+  onConnect: (k: ChannelKey, extra?: Partial<ChannelState>) => void;
   busy: ChannelKey | null;
   state?: ChannelState;
 }) {
   const meta = channelKey ? CHANNELS.find(c => c.key === channelKey) : null;
   const open = !!channelKey && !!meta;
+  const [waSender, setWaSender] = useState(state?.sender || "+14155238886");
+  useEffect(() => { setWaSender(state?.sender || "+14155238886"); }, [state?.sender, channelKey]);
+
   if (!meta) return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}><DialogContent /></Dialog>
   );
   const I = meta.icon;
   const connected = !!state?.connected;
+  const projectRef = (import.meta.env.VITE_SUPABASE_PROJECT_ID as string) || "";
+  const webhookUrl = `https://${projectRef}.supabase.co/functions/v1/whatsapp-inbound`;
+
+  const copy = (s: string) => { navigator.clipboard.writeText(s); toast.success("Copied"); };
+
+  if (channelKey === "whatsapp") {
+    return (
+      <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="max-w-lg bg-[hsl(28_22%_5%/0.96)] border-white/[0.06]">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/10 grid place-items-center">
+                <I className="h-5 w-5" style={{ color: meta.color }} />
+              </div>
+              <div>
+                <DialogTitle className="text-base">WhatsApp · Twilio Sandbox</DialogTitle>
+                <DialogDescription className="text-xs">Fast path — live in under 5 minutes for testing.</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Step n={1} title="Open Twilio WhatsApp Sandbox" done={connected}>
+              In Twilio Console → Messaging → Try it out → <strong>Send a WhatsApp message</strong>.
+              From your phone, message the sandbox number with the join code shown there
+              (e.g. <em>"join silver-tiger"</em>).
+            </Step>
+
+            <Step n={2} title="Paste the inbound webhook into Twilio" done={connected}>
+              In the same sandbox screen, under <strong>"When a message comes in"</strong>, paste:
+              <div className="mt-2 flex items-center gap-2 rounded-lg bg-black/40 border border-white/10 px-2 py-1.5">
+                <code className="text-[11px] flex-1 truncate">{webhookUrl}</code>
+                <Button size="sm" variant="outline" className="h-6 px-2 border-white/10" onClick={() => copy(webhookUrl)}>
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-1">Method: HTTP POST</div>
+            </Step>
+
+            <Step n={3} title="Confirm the sandbox sender" done={connected}>
+              <div className="mt-1">
+                <Label className="text-[11px] text-muted-foreground">Sandbox sender (E.164)</Label>
+                <Input
+                  value={waSender}
+                  onChange={(e) => setWaSender(e.target.value)}
+                  placeholder="+14155238886"
+                  className="h-8 mt-1 bg-black/40 border-white/10 text-xs"
+                />
+                <div className="text-[10px] text-muted-foreground mt-1">
+                  Twilio's default sandbox number is <code>+14155238886</code>. Leave as-is unless yours differs.
+                </div>
+              </div>
+            </Step>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="border-white/10" onClick={onClose}>Close</Button>
+            <Button
+              disabled={busy === channelKey || !/^\+[1-9]\d{6,14}$/.test(waSender)}
+              onClick={() => onConnect("whatsapp", { sender: waSender })}
+              className="flex-1 bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40"
+            >
+              {busy === channelKey
+                ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Saving…</>
+                : connected
+                  ? <><Sparkles className="h-3.5 w-3.5 mr-1.5" /> Update sender</>
+                  : <><Zap className="h-3.5 w-3.5 mr-1.5" /> I've done the steps — go live</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md bg-[hsl(28_22%_5%/0.96)] border-white/[0.06]">

@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.email-action]
 verify_jwt = false
+
+[functions.whatsapp-inbound]
+verify_jwt = false

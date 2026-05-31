@@ -338,7 +338,7 @@ CALLER LOOKUP RULES
 
     // 6) Tool-calling loop (max 3 hops).
     let reply = "";
-    for (let hop = 0; hop < 3; hop++) {
+    for (let hop = 0; hop < 5; hop++) {
       const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },

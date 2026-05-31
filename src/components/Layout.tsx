@@ -54,6 +54,7 @@ export function ProtectedLayout() {
   // If a transient fetch error left `venue` null but venues exist, keep them in the app.
   if (!venue && venues.length === 0) return <Navigate to="/onboarding" replace />;
   if (!venue) return <SignInLoader label="Reconnecting your venue" />;
+  return (
     <div className="flex min-h-screen relative">
       {/* Cinematic ambient room — soft drifting amber light behind everything */}
       <div className="ambient-room" aria-hidden />

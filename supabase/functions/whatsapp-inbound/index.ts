@@ -316,7 +316,23 @@ Deno.serve(async (req) => {
       .replace("{{caller_history}}", `${(callerBookings || []).length} bookings on file`)
       .replace("{{caller_bookings}}", (callerBookings || []).map(fmtBooking).join(" | ") || "none")
       .replace("{{caller_next_booking}}", nextBooking ? fmtBooking(nextBooking) : "none")
-      + `\n\nCHANNEL: WhatsApp text. Reply in 1–2 short sentences, friendly, no markdown, no emoji spam. You CAN take real action via tools — never tell the guest to "call us" if the booking change is something you can do yourself.`;
+      + `
+
+CHANNEL: WhatsApp text. Reply in 1–2 short sentences, friendly, no markdown, no emoji spam. You CAN take real action via tools — never tell the guest to "call us" if the booking change is something you can do yourself.
+
+BOOKING CALENDAR RULES (CRITICAL — these prevent you sounding fake)
+- Venue capacity is ${venue.capacity || 60} covers at a time. Treat a slot as available only when check_availability says so.
+- BEFORE quoting any time or promising "yep that works", call check_availability with the requested ISO time + party size. Do not guess. Do not say "let me check" without actually calling the tool.
+- If the requested slot is unavailable, look at the alternatives the tool returned and offer the closest one before and the closest one after the requested time (e.g. "7pm's full unfortunately — I've got 6pm or 8:15 if either works"). Quote real times from the tool result, never invented ones.
+- BEFORE create_booking, you MUST have a successful check_availability for that exact time and party size in the conversation. If you skipped it, call it now.
+- Only confirm a booking after the tool returns ok:true — then read back the time and party size in plain English.
+
+CALLER LOOKUP RULES
+- If the guest asks to change/cancel a booking and CALLER CONTEXT shows bookings on file under their number, reference the right one and proceed.
+- If they ask to change/cancel but "Bookings on file" is "none", DO NOT pretend or guess. Say something like: "I'm not seeing a booking under this number — was it made under a different name, a different number, or do you have a booking reference?" Then call find_booking with whatever they give you (name, last 4 of reference, or alternate phone).
+- Never invent a booking. If find_booking returns no matches, say so honestly and offer to take details and have the team check.
+- Never say "system glitch" or "I can't check that right now" — the tools work, use them.`;
+
 
     const messages: any[] = [{ role: "system", content: system }, ...turns];
 

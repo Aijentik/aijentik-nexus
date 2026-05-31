@@ -112,6 +112,69 @@ const TOOLS = [
 
 async function execTool(sb: any, venue: any, guestPhone: string, guestId: string | null, name: string, args: any) {
   try {
+    if (name === "check_availability") {
+      const capacity = Math.max(1, Number(venue.capacity) || 60);
+      const target = new Date(args.booking_time);
+      if (isNaN(target.getTime())) return { ok: false, error: "invalid booking_time" };
+      const party = Math.max(1, Number(args.party_size) || 2);
+      // Pull every confirmed/pending booking in a wide window so we can score nearby slots too.
+      const winStart = new Date(target.getTime() - 4 * 60 * 60 * 1000).toISOString();
+      const winEnd = new Date(target.getTime() + 4 * 60 * 60 * 1000).toISOString();
+      const { data: nearby } = await sb.from("bookings")
+        .select("booking_time,party_size,status")
+        .eq("venue_id", venue.id)
+        .gte("booking_time", winStart).lte("booking_time", winEnd)
+        .neq("status", "cancelled");
+      const scoreSlot = (when: Date) => {
+        const start = when.getTime() - 75 * 60 * 1000;
+        const end = when.getTime() + 75 * 60 * 1000;
+        const covers = (nearby || [])
+          .filter((b: any) => {
+            const t = new Date(b.booking_time).getTime();
+            return t >= start && t <= end;
+          })
+          .reduce((s: number, b: any) => s + (b.party_size || 0), 0);
+        const remaining = capacity - covers;
+        return { covers, remaining, available: remaining >= party };
+      };
+      const requested = scoreSlot(target);
+      const alts: Array<{ booking_time: string; covers: number; remaining: number }> = [];
+      for (const offsetMin of [-90, -60, -30, 30, 60, 90, 120]) {
+        const t = new Date(target.getTime() + offsetMin * 60 * 1000);
+        const s = scoreSlot(t);
+        if (s.available) alts.push({ booking_time: t.toISOString(), covers: s.covers, remaining: s.remaining });
+      }
+      return {
+        ok: true,
+        capacity,
+        requested: { booking_time: target.toISOString(), party_size: party, ...requested },
+        alternatives: alts.slice(0, 5),
+      };
+    }
+    if (name === "find_booking") {
+      const venueId = venue.id;
+      let q = sb.from("bookings")
+        .select("id,guest_name,guest_phone,party_size,booking_time,status,notes")
+        .eq("venue_id", venueId)
+        .neq("status", "cancelled")
+        .gte("booking_time", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order("booking_time").limit(20);
+      const { data: all } = await q;
+      let matches = all || [];
+      if (args.booking_ref) {
+        const ref = String(args.booking_ref).toLowerCase().replace(/[^a-f0-9]/g, "").slice(0, 8);
+        matches = matches.filter((b: any) => (b.id || "").toLowerCase().startsWith(ref));
+      }
+      if (args.guest_name) {
+        const needle = String(args.guest_name).toLowerCase().trim();
+        matches = matches.filter((b: any) => (b.guest_name || "").toLowerCase().includes(needle));
+      }
+      if (args.alternate_phone) {
+        const tail = String(args.alternate_phone).replace(/\D/g, "").slice(-8);
+        if (tail) matches = matches.filter((b: any) => (b.guest_phone || "").replace(/\D/g, "").slice(-8) === tail);
+      }
+      return { ok: true, matches: matches.slice(0, 5) };
+    }
     if (name === "create_booking") {
       const { data, error } = await sb.from("bookings").insert({
         venue_id: venue.id,
@@ -150,6 +213,7 @@ async function execTool(sb: any, venue: any, guestPhone: string, guestId: string
     return { ok: false, error: String(e) };
   }
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });

@@ -65,10 +65,9 @@ export default function Channels() {
     return true;
   };
 
-  const connect = async (k: ChannelKey) => {
+  const connect = async (k: ChannelKey, extra?: Partial<ChannelState>) => {
     setBusy(k);
-    // Simulated provisioning — real OAuth handled in the per-channel wizard later.
-    await new Promise(r => setTimeout(r, 700 + Math.random() * 600));
+    await new Promise(r => setTimeout(r, 400 + Math.random() * 400));
     const next: ChannelsMap = {
       ...channels,
       [k]: {
@@ -76,6 +75,7 @@ export default function Channels() {
         handlingPct: 88 + Math.floor(Math.random() * 10),
         escalationPct: 2 + Math.floor(Math.random() * 4),
         avgMs: 600 + Math.floor(Math.random() * 900),
+        ...(extra || {}),
       },
     };
     const ok = await persist(next);

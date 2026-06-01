@@ -70,6 +70,7 @@ export function Sidebar() {
   const loc = useLocation();
   const nav2 = useNavigate();
   const { user, venue, venues, setActiveVenue, signOut } = useAuth();
+  const { wedgeMode } = useWedgeMode();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch { return false; }
   });

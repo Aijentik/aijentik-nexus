@@ -411,8 +411,8 @@ function OrderCard({ o, items, onClick, onAdvance }: {
   );
 }
 
-function OrderDetail({ o, items, onAdvance, onCancel, onMarkPaid }: {
-  o: Order; items: OrderItem[]; onAdvance: () => void; onCancel: () => void; onMarkPaid: () => void;
+function OrderDetail({ o, items, onAdvance, onCancel, onMarkPaid, onSendPaymentLink }: {
+  o: Order; items: OrderItem[]; onAdvance: () => void; onCancel: () => void; onMarkPaid: () => void; onSendPaymentLink: () => void;
 }) {
   const next = NEXT[o.status];
   return (
@@ -469,9 +469,14 @@ function OrderDetail({ o, items, onAdvance, onCancel, onMarkPaid }: {
           <XCircle className="h-4 w-4 mr-1.5" /> Cancel order
         </Button>
         {o.payment_status !== "paid" && (
-          <Button variant="outline" onClick={onMarkPaid}>
-            <CreditCard className="h-4 w-4 mr-1.5" /> Mark paid
-          </Button>
+          <>
+            <Button variant="outline" onClick={onSendPaymentLink}>
+              <Link2 className="h-4 w-4 mr-1.5" /> Send payment link
+            </Button>
+            <Button variant="outline" onClick={onMarkPaid}>
+              <CreditCard className="h-4 w-4 mr-1.5" /> Mark paid
+            </Button>
+          </>
         )}
         {next && (
           <Button onClick={onAdvance} className="bg-gradient-to-r from-primary to-accent text-primary-foreground">

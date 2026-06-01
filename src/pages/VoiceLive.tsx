@@ -165,7 +165,7 @@ function VoiceLiveInner() {
       create_takeaway_order: async (params: any) => {
         try {
           if (!venue) return "No venue selected";
-          if (!venue.features?.ordering) return "Ordering is disabled for this venue";
+          if (!(venue.features as any)?.ordering) return "Ordering is disabled for this venue";
           const items = Array.isArray(params.items) ? params.items : [];
           if (!items.length) return "No items provided";
           // Resolve menu items by name for price lookup

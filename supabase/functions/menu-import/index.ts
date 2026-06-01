@@ -92,9 +92,9 @@ Deno.serve(async (req) => {
     const data = await aiRes.json();
     const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
     if (!args) return new Response(JSON.stringify({ error: "no extraction" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    const parsed = JSON.parse(args);
+    let parsed: any = {};
+    try { parsed = JSON.parse(args); } catch { parsed = {}; }
     const items = (parsed.items || []).slice(0, 200);
-    if (!items.length) return new Response(JSON.stringify({ error: "no items found in menu" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { data: menu, error: mErr } = await sb.from("menus").insert({
       venue_id,

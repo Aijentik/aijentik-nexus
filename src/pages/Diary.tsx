@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, CalendarDays, Users, Pencil, Copy, MoveRight, X, Crown, Repeat, MoreHorizontal, Sparkles, Search } from "lucide-react";
+import { Plus, Trash2, CalendarDays, Users, Pencil, Copy, MoveRight, X, Crown, Repeat, MoreHorizontal, Sparkles, Search, Share2, ExternalLink, Link as LinkIcon } from "lucide-react";
 import { format, isToday, isThisWeek, isPast, isFuture } from "date-fns";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -28,6 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const statusStyle = (s: string): { color: string; bg: string; border: string } => {
   switch (s) {
@@ -56,6 +57,9 @@ export default function Diary() {
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<Scope>("upcoming");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTS)[number]>("all");
+  const [shareOpen, setShareOpen] = useState(false);
+
+  const bookingUrl = venue ? `${window.location.origin}/book/${venue.id}` : "";
 
 
   const load = async () => {
@@ -174,6 +178,14 @@ export default function Diary() {
         actions={
 
           <div className="flex items-center gap-2">
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => setShareOpen(true)}
+              className="h-11 border-primary/30 hover:border-primary/60 hover:bg-primary/5"
+            >
+              <Share2 className="h-4 w-4 mr-2 text-primary" /> Guest booking portal
+            </Button>
             <Button
               size="lg"
               variant="outline"
@@ -390,6 +402,55 @@ export default function Diary() {
       />
 
       <RunSheetDialog open={runSheetOpen} onOpenChange={setRunSheetOpen} />
+
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent className="glass-strong border-white/10 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl">Your guest booking portal</DialogTitle>
+            <DialogDescription>
+              Share this link anywhere — website, Instagram bio, WhatsApp, email signature. Bookings drop straight into your diary in real time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+              <div className="text-[10px] uppercase tracking-wider text-primary mb-1">Booking link</div>
+              <div className="font-mono text-sm break-all">{bookingUrl}</div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 bg-gradient-to-r from-primary to-accent text-primary-foreground"
+                onClick={() => { navigator.clipboard.writeText(bookingUrl); toast.success("Link copied"); }}
+              >
+                <LinkIcon className="h-4 w-4 mr-2" /> Copy link
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => window.open(bookingUrl, "_blank")}>
+                <ExternalLink className="h-4 w-4 mr-2" /> Open portal
+              </Button>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Embed on your website</div>
+              <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap break-all">
+{`<iframe src="${bookingUrl}" width="100%" height="780" style="border:0;border-radius:16px"></iframe>`}
+              </pre>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2 h-8"
+                onClick={() => {
+                  navigator.clipboard.writeText(`<iframe src="${bookingUrl}" width="100%" height="780" style="border:0;border-radius:16px"></iframe>`);
+                  toast.success("Embed code copied");
+                }}
+              >
+                <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy embed code
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Tip: your AI agents can share this link directly in WhatsApp and SMS — guests complete the booking themselves with zero staff effort.
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent className="glass-strong border-white/10">

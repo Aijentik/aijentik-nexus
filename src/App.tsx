@@ -26,6 +26,7 @@ import Integrations from "./pages/Integrations";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import EmailOps from "./pages/EmailOps";
+import PublicBooking from "./pages/PublicBooking";
 import ManagerEarpiece from "./pages/ManagerEarpiece";
 import Forecast from "./pages/Forecast";
 import Orders from "./pages/Orders";
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/" element={<Landing />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/book/:venueId" element={<PublicBooking />} />
               <Route path="/app" element={<ProtectedLayout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="voice" element={<VoiceLive />} />

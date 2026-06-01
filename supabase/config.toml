@@ -20,3 +20,7 @@ verify_jwt = false
 
 [functions.whatsapp-inbound]
 verify_jwt = false
+
+[functions.public-booking]
+verify_jwt = false
+

@@ -744,6 +744,7 @@ export type Database = {
           id: string
           image_source: string | null
           image_url: string | null
+          menu_id: string | null
           name: string
           position: number
           price: string | null
@@ -759,6 +760,7 @@ export type Database = {
           id?: string
           image_source?: string | null
           image_url?: string | null
+          menu_id?: string | null
           name: string
           position?: number
           price?: string | null
@@ -774,12 +776,57 @@ export type Database = {
           id?: string
           image_source?: string | null
           image_url?: string | null
+          menu_id?: string | null
           name?: string
           position?: number
           price?: string | null
           section?: string
           source_url?: string | null
           tags?: string[] | null
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_items_menu_id_fkey"
+            columns: ["menu_id"]
+            isOneToOne: false
+            referencedRelation: "menus"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menus: {
+        Row: {
+          created_at: string
+          id: string
+          is_live: boolean
+          name: string
+          position: number
+          raw_text: string | null
+          source_url: string | null
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_live?: boolean
+          name?: string
+          position?: number
+          raw_text?: string | null
+          source_url?: string | null
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_live?: boolean
+          name?: string
+          position?: number
+          raw_text?: string | null
+          source_url?: string | null
           updated_at?: string
           venue_id?: string
         }

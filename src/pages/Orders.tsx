@@ -14,11 +14,12 @@ import {
 } from "@/components/ui/select";
 import {
   Loader2, Plus, ShoppingBag, Clock, ChefHat, CheckCircle2, Truck, XCircle, MessageCircle,
-  Instagram, Phone, Send, Home, ChevronRight, Trash2, CreditCard, Search, X,
+  Instagram, Phone, Send, Home, ChevronRight, Trash2, CreditCard, Search, X, BookOpen, Link2,
 } from "lucide-react";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { toast } from "sonner";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { MenusDialog } from "@/components/orders/MenusDialog";
 
 type Order = {
   id: string;
@@ -85,6 +86,9 @@ export default function Orders() {
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [channelFilter, setChannelFilter] = useState<"all" | Order["channel"]>("all");
+  const [menusOpen, setMenusOpen] = useState(false);
+
+
 
   const load = async () => {
     if (!venue) return;
@@ -177,6 +181,23 @@ export default function Orders() {
     else { toast.success("Marked paid"); load(); }
   };
 
+  const sendPaymentLink = async (o: Order) => {
+    if (!venue) return;
+    const link = `${window.location.origin}/pay/demo/${o.id}`;
+    const body = `Hi ${o.guest_name.split(" ")[0]}, here's your payment link for ${money(o.total_cents, o.currency)} at ${venue.name}: ${link}`;
+    const contact = o.guest_phone || o.guest_email || null;
+    const channel = ["whatsapp", "sms", "instagram", "messenger", "phone"].includes(o.channel) ? o.channel : "sms";
+    await supabase.from("messages").insert({
+      venue_id: venue.id, channel, contact, body, direction: "outbound", status: "sent",
+    });
+    await supabase.from("brain_events").insert({
+      venue_id: venue.id, title: `Payment link sent · ${o.guest_name}`,
+      reason: `${money(o.total_cents, o.currency)} via ${channel}`, severity: "info",
+    });
+    try { await navigator.clipboard.writeText(link); } catch { /* ignore */ }
+    toast.success(`Payment link sent via ${channel} (copied)`);
+  };
+
   const stats = useMemo(() => {
     const today = orders.filter(o =>
       new Date(o.created_at).toDateString() === new Date().toDateString()
@@ -197,20 +218,27 @@ export default function Orders() {
         title="Ordering"
         subtitle="Live kanban for every order across every channel — WhatsApp, Instagram, web, phone, in-house."
         actions={
-          <Dialog open={newOpen} onOpenChange={setNewOpen}>
-            <DialogTrigger asChild>
-              <Button
-                size="lg"
-                className="h-11 bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40
-                  shadow-[0_12px_40px_-12px_hsl(var(--primary)/0.7),0_1px_0_hsl(36_100%_90%_/_0.25)_inset]"
-              >
-                <Plus className="h-4 w-4 mr-2" /> New order
-              </Button>
-            </DialogTrigger>
-            <NewOrderDialog venueId={venue?.id} onCreated={() => { setNewOpen(false); load(); }} />
-          </Dialog>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="lg" className="h-11" onClick={() => setMenusOpen(true)}>
+              <BookOpen className="h-4 w-4 mr-2" /> Menus
+            </Button>
+            <Dialog open={newOpen} onOpenChange={setNewOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  size="lg"
+                  className="h-11 bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40
+                    shadow-[0_12px_40px_-12px_hsl(var(--primary)/0.7),0_1px_0_hsl(36_100%_90%_/_0.25)_inset]"
+                >
+                  <Plus className="h-4 w-4 mr-2" /> New order
+                </Button>
+              </DialogTrigger>
+              <NewOrderDialog venueId={venue?.id} onCreated={() => { setNewOpen(false); load(); }} />
+            </Dialog>
+          </div>
         }
       />
+
+      <MenusDialog open={menusOpen} onOpenChange={setMenusOpen} venueId={venue?.id} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
@@ -308,6 +336,7 @@ export default function Orders() {
             onAdvance={() => { advance(selected); }}
             onCancel={() => cancelOrder(selected)}
             onMarkPaid={() => markPaid(selected)}
+            onSendPaymentLink={() => sendPaymentLink(selected)}
           />
         )}
       </Dialog>
@@ -382,8 +411,8 @@ function OrderCard({ o, items, onClick, onAdvance }: {
   );
 }
 
-function OrderDetail({ o, items, onAdvance, onCancel, onMarkPaid }: {
-  o: Order; items: OrderItem[]; onAdvance: () => void; onCancel: () => void; onMarkPaid: () => void;
+function OrderDetail({ o, items, onAdvance, onCancel, onMarkPaid, onSendPaymentLink }: {
+  o: Order; items: OrderItem[]; onAdvance: () => void; onCancel: () => void; onMarkPaid: () => void; onSendPaymentLink: () => void;
 }) {
   const next = NEXT[o.status];
   return (
@@ -440,9 +469,14 @@ function OrderDetail({ o, items, onAdvance, onCancel, onMarkPaid }: {
           <XCircle className="h-4 w-4 mr-1.5" /> Cancel order
         </Button>
         {o.payment_status !== "paid" && (
-          <Button variant="outline" onClick={onMarkPaid}>
-            <CreditCard className="h-4 w-4 mr-1.5" /> Mark paid
-          </Button>
+          <>
+            <Button variant="outline" onClick={onSendPaymentLink}>
+              <Link2 className="h-4 w-4 mr-1.5" /> Send payment link
+            </Button>
+            <Button variant="outline" onClick={onMarkPaid}>
+              <CreditCard className="h-4 w-4 mr-1.5" /> Mark paid
+            </Button>
+          </>
         )}
         {next && (
           <Button onClick={onAdvance} className="bg-gradient-to-r from-primary to-accent text-primary-foreground">

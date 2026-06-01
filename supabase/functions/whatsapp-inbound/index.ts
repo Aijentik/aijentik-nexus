@@ -5,6 +5,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildPrompt } from "../_shared/agent-config.ts";
+import { fetchLiveMenuItems } from "../_shared/menu.ts";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/twilio";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -243,7 +244,7 @@ async function execTool(sb: any, venue: any, guestPhone: string, guestId: string
       if (!venue?.features?.ordering) return { ok: false, error: "ordering not enabled for this venue" };
       const items = Array.isArray(args.items) ? args.items : [];
       if (!items.length) return { ok: false, error: "no items" };
-      const { data: menu } = await sb.from("menu_items").select("id,name,price").eq("venue_id", venue.id).limit(500);
+      const menu = await fetchLiveMenuItems(sb, venue.id, "id,name,price", 500);
       const parsePrice = (p: any) => { const n = Number(String(p || "").replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : Math.round(n * 100); };
       const resolved = items.map((it: any) => {
         const m = (menu || []).find((x: any) => (x.name || "").toLowerCase().trim() === String(it.name || "").toLowerCase().trim());
@@ -337,10 +338,10 @@ Deno.serve(async (req) => {
         .eq("venue_id", venue.id).gte("booking_time", new Date().toISOString())
         .order("booking_time").limit(15),
       orderingEnabled
-        ? sb.from("menu_items").select("name,price,section,description").eq("venue_id", venue.id).order("position").limit(120)
-        : Promise.resolve({ data: [] as any[] }),
+        ? fetchLiveMenuItems(sb, venue.id, "name,price,section,description", 120)
+        : Promise.resolve([] as any[]),
     ]);
-    const menu = (menuRes as any)?.data || [];
+    const menu = (menuRes as any) || [];
 
     const turns = (history || []).slice().reverse().map((m) => ({
       role: m.direction === "inbound" ? "user" : "assistant",

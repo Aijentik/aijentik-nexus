@@ -1,6 +1,7 @@
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 import { buildPrompt, buildAgentBody } from "../_shared/agent-config.ts";
+import { fetchLiveMenuItems } from "../_shared/menu.ts";
 
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -43,20 +44,18 @@ Deno.serve(async (req) => {
     if (!venue) return new Response(JSON.stringify({ error: "venue not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const orderingEnabled = !!(venue as any)?.features?.ordering;
-    const [{ data: kb }, { data: bookings }, { data: messages }, { data: events }, { data: insights }, menuRes] = await Promise.all([
+    const [{ data: kb }, { data: bookings }, { data: messages }, { data: events }, { data: insights }, menuItems] = await Promise.all([
       sb.from("knowledge_base").select("title,content").eq("venue_id", venue_id).limit(30),
       sb.from("bookings").select("guest_name,party_size,booking_time,status,notes").eq("venue_id", venue_id).gte("booking_time", new Date().toISOString()).order("booking_time", { ascending: true }).limit(10),
       sb.from("messages").select("direction,channel,contact,body,created_at").eq("venue_id", venue_id).order("created_at", { ascending: false }).limit(10),
       sb.from("brain_events").select("title,reason,severity,created_at").eq("venue_id", venue_id).order("created_at", { ascending: false }).limit(10),
       sb.from("insights").select("title,body,category,impact,created_at").eq("venue_id", venue_id).order("created_at", { ascending: false }).limit(8),
-      orderingEnabled
-        ? sb.from("menu_items").select("name,price,section,description").eq("venue_id", venue_id).order("position").limit(120)
-        : Promise.resolve({ data: [] as any[] }),
+      orderingEnabled ? fetchLiveMenuItems(sb, venue_id, "name,price,section,description", 120) : Promise.resolve([] as any[]),
     ]);
 
     let { data: agent } = await sb.from("agents").select("*").eq("venue_id", venue_id).eq("kind", "voice").maybeSingle();
     const cfg = agent?.config || {};
-    const context = { bookings: bookings || [], messages: messages || [], events: events || [], insights: insights || [], menu: (menuRes as any)?.data || [] };
+    const context = { bookings: bookings || [], messages: messages || [], events: events || [], insights: insights || [], menu: menuItems || [] };
 
     const prompt = buildPrompt(venue, kb || [], cfg, context);
     const body = buildAgentBody(venue, prompt, cfg);

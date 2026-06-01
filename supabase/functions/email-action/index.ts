@@ -3,6 +3,7 @@
 // create/update/cancel booking in DB.
 import { createClient } from "npm:@supabase/supabase-js@2.49.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { fetchLiveMenuItems } from "../_shared/menu.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -141,7 +142,7 @@ Deno.serve(async (req) => {
     } else if (action.kind === "create_order") {
       const items = Array.isArray(payload.order_items) ? payload.order_items : [];
       if (items.length) {
-        const { data: menu } = await svc.from("menu_items").select("id,name,price").eq("venue_id", action.venue_id).limit(500);
+        const menu = await fetchLiveMenuItems(svc, action.venue_id, "id,name,price", 500);
         const parsePrice = (p: any) => { const n = Number(String(p || "").replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : Math.round(n * 100); };
         const resolved = items.map((it: any) => {
           const m = (menu || []).find((x: any) => (x.name || "").toLowerCase().trim() === String(it.name || "").toLowerCase().trim());

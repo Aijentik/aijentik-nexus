@@ -162,6 +162,55 @@ function VoiceLiveInner() {
           return `Failed to create booking: ${e.message || "unknown error"}`;
         }
       },
+      create_takeaway_order: async (params: any) => {
+        try {
+          if (!venue) return "No venue selected";
+          if (!(venue.features as any)?.ordering) return "Ordering is disabled for this venue";
+          const items = Array.isArray(params.items) ? params.items : [];
+          if (!items.length) return "No items provided";
+          // Resolve menu items by name for price lookup
+          const { data: menu } = await supabase.from("menu_items")
+            .select("id,name,price").eq("venue_id", venue.id).limit(500);
+          const parsePrice = (p: any) => {
+            const n = Number(String(p || "").replace(/[^0-9.]/g, ""));
+            return isNaN(n) ? 0 : Math.round(n * 100);
+          };
+          const resolved = items.map((it: any) => {
+            const m = (menu || []).find((x: any) => x.name?.toLowerCase().trim() === String(it.name || "").toLowerCase().trim());
+            const unit = m ? parsePrice(m.price) : 0;
+            return { menu_item_id: m?.id || null, name: it.name, qty: Math.max(1, Number(it.qty) || 1), unit_price_cents: unit, modifiers: it.modifiers ? [{ note: it.modifiers }] : [], notes: it.notes || null };
+          });
+          const subtotal = resolved.reduce((s: number, r: any) => s + r.unit_price_cents * r.qty, 0);
+          const fulfillment = ["takeaway", "delivery", "dine_in"].includes(params.fulfillment) ? params.fulfillment : "takeaway";
+          const { data: order, error } = await supabase.from("orders").insert({
+            venue_id: venue.id,
+            guest_name: params.guest_name,
+            guest_phone: params.guest_phone || null,
+            channel: "phone",
+            fulfillment,
+            status: "new",
+            payment_status: "unpaid",
+            subtotal_cents: subtotal,
+            total_cents: subtotal,
+            pickup_time: params.pickup_time ? new Date(params.pickup_time).toISOString() : null,
+            delivery_address: params.delivery_address || null,
+            notes: params.notes || null,
+            ai_confidence: 0.9,
+          }).select("id").single();
+          if (error) throw error;
+          await supabase.from("order_items").insert(resolved.map((r: any) => ({ ...r, order_id: order.id, venue_id: venue.id })));
+          await supabase.from("brain_events").insert({
+            venue_id: venue.id, title: "Takeaway order taken by voice agent",
+            reason: `${params.guest_name} · ${resolved.length} item(s) · ${fulfillment}`, severity: "success",
+            meta: { order_id: order.id },
+          });
+          toast.success(`Order placed: ${params.guest_name}`);
+          return `Order #${order.id.slice(0, 8)} created — ${resolved.length} items, total ${(subtotal / 100).toFixed(2)}.`;
+        } catch (e: any) {
+          console.error("[create_takeaway_order] failed", e);
+          return `Failed to create order: ${e.message || "unknown error"}`;
+        }
+      },
     },
   });
 

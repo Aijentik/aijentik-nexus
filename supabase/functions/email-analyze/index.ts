@@ -16,7 +16,7 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const analysisSchema = z.object({
   intent: z.enum([
     "new_booking","modify_booking","cancel_booking","dietary","vip_request",
-    "event_enquiry","function_enquiry","general_question","spam","other",
+    "event_enquiry","function_enquiry","takeaway_order","general_question","spam","other",
   ]),
   confidence: z.number().min(0).max(1),
   reasoning: z.string(),
@@ -28,6 +28,15 @@ const analysisSchema = z.object({
   needs_clarification: z.boolean(),
   reply_subject: z.string(),
   reply_body: z.string(),
+  order_fulfillment: z.enum(["takeaway","delivery","dine_in"]).nullable(),
+  delivery_address: z.string().nullable(),
+  pickup_time_iso: z.string().nullable(),
+  order_items: z.array(z.object({
+    name: z.string(),
+    qty: z.number().int().min(1),
+    modifiers: z.string().nullable(),
+    notes: z.string().nullable(),
+  })).nullable(),
 });
 
 Deno.serve(async (req) => {
@@ -55,30 +64,42 @@ Deno.serve(async (req) => {
 
     const { data: venue } = await supabase
       .from("venues")
-      .select("name, brand_voice, hours, address, phone, cuisine")
+      .select("name, brand_voice, hours, address, phone, cuisine, features")
       .eq("id", thread.venue_id)
       .single();
 
+    const orderingEnabled = !!(venue as any)?.features?.ordering;
+
     // Quick live availability snapshot for next 14 days
     const nextWeek = new Date(Date.now() + 14 * 86400e3).toISOString();
-    const { data: upcoming } = await supabase
-      .from("bookings")
-      .select("booking_time, party_size")
-      .eq("venue_id", thread.venue_id)
-      .gte("booking_time", new Date().toISOString())
-      .lte("booking_time", nextWeek)
-      .neq("status", "cancelled");
+    const [{ data: upcoming }, menuRes] = await Promise.all([
+      supabase
+        .from("bookings")
+        .select("booking_time, party_size")
+        .eq("venue_id", thread.venue_id)
+        .gte("booking_time", new Date().toISOString())
+        .lte("booking_time", nextWeek)
+        .neq("status", "cancelled"),
+      orderingEnabled
+        ? supabase.from("menu_items").select("name,price,section,description").eq("venue_id", thread.venue_id).order("position").limit(120)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+    const menu = (menuRes as any)?.data || [];
 
     const inbox = (thread as any).email_inboxes;
     const transcript = (msgs || []).map(m =>
       `[${m.direction === "inbound" ? "GUEST" : "VENUE"} ${m.created_at}] ${m.subject ? `(${m.subject}) ` : ""}${m.body_text || ""}`
     ).join("\n\n");
 
+    const menuBlock = orderingEnabled
+      ? `\n\nTAKEAWAY & DELIVERY MENU (only quote real items from here when the guest is ordering):\n${menu.map((m: any) => `• ${m.name}${m.price ? ` — ${m.price}` : ""}${m.section ? ` [${m.section}]` : ""}`).join("\n") || "(no menu published)"}\n\nIf the guest's email is a takeaway/delivery order, set intent="takeaway_order", fill order_items with real menu items + qty, set order_fulfillment, and include pickup_time_iso or delivery_address. Confirm the total in the reply.`
+      : "";
+
     const system = `You are the AI Email Operations Manager for "${venue?.name ?? "the venue"}".
 Brand voice: ${venue?.brand_voice ?? "warm, professional, concise"}.
 Cuisine/style: ${venue?.cuisine ?? "—"}.
 Address: ${venue?.address ?? "—"}.
-You handle inbound emails: new bookings, modifications, cancellations, dietary, VIPs, events.
+You handle inbound emails: new bookings, modifications, cancellations, dietary, VIPs, events${orderingEnabled ? ", takeaway and delivery orders" : ""}.
 Always:
 - Be concise (4–8 sentences max), warm, on-brand.
 - Confirm details (date/time/party size) explicitly when proposing a booking.
@@ -86,7 +107,7 @@ Always:
 - If you are unsure or missing critical info, ask one clarifying question and set needs_clarification=true.
 - confidence reflects how safe it would be to auto-send AND auto-execute the action without a human.
   Use >=0.85 only when intent is unambiguous and required fields are present and consistent with venue availability.
-Live availability snapshot (upcoming 14 days, ${upcoming?.length ?? 0} bookings on books).`;
+Live availability snapshot (upcoming 14 days, ${upcoming?.length ?? 0} bookings on books).${menuBlock}`;
 
     const provider = createLovableAiGatewayProvider(LOVABLE_API_KEY);
     const model = provider("google/gemini-3-flash-preview");
@@ -106,6 +127,7 @@ Live availability snapshot (upcoming 14 days, ${upcoming?.length ?? 0} bookings 
     if (intent === "new_booking" && !output.needs_clarification && output.party_size && output.requested_time_iso) kind = "create_booking";
     else if (intent === "modify_booking") kind = "update_booking";
     else if (intent === "cancel_booking") kind = "cancel_booking";
+    else if (intent === "takeaway_order" && orderingEnabled && !output.needs_clarification && output.order_items?.length) kind = "create_order";
     else if (intent === "spam") kind = "no_action";
     else kind = "reply";
 
@@ -136,6 +158,10 @@ Live availability snapshot (upcoming 14 days, ${upcoming?.length ?? 0} bookings 
         needs_clarification: output.needs_clarification,
         reply_subject: output.reply_subject,
         reply_body: output.reply_body,
+        order_fulfillment: output.order_fulfillment,
+        delivery_address: output.delivery_address,
+        pickup_time_iso: output.pickup_time_iso,
+        order_items: output.order_items,
       },
     }).select("id").single();
 

@@ -107,6 +107,37 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "create_takeaway_order",
+      description: "Create a takeaway/delivery/pickup order from the venue MENU. Only call after confirming items, fulfillment, pickup time or delivery address, and reading back the total. Only quote real menu items.",
+      parameters: {
+        type: "object",
+        properties: {
+          guest_name: { type: "string" },
+          fulfillment: { type: "string", description: "'takeaway', 'delivery', or 'dine_in'" },
+          pickup_time: { type: "string", description: "ISO 8601 pickup time for takeaway" },
+          delivery_address: { type: "string", description: "Full address for delivery" },
+          notes: { type: "string" },
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Menu item name exactly as on the menu" },
+                qty: { type: "integer", minimum: 1 },
+                modifiers: { type: "string" },
+                notes: { type: "string" },
+              },
+              required: ["name", "qty"],
+            },
+          },
+        },
+        required: ["guest_name", "fulfillment", "items"],
+      },
+    },
+  },
 ];
 
 
@@ -208,6 +239,29 @@ async function execTool(sb: any, venue: any, guestPhone: string, guestId: string
       if (error) return { ok: false, error: error.message };
       return { ok: true, booking: data };
     }
+    if (name === "create_takeaway_order") {
+      if (!venue?.features?.ordering) return { ok: false, error: "ordering not enabled for this venue" };
+      const items = Array.isArray(args.items) ? args.items : [];
+      if (!items.length) return { ok: false, error: "no items" };
+      const { data: menu } = await sb.from("menu_items").select("id,name,price").eq("venue_id", venue.id).limit(500);
+      const parsePrice = (p: any) => { const n = Number(String(p || "").replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : Math.round(n * 100); };
+      const resolved = items.map((it: any) => {
+        const m = (menu || []).find((x: any) => (x.name || "").toLowerCase().trim() === String(it.name || "").toLowerCase().trim());
+        return { menu_item_id: m?.id || null, name: it.name, qty: Math.max(1, Number(it.qty) || 1), unit_price_cents: m ? parsePrice(m.price) : 0, modifiers: it.modifiers ? [{ note: it.modifiers }] : [], notes: it.notes || null };
+      });
+      const subtotal = resolved.reduce((s: number, r: any) => s + r.unit_price_cents * r.qty, 0);
+      const fulfillment = ["takeaway", "delivery", "dine_in"].includes(args.fulfillment) ? args.fulfillment : "takeaway";
+      const { data: order, error } = await sb.from("orders").insert({
+        venue_id: venue.id, guest_name: args.guest_name, guest_phone: guestPhone, guest_id: guestId,
+        channel: "whatsapp", fulfillment, status: "new", payment_status: "unpaid",
+        subtotal_cents: subtotal, total_cents: subtotal,
+        pickup_time: args.pickup_time ? new Date(args.pickup_time).toISOString() : null,
+        delivery_address: args.delivery_address || null, notes: args.notes || null, ai_confidence: 0.85,
+      }).select("id").maybeSingle();
+      if (error || !order) return { ok: false, error: error?.message || "order insert failed" };
+      await sb.from("order_items").insert(resolved.map((r: any) => ({ ...r, order_id: order.id, venue_id: venue.id })));
+      return { ok: true, order: { id: order.id, total: (subtotal / 100).toFixed(2), items: resolved.length, fulfillment } };
+    }
     return { ok: false, error: `unknown tool ${name}` };
   } catch (e) {
     return { ok: false, error: String(e) };
@@ -269,8 +323,9 @@ Deno.serve(async (req) => {
       channel: "whatsapp", direction: "inbound", status: "received",
     });
 
-    // 4) Load thread (last 10), caller bookings, KB, venue context.
-    const [{ data: history }, { data: callerBookings }, { data: kb }, { data: venueBookings }] = await Promise.all([
+    // 4) Load thread (last 10), caller bookings, KB, venue context, menu (if ordering on).
+    const orderingEnabled = !!(venue as any)?.features?.ordering;
+    const [{ data: history }, { data: callerBookings }, { data: kb }, { data: venueBookings }, menuRes] = await Promise.all([
       sb.from("messages").select("direction, body").eq("venue_id", venue.id)
         .eq("channel", "whatsapp").eq("contact", fromE164)
         .order("created_at", { ascending: false }).limit(10),
@@ -281,7 +336,11 @@ Deno.serve(async (req) => {
       sb.from("bookings").select("guest_name,party_size,booking_time,status,notes")
         .eq("venue_id", venue.id).gte("booking_time", new Date().toISOString())
         .order("booking_time").limit(15),
+      orderingEnabled
+        ? sb.from("menu_items").select("name,price,section,description").eq("venue_id", venue.id).order("position").limit(120)
+        : Promise.resolve({ data: [] as any[] }),
     ]);
+    const menu = (menuRes as any)?.data || [];
 
     const turns = (history || []).slice().reverse().map((m) => ({
       role: m.direction === "inbound" ? "user" : "assistant",
@@ -293,9 +352,9 @@ Deno.serve(async (req) => {
     const fmtBooking = (b: any) => `${b.guest_name}, party of ${b.party_size}, ${b.booking_time} (id: ${b.id}, status: ${b.status})`;
 
     const basePrompt = buildPrompt(venue, kb || [], {
-      tools: { create_booking: true, update_booking: true, take_message: true },
+      tools: { create_booking: true, update_booking: true, take_message: true, take_order: orderingEnabled },
       responseLength: "short",
-    }, { bookings: venueBookings || [] });
+    }, { bookings: venueBookings || [], menu });
 
     const now = new Date();
     const todayLong = now.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Australia/Sydney" });

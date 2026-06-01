@@ -5,6 +5,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildPrompt } from "../_shared/agent-config.ts";
+import { fetchLiveMenuItems } from "../_shared/menu.ts";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/twilio";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;

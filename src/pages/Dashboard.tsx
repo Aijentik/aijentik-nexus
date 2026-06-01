@@ -12,6 +12,7 @@ import { useWedgeMode } from "@/lib/wedgeMode";
 
 export default function Dashboard() {
   const { venue } = useAuth();
+  const { wedgeMode } = useWedgeMode();
   const [stats, setStats] = useState({ bookings: 0, calls: 0, covers: 0, agents: 0, bookingsToday: 0, callsToday: 0, coversToday: 0 });
   const [events, setEvents] = useState<any[]>([]);
   const [upcoming, setUpcoming] = useState<any[]>([]);

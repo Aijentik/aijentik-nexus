@@ -239,6 +239,29 @@ async function execTool(sb: any, venue: any, guestPhone: string, guestId: string
       if (error) return { ok: false, error: error.message };
       return { ok: true, booking: data };
     }
+    if (name === "create_takeaway_order") {
+      if (!venue?.features?.ordering) return { ok: false, error: "ordering not enabled for this venue" };
+      const items = Array.isArray(args.items) ? args.items : [];
+      if (!items.length) return { ok: false, error: "no items" };
+      const { data: menu } = await sb.from("menu_items").select("id,name,price").eq("venue_id", venue.id).limit(500);
+      const parsePrice = (p: any) => { const n = Number(String(p || "").replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : Math.round(n * 100); };
+      const resolved = items.map((it: any) => {
+        const m = (menu || []).find((x: any) => (x.name || "").toLowerCase().trim() === String(it.name || "").toLowerCase().trim());
+        return { menu_item_id: m?.id || null, name: it.name, qty: Math.max(1, Number(it.qty) || 1), unit_price_cents: m ? parsePrice(m.price) : 0, modifiers: it.modifiers ? [{ note: it.modifiers }] : [], notes: it.notes || null };
+      });
+      const subtotal = resolved.reduce((s: number, r: any) => s + r.unit_price_cents * r.qty, 0);
+      const fulfillment = ["takeaway", "delivery", "dine_in"].includes(args.fulfillment) ? args.fulfillment : "takeaway";
+      const { data: order, error } = await sb.from("orders").insert({
+        venue_id: venue.id, guest_name: args.guest_name, guest_phone: guestPhone, guest_id: guestId,
+        channel: "whatsapp", fulfillment, status: "new", payment_status: "unpaid",
+        subtotal_cents: subtotal, total_cents: subtotal,
+        pickup_time: args.pickup_time ? new Date(args.pickup_time).toISOString() : null,
+        delivery_address: args.delivery_address || null, notes: args.notes || null, ai_confidence: 0.85,
+      }).select("id").maybeSingle();
+      if (error || !order) return { ok: false, error: error?.message || "order insert failed" };
+      await sb.from("order_items").insert(resolved.map((r: any) => ({ ...r, order_id: order.id, venue_id: venue.id })));
+      return { ok: true, order: { id: order.id, total: (subtotal / 100).toFixed(2), items: resolved.length, fulfillment } };
+    }
     return { ok: false, error: `unknown tool ${name}` };
   } catch (e) {
     return { ok: false, error: String(e) };

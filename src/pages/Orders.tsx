@@ -336,6 +336,7 @@ export default function Orders() {
             onAdvance={() => { advance(selected); }}
             onCancel={() => cancelOrder(selected)}
             onMarkPaid={() => markPaid(selected)}
+            onSendPaymentLink={() => sendPaymentLink(selected)}
           />
         )}
       </Dialog>

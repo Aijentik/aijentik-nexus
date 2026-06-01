@@ -127,6 +127,7 @@ Live availability snapshot (upcoming 14 days, ${upcoming?.length ?? 0} bookings 
     if (intent === "new_booking" && !output.needs_clarification && output.party_size && output.requested_time_iso) kind = "create_booking";
     else if (intent === "modify_booking") kind = "update_booking";
     else if (intent === "cancel_booking") kind = "cancel_booking";
+    else if (intent === "takeaway_order" && orderingEnabled && !output.needs_clarification && output.order_items?.length) kind = "create_order";
     else if (intent === "spam") kind = "no_action";
     else kind = "reply";
 
@@ -157,6 +158,10 @@ Live availability snapshot (upcoming 14 days, ${upcoming?.length ?? 0} bookings 
         needs_clarification: output.needs_clarification,
         reply_subject: output.reply_subject,
         reply_body: output.reply_body,
+        order_fulfillment: output.order_fulfillment,
+        delivery_address: output.delivery_address,
+        pickup_time_iso: output.pickup_time_iso,
+        order_items: output.order_items,
       },
     }).select("id").single();
 

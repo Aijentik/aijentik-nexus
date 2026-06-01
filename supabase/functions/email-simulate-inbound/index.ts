@@ -23,7 +23,8 @@ Deno.serve(async (req) => {
 
     const svc = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
     // Ensure inbox exists
-    let { data: inbox, error: selErr } = await svc.from("email_inboxes").select("forwarding_address").eq("venue_id", venue_id).maybeSingle();
+    let { data: inboxes, error: selErr } = await svc.from("email_inboxes").select("forwarding_address").eq("venue_id", venue_id).limit(1);
+    let inbox = inboxes?.[0] ?? null;
     if (selErr) throw selErr;
     if (!inbox) {
       const addr = `venue-${venue_id.slice(0, 8)}@inbound.aijentik.app`;

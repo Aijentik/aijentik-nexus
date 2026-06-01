@@ -244,7 +244,7 @@ async function execTool(sb: any, venue: any, guestPhone: string, guestId: string
       if (!venue?.features?.ordering) return { ok: false, error: "ordering not enabled for this venue" };
       const items = Array.isArray(args.items) ? args.items : [];
       if (!items.length) return { ok: false, error: "no items" };
-      const { data: menu } = await sb.from("menu_items").select("id,name,price").eq("venue_id", venue.id).limit(500);
+      const menu = await fetchLiveMenuItems(sb, venue.id, "id,name,price", 500);
       const parsePrice = (p: any) => { const n = Number(String(p || "").replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : Math.round(n * 100); };
       const resolved = items.map((it: any) => {
         const m = (menu || []).find((x: any) => (x.name || "").toLowerCase().trim() === String(it.name || "").toLowerCase().trim());

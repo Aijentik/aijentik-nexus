@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { Navigate, Outlet, Link } from "react-router-dom";
+import { Navigate, Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { Sidebar } from "./Sidebar";
 import { FloatingBrain } from "./FloatingBrain";
@@ -9,6 +9,7 @@ import { DemoModeBanner } from "./demo/DemoModeBanner";
 import { VenueClock } from "./VenueClock";
 import { motion } from "framer-motion";
 import { Menu, Brain } from "lucide-react";
+import { useWedgeMode, isPathAllowedInWedge } from "@/lib/wedgeMode";
 
 function SignInLoader({ label = "Signing you in" }: { label?: string }) {
   return (

@@ -16,7 +16,7 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const analysisSchema = z.object({
   intent: z.enum([
     "new_booking","modify_booking","cancel_booking","dietary","vip_request",
-    "event_enquiry","function_enquiry","general_question","spam","other",
+    "event_enquiry","function_enquiry","takeaway_order","general_question","spam","other",
   ]),
   confidence: z.number().min(0).max(1),
   reasoning: z.string(),
@@ -28,6 +28,15 @@ const analysisSchema = z.object({
   needs_clarification: z.boolean(),
   reply_subject: z.string(),
   reply_body: z.string(),
+  order_fulfillment: z.enum(["takeaway","delivery","dine_in"]).nullable(),
+  delivery_address: z.string().nullable(),
+  pickup_time_iso: z.string().nullable(),
+  order_items: z.array(z.object({
+    name: z.string(),
+    qty: z.number().int().min(1),
+    modifiers: z.string().nullable(),
+    notes: z.string().nullable(),
+  })).nullable(),
 });
 
 Deno.serve(async (req) => {

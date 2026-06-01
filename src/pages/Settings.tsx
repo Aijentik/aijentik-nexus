@@ -201,6 +201,10 @@ export default function Settings() {
           />
         </Section>
 
+        <LaunchModeSection Section={Section} />
+
+
+
 
         <Section
           icon={Users}

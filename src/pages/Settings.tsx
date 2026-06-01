@@ -6,14 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Building2, Phone, Sparkles, Loader2, Users, Plus, Trash2, ShieldCheck, Crown } from "lucide-react";
+import { Building2, Phone, Sparkles, Loader2, Users, Plus, Trash2, ShieldCheck, Crown, Rocket, Lock } from "lucide-react";
 import { toast } from "sonner";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useWedgeMode, WEDGE_PASSWORD } from "@/lib/wedgeMode";
 
 type Member = { id: string; user_id: string; role: string; display_name?: string | null };
 

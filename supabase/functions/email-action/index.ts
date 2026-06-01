@@ -138,6 +138,34 @@ Deno.serve(async (req) => {
         result.booking_id = b.id;
         result.previous_status = b.status;
       }
+    } else if (action.kind === "create_order") {
+      const items = Array.isArray(payload.order_items) ? payload.order_items : [];
+      if (items.length) {
+        const { data: menu } = await svc.from("menu_items").select("id,name,price").eq("venue_id", action.venue_id).limit(500);
+        const parsePrice = (p: any) => { const n = Number(String(p || "").replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : Math.round(n * 100); };
+        const resolved = items.map((it: any) => {
+          const m = (menu || []).find((x: any) => (x.name || "").toLowerCase().trim() === String(it.name || "").toLowerCase().trim());
+          return { menu_item_id: m?.id || null, name: it.name, qty: Math.max(1, Number(it.qty) || 1), unit_price_cents: m ? parsePrice(m.price) : 0, modifiers: it.modifiers ? [{ note: it.modifiers }] : [], notes: it.notes || null };
+        });
+        const subtotal = resolved.reduce((s: number, r: any) => s + r.unit_price_cents * r.qty, 0);
+        const fulfillment = ["takeaway", "delivery", "dine_in"].includes(payload.order_fulfillment) ? payload.order_fulfillment : "takeaway";
+        const { data: order } = await svc.from("orders").insert({
+          venue_id: action.venue_id,
+          guest_name: payload.guest_name || thread.guest_name || thread.guest_email,
+          guest_email: thread.guest_email,
+          channel: "email" as any,
+          fulfillment, status: "new", payment_status: "unpaid",
+          subtotal_cents: subtotal, total_cents: subtotal,
+          pickup_time: payload.pickup_time_iso ? new Date(payload.pickup_time_iso).toISOString() : null,
+          delivery_address: payload.delivery_address || null,
+          notes: payload.dietary_notes || null,
+          ai_confidence: action.confidence,
+        }).select("id").single();
+        if (order?.id) {
+          await svc.from("order_items").insert(resolved.map((r: any) => ({ ...r, order_id: order.id, venue_id: action.venue_id })));
+          result.order_id = order.id;
+        }
+      }
     }
 
     // 2) Send reply (unless no_action)

@@ -46,8 +46,8 @@ async function firecrawlMap(url: string): Promise<string[]> {
   });
   if (!r.ok) return [];
   const j = await r.json();
-  const links: string[] = j.data?.links?.map((l: any) => typeof l === "string" ? l : l.url) || j.links || [];
-  return links.filter(Boolean);
+  const raw: any[] = j.data?.links || j.links || [];
+  return raw.map((l) => (typeof l === "string" ? l : (l?.url || l?.href || ""))).filter((l) => typeof l === "string" && l.length > 0);
 }
 
 async function smartScrapeMenu(url: string): Promise<string> {

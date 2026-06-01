@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, CalendarDays, Users, Pencil, Copy, MoveRight, X, Crown, Repeat, MoreHorizontal, Sparkles, Search } from "lucide-react";
+import { Plus, Trash2, CalendarDays, Users, Pencil, Copy, MoveRight, X, Crown, Repeat, MoreHorizontal, Sparkles, Search, Share2, ExternalLink, Link as LinkIcon } from "lucide-react";
 import { format, isToday, isThisWeek, isPast, isFuture } from "date-fns";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -28,6 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const statusStyle = (s: string): { color: string; bg: string; border: string } => {
   switch (s) {
@@ -56,6 +57,9 @@ export default function Diary() {
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<Scope>("upcoming");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTS)[number]>("all");
+  const [shareOpen, setShareOpen] = useState(false);
+
+  const bookingUrl = venue ? `${window.location.origin}/book/${venue.id}` : "";
 
 
   const load = async () => {
@@ -174,6 +178,14 @@ export default function Diary() {
         actions={
 
           <div className="flex items-center gap-2">
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => setShareOpen(true)}
+              className="h-11 border-primary/30 hover:border-primary/60 hover:bg-primary/5"
+            >
+              <Share2 className="h-4 w-4 mr-2 text-primary" /> Guest booking portal
+            </Button>
             <Button
               size="lg"
               variant="outline"

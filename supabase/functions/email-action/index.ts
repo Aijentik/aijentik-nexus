@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
           venue_id: action.venue_id,
           guest_name: payload.guest_name || thread.guest_name || thread.guest_email,
           guest_email: thread.guest_email,
-          channel: "email" as any,
+          channel: "web" as any,
           fulfillment, status: "new", payment_status: "unpaid",
           subtotal_cents: subtotal, total_cents: subtotal,
           pickup_time: payload.pickup_time_iso ? new Date(payload.pickup_time_iso).toISOString() : null,

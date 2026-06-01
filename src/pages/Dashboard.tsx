@@ -124,9 +124,11 @@ export default function Dashboard() {
               <div className="label-micro mb-1.5">Diary · Next up</div>
               <div className="font-medium text-[15px]">Upcoming bookings</div>
             </div>
-            <Link to="/app/diary" className="text-[11px] uppercase tracking-wider text-primary hover:text-primary-glow transition-colors flex items-center gap-1">
-              Open diary <ArrowUpRight className="h-3 w-3" />
-            </Link>
+            {!wedgeMode && (
+              <Link to="/app/diary" className="text-[11px] uppercase tracking-wider text-primary hover:text-primary-glow transition-colors flex items-center gap-1">
+                Open diary <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            )}
           </div>
           <div className="space-y-1.5">
             {upcoming.length === 0 && (

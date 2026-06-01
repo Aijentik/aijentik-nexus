@@ -86,6 +86,9 @@ export default function Orders() {
   const [newOpen, setNewOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [channelFilter, setChannelFilter] = useState<"all" | Order["channel"]>("all");
+  const [menusOpen, setMenusOpen] = useState(false);
+
+
 
   const load = async () => {
     if (!venue) return;

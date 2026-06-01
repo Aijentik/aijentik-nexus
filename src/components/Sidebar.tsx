@@ -12,6 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useWedgeMode, isPathAllowedInWedge } from "@/lib/wedgeMode";
 
 type Item = { to: string; label: string; icon: any; hero?: boolean; live?: boolean; featureFlag?: string };
 
@@ -69,6 +70,7 @@ export function Sidebar() {
   const loc = useLocation();
   const nav2 = useNavigate();
   const { user, venue, venues, setActiveVenue, signOut } = useAuth();
+  const { wedgeMode } = useWedgeMode();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch { return false; }
   });
@@ -230,7 +232,8 @@ export function Sidebar() {
       <nav className="relative flex-1 overflow-y-auto px-3 py-4 space-y-3 scrollbar-thin">
         {SECTIONS.map((section) => {
           const features = (venue?.features || {}) as Record<string, any>;
-          const visibleItems = section.items.filter(i => !i.featureFlag || features[i.featureFlag]);
+          let visibleItems = section.items.filter(i => !i.featureFlag || features[i.featureFlag]);
+          if (wedgeMode) visibleItems = visibleItems.filter(i => isPathAllowedInWedge(i.to));
           if (visibleItems.length === 0) return null;
           const isOpen = collapsed ? true : (openGroups[section.id] ?? true);
           const hasActive = visibleItems.some(i => isActive(i.to));

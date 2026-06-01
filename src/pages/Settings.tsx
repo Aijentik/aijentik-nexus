@@ -6,14 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Building2, Phone, Sparkles, Loader2, Users, Plus, Trash2, ShieldCheck, Crown } from "lucide-react";
+import { Building2, Phone, Sparkles, Loader2, Users, Plus, Trash2, ShieldCheck, Crown, Rocket, Lock } from "lucide-react";
 import { toast } from "sonner";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useWedgeMode, WEDGE_PASSWORD } from "@/lib/wedgeMode";
 
 type Member = { id: string; user_id: string; role: string; display_name?: string | null };
 
@@ -200,6 +201,10 @@ export default function Settings() {
           />
         </Section>
 
+        <LaunchModeSection Section={Section} />
+
+
+
 
         <Section
           icon={Users}
@@ -296,4 +301,98 @@ function FeatureToggle({ label, hint, enabled, onToggle }: { label: string; hint
     </button>
   );
 }
+
+function LaunchModeSection({ Section }: { Section: any }) {
+  const { wedgeMode, setWedgeMode } = useWedgeMode();
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const reset = () => { setPw(""); setErr(null); setSubmitting(false); };
+
+  const onConfirm = () => {
+    setSubmitting(true);
+    setErr(null);
+    if (pw !== WEDGE_PASSWORD) {
+      setErr("Incorrect password. Please try again.");
+      setSubmitting(false);
+      return;
+    }
+    const next = !wedgeMode;
+    setWedgeMode(next);
+    setOpen(false);
+    reset();
+    toast.success(next ? "Wedge Mode activated" : "Full Platform mode restored");
+  };
+
+  const statusBadge = wedgeMode ? (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10.5px] uppercase tracking-[0.2em] font-semibold
+      text-primary bg-primary/12 border border-primary/30 shadow-[0_0_18px_-6px_hsl(var(--primary)/0.7)]">
+      <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
+      Wedge Mode
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10.5px] uppercase tracking-[0.2em] font-medium
+      text-muted-foreground bg-white/[0.04] border border-white/[0.08]">
+      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+      Full Platform
+    </span>
+  );
+
+  return (
+    <Section
+      icon={Rocket}
+      title="Launch Mode"
+      hint="Control which surfaces are exposed to your team. Use Wedge Mode for a focused Phase One go-live."
+    >
+      <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-black/30 border border-white/[0.06]">
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1.5">Current mode</div>
+          {statusBadge}
+          <div className="text-[11.5px] text-muted-foreground mt-2.5 max-w-md">
+            {wedgeMode
+              ? "Only Overview, Live Voice, Calls, Agents, Knowledge and Settings are visible. The full platform is preserved and can be restored at any time."
+              : "All platform modules are visible to your team."}
+          </div>
+        </div>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+          <DialogTrigger asChild>
+            <Button variant={wedgeMode ? "outline" : "default"} className="shrink-0 h-10">
+              {wedgeMode ? "Deactivate Wedge Mode" : "Activate Wedge Mode"}
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Lock className="h-4 w-4 text-primary" /> Confirm Launch Mode Change
+              </DialogTitle>
+              <DialogDescription>
+                This will switch the platform between Full Platform mode and Wedge Mode. Please enter the admin password to continue.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 pt-2">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Enter password</Label>
+              <Input
+                type="password"
+                value={pw}
+                onChange={(e) => { setPw(e.target.value); if (err) setErr(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") onConfirm(); }}
+                placeholder="Admin password"
+                autoFocus
+                className="bg-black/40 border-white/[0.08]"
+              />
+              {err && <div className="text-[12px] text-destructive">{err}</div>}
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => { setOpen(false); reset(); }}>Cancel</Button>
+              <Button onClick={onConfirm} disabled={submitting || !pw}>Confirm</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </Section>
+  );
+}
+
 

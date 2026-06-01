@@ -33,6 +33,7 @@ import Orders from "./pages/Orders";
 import Channels from "./pages/Channels";
 import { DemoTourProvider } from "@/lib/demo/DemoTourProvider";
 import { DemoController } from "@/components/demo/DemoController";
+import { WedgeModeProvider } from "@/lib/wedgeMode";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +44,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <WedgeModeProvider>
           <DemoTourProvider>
             <Routes>
               <Route path="/" element={<Landing />} />
@@ -76,6 +78,7 @@ const App = () => (
             </Routes>
             <DemoController />
           </DemoTourProvider>
+          </WedgeModeProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

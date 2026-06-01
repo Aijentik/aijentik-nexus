@@ -8,9 +8,11 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { LaunchDemoButton } from "@/components/demo/LaunchDemoButton";
 import { format } from "date-fns";
+import { useWedgeMode } from "@/lib/wedgeMode";
 
 export default function Dashboard() {
   const { venue } = useAuth();
+  const { wedgeMode } = useWedgeMode();
   const [stats, setStats] = useState({ bookings: 0, calls: 0, covers: 0, agents: 0, bookingsToday: 0, callsToday: 0, coversToday: 0 });
   const [events, setEvents] = useState<any[]>([]);
   const [upcoming, setUpcoming] = useState<any[]>([]);
@@ -122,9 +124,11 @@ export default function Dashboard() {
               <div className="label-micro mb-1.5">Diary · Next up</div>
               <div className="font-medium text-[15px]">Upcoming bookings</div>
             </div>
-            <Link to="/app/diary" className="text-[11px] uppercase tracking-wider text-primary hover:text-primary-glow transition-colors flex items-center gap-1">
-              Open diary <ArrowUpRight className="h-3 w-3" />
-            </Link>
+            {!wedgeMode && (
+              <Link to="/app/diary" className="text-[11px] uppercase tracking-wider text-primary hover:text-primary-glow transition-colors flex items-center gap-1">
+                Open diary <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            )}
           </div>
           <div className="space-y-1.5">
             {upcoming.length === 0 && (
@@ -166,9 +170,11 @@ export default function Dashboard() {
               </div>
               <div className="font-medium text-[15px]">Decisions, narrated</div>
             </div>
-            <Link to="/app/brain" className="text-[11px] uppercase tracking-wider text-primary hover:text-primary-glow transition-colors flex items-center gap-1">
-              Open <ArrowUpRight className="h-3 w-3" />
-            </Link>
+            {!wedgeMode && (
+              <Link to="/app/brain" className="text-[11px] uppercase tracking-wider text-primary hover:text-primary-glow transition-colors flex items-center gap-1">
+                Open <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            )}
           </div>
           <div className="space-y-2 relative">
             {events.length === 0 && (

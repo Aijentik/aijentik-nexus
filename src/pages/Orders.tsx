@@ -181,6 +181,23 @@ export default function Orders() {
     else { toast.success("Marked paid"); load(); }
   };
 
+  const sendPaymentLink = async (o: Order) => {
+    if (!venue) return;
+    const link = `${window.location.origin}/pay/demo/${o.id}`;
+    const body = `Hi ${o.guest_name.split(" ")[0]}, here's your payment link for ${money(o.total_cents, o.currency)} at ${venue.name}: ${link}`;
+    const contact = o.guest_phone || o.guest_email || null;
+    const channel = ["whatsapp", "sms", "instagram", "messenger", "phone"].includes(o.channel) ? o.channel : "sms";
+    await supabase.from("messages").insert({
+      venue_id: venue.id, channel, contact, body, direction: "outbound", status: "sent",
+    });
+    await supabase.from("brain_events").insert({
+      venue_id: venue.id, title: `Payment link sent · ${o.guest_name}`,
+      reason: `${money(o.total_cents, o.currency)} via ${channel}`, severity: "info",
+    });
+    try { await navigator.clipboard.writeText(link); } catch { /* ignore */ }
+    toast.success(`Payment link sent via ${channel} (copied)`);
+  };
+
   const stats = useMemo(() => {
     const today = orders.filter(o =>
       new Date(o.created_at).toDateString() === new Date().toDateString()

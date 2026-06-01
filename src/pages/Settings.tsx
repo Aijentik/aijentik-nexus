@@ -65,10 +65,19 @@ export default function Settings() {
     refreshVenues();
   };
 
-  const toggleFeature = (key: string) => {
+  const toggleFeature = async (key: string) => {
     const features = { ...(v.features || {}) };
     features[key] = !features[key];
     setV({ ...v, features });
+    const { error } = await supabase.from("venues").update({ features }).eq("id", v.id);
+    if (error) {
+      // revert on failure
+      const reverted = { ...(v.features || {}) };
+      setV({ ...v, features: reverted });
+      return toast.error(error.message);
+    }
+    toast.success(features[key] ? `${key} enabled` : `${key} disabled`);
+    refreshVenues();
   };
 
   const changeRole = async (id: string, role: string) => {

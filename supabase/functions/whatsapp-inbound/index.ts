@@ -107,6 +107,37 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "create_takeaway_order",
+      description: "Create a takeaway/delivery/pickup order from the venue MENU. Only call after confirming items, fulfillment, pickup time or delivery address, and reading back the total. Only quote real menu items.",
+      parameters: {
+        type: "object",
+        properties: {
+          guest_name: { type: "string" },
+          fulfillment: { type: "string", description: "'takeaway', 'delivery', or 'dine_in'" },
+          pickup_time: { type: "string", description: "ISO 8601 pickup time for takeaway" },
+          delivery_address: { type: "string", description: "Full address for delivery" },
+          notes: { type: "string" },
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Menu item name exactly as on the menu" },
+                qty: { type: "integer", minimum: 1 },
+                modifiers: { type: "string" },
+                notes: { type: "string" },
+              },
+              required: ["name", "qty"],
+            },
+          },
+        },
+        required: ["guest_name", "fulfillment", "items"],
+      },
+    },
+  },
 ];
 
 

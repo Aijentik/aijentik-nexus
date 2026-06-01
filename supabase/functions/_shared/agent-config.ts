@@ -37,6 +37,7 @@ export type AgentConfig = {
     take_message?: boolean;
     transfer_call?: boolean;
     transfer_number?: string;
+    take_order?: boolean;
   };
   speed?: number;          // 0.7–1.2
   stability?: number;      // 0–1

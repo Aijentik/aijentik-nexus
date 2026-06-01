@@ -338,10 +338,10 @@ Deno.serve(async (req) => {
         .eq("venue_id", venue.id).gte("booking_time", new Date().toISOString())
         .order("booking_time").limit(15),
       orderingEnabled
-        ? sb.from("menu_items").select("name,price,section,description").eq("venue_id", venue.id).order("position").limit(120)
-        : Promise.resolve({ data: [] as any[] }),
+        ? fetchLiveMenuItems(sb, venue.id, "name,price,section,description", 120)
+        : Promise.resolve([] as any[]),
     ]);
-    const menu = (menuRes as any)?.data || [];
+    const menu = (menuRes as any) || [];
 
     const turns = (history || []).slice().reverse().map((m) => ({
       role: m.direction === "inbound" ? "user" : "assistant",

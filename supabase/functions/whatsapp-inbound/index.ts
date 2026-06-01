@@ -323,8 +323,9 @@ Deno.serve(async (req) => {
       channel: "whatsapp", direction: "inbound", status: "received",
     });
 
-    // 4) Load thread (last 10), caller bookings, KB, venue context.
-    const [{ data: history }, { data: callerBookings }, { data: kb }, { data: venueBookings }] = await Promise.all([
+    // 4) Load thread (last 10), caller bookings, KB, venue context, menu (if ordering on).
+    const orderingEnabled = !!(venue as any)?.features?.ordering;
+    const [{ data: history }, { data: callerBookings }, { data: kb }, { data: venueBookings }, menuRes] = await Promise.all([
       sb.from("messages").select("direction, body").eq("venue_id", venue.id)
         .eq("channel", "whatsapp").eq("contact", fromE164)
         .order("created_at", { ascending: false }).limit(10),
@@ -335,7 +336,11 @@ Deno.serve(async (req) => {
       sb.from("bookings").select("guest_name,party_size,booking_time,status,notes")
         .eq("venue_id", venue.id).gte("booking_time", new Date().toISOString())
         .order("booking_time").limit(15),
+      orderingEnabled
+        ? sb.from("menu_items").select("name,price,section,description").eq("venue_id", venue.id).order("position").limit(120)
+        : Promise.resolve({ data: [] as any[] }),
     ]);
+    const menu = (menuRes as any)?.data || [];
 
     const turns = (history || []).slice().reverse().map((m) => ({
       role: m.direction === "inbound" ? "user" : "assistant",

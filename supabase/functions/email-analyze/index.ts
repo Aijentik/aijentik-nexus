@@ -82,10 +82,10 @@ Deno.serve(async (req) => {
         .lte("booking_time", nextWeek)
         .neq("status", "cancelled"),
       orderingEnabled
-        ? supabase.from("menu_items").select("name,price,section,description").eq("venue_id", thread.venue_id).order("position").limit(120)
-        : Promise.resolve({ data: [] as any[] }),
+        ? fetchLiveMenuItems(supabase, thread.venue_id, "name,price,section,description", 120)
+        : Promise.resolve([] as any[]),
     ]);
-    const menu = (menuRes as any)?.data || [];
+    const menu = (menuRes as any) || [];
 
     const inbox = (thread as any).email_inboxes;
     const transcript = (msgs || []).map(m =>

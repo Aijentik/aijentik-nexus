@@ -146,7 +146,7 @@ ${events || "(none available)"}
 
 INSIGHTS
 ${insights || "(none available)"}
-
+${orderingEnabled ? `\nMENU (takeaway & delivery enabled — only quote items from here)\n${menu || "(menu is empty — tell the guest the kitchen hasn't published a menu yet)"}\n\nORDERING RULES\n- Takeaway and delivery are ON for this venue. You can take orders directly.\n- Only ever quote items, prices, and modifiers that appear in MENU above. Never invent dishes or prices.\n- Confirm: every item + qty, any modifiers/notes, fulfillment (takeaway pickup vs delivery), pickup time or delivery address, and the running total before calling create_takeaway_order.\n- For delivery, always collect a full address. For takeaway, always collect a pickup time (or "as soon as ready").\n- Read the total back in plain English before finalising ("that's three items, comes to twenty-eight fifty, ready in about twenty minutes — does that sound right?").\n` : ""}
 ENABLED CAPABILITIES
 ${enabledTools.length ? enabledTools.map(t => `- ${t}`).join("\n") : "- Conversation only — do not promise to take any actions."}
 

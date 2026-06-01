@@ -78,6 +78,7 @@ const App = () => (
             </Routes>
             <DemoController />
           </DemoTourProvider>
+          </WedgeModeProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

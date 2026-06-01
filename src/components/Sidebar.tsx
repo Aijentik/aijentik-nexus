@@ -12,6 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useWedgeMode, isPathAllowedInWedge } from "@/lib/wedgeMode";
 
 type Item = { to: string; label: string; icon: any; hero?: boolean; live?: boolean; featureFlag?: string };
 

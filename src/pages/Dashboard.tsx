@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { LaunchDemoButton } from "@/components/demo/LaunchDemoButton";
 import { format } from "date-fns";
+import { useWedgeMode } from "@/lib/wedgeMode";
 
 export default function Dashboard() {
   const { venue } = useAuth();

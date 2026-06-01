@@ -105,17 +105,19 @@ Deno.serve(async (req) => {
     }).select().single();
     if (mErr) return new Response(JSON.stringify({ error: mErr.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    await sb.from("menu_items").insert(
-      items.map((it: any, i: number) => ({
-        venue_id,
-        menu_id: menu.id,
-        section: (it.section || "mains").toString().toLowerCase().slice(0, 40),
-        name: String(it.name).slice(0, 160),
-        description: it.description ? String(it.description).slice(0, 600) : null,
-        price: it.price ? String(it.price).slice(0, 40) : null,
-        position: i,
-      }))
-    );
+    if (items.length) {
+      await sb.from("menu_items").insert(
+        items.map((it: any, i: number) => ({
+          venue_id,
+          menu_id: menu.id,
+          section: (it.section || "mains").toString().toLowerCase().slice(0, 40),
+          name: String(it.name).slice(0, 160),
+          description: it.description ? String(it.description).slice(0, 600) : null,
+          price: it.price ? String(it.price).slice(0, 40) : null,
+          position: i,
+        }))
+      );
+    }
 
     await sb.from("brain_events").insert({
       venue_id,

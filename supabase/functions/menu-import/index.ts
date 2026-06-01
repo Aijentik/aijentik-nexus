@@ -92,9 +92,9 @@ Deno.serve(async (req) => {
     const data = await aiRes.json();
     const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
     if (!args) return new Response(JSON.stringify({ error: "no extraction" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    const parsed = JSON.parse(args);
+    let parsed: any = {};
+    try { parsed = JSON.parse(args); } catch { parsed = {}; }
     const items = (parsed.items || []).slice(0, 200);
-    if (!items.length) return new Response(JSON.stringify({ error: "no items found in menu" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { data: menu, error: mErr } = await sb.from("menus").insert({
       venue_id,
@@ -105,26 +105,28 @@ Deno.serve(async (req) => {
     }).select().single();
     if (mErr) return new Response(JSON.stringify({ error: mErr.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    await sb.from("menu_items").insert(
-      items.map((it: any, i: number) => ({
-        venue_id,
-        menu_id: menu.id,
-        section: (it.section || "mains").toString().toLowerCase().slice(0, 40),
-        name: String(it.name).slice(0, 160),
-        description: it.description ? String(it.description).slice(0, 600) : null,
-        price: it.price ? String(it.price).slice(0, 40) : null,
-        position: i,
-      }))
-    );
+    if (items.length) {
+      await sb.from("menu_items").insert(
+        items.map((it: any, i: number) => ({
+          venue_id,
+          menu_id: menu.id,
+          section: (it.section || "mains").toString().toLowerCase().slice(0, 40),
+          name: String(it.name).slice(0, 160),
+          description: it.description ? String(it.description).slice(0, 600) : null,
+          price: it.price ? String(it.price).slice(0, 40) : null,
+          position: i,
+        }))
+      );
+    }
 
     await sb.from("brain_events").insert({
       venue_id,
       title: `Menu imported · ${menu.name}`,
       reason: `${items.length} items added${url ? ` from ${url}` : " from pasted text"}`,
-      severity: "success",
+      severity: items.length ? "success" : "warning",
     });
 
-    return new Response(JSON.stringify({ ok: true, menu, count: items.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: true, menu, count: items.length, warning: items.length ? null : "No items could be extracted automatically — menu created empty, add items manually." }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

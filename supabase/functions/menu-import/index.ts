@@ -11,6 +11,9 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
+
+const MENU_KEYWORDS = ["menu", "menus", "food", "drinks", "wine", "cocktail", "dinner", "lunch", "brunch", "breakfast", "takeaway", "delivery", "eat", "order"];
 
 function stripHtml(html: string): string {
   return html
@@ -20,6 +23,77 @@ function stripHtml(html: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 18000);
+}
+
+async function firecrawlScrape(url: string): Promise<string> {
+  const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${FIRECRAWL_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true }),
+    signal: AbortSignal.timeout(45000),
+  });
+  if (!r.ok) throw new Error(`firecrawl scrape ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const j = await r.json();
+  return (j.data?.markdown || j.markdown || "").toString();
+}
+
+async function firecrawlMap(url: string): Promise<string[]> {
+  const r = await fetch("https://api.firecrawl.dev/v2/map", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${FIRECRAWL_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ url, search: "menu", limit: 80, includeSubdomains: false }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!r.ok) return [];
+  const j = await r.json();
+  const links: string[] = j.data?.links?.map((l: any) => typeof l === "string" ? l : l.url) || j.links || [];
+  return links.filter(Boolean);
+}
+
+async function smartScrapeMenu(url: string): Promise<string> {
+  if (!FIRECRAWL_API_KEY) {
+    // Fallback: plain fetch
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 AijentikBot" }, signal: AbortSignal.timeout(15000) });
+    return stripHtml(await r.text());
+  }
+
+  // 1. Scrape the entry page as clean markdown
+  let combined = "";
+  try {
+    combined = `## ${url}\n` + (await firecrawlScrape(url));
+  } catch (_) { /* keep going */ }
+
+  // 2. Map the site for menu-like URLs
+  let candidates: string[] = [];
+  try {
+    candidates = await firecrawlMap(url);
+  } catch (_) { /* ignore */ }
+
+  const origin = (() => { try { return new URL(url).origin; } catch { return ""; } })();
+  const ranked = candidates
+    .filter((l) => l && (!origin || l.startsWith(origin)))
+    .filter((l) => l.toLowerCase() !== url.toLowerCase())
+    .map((l) => {
+      const lo = l.toLowerCase();
+      const score = MENU_KEYWORDS.reduce((s, k) => s + (lo.includes(k) ? 1 : 0), 0)
+        + (lo.endsWith(".pdf") ? 2 : 0);
+      return { l, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map((x) => x.l);
+
+  // 3. Scrape top menu pages
+  for (const link of ranked) {
+    try {
+      const md = await firecrawlScrape(link);
+      if (md && md.length > 80) combined += `\n\n## ${link}\n${md}`;
+      if (combined.length > 40000) break;
+    } catch (_) { /* skip */ }
+  }
+
+  return combined.slice(0, 45000);
 }
 
 Deno.serve(async (req) => {
@@ -36,8 +110,7 @@ Deno.serve(async (req) => {
     let source = text || "";
     if (!source && url) {
       try {
-        const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 AijentikBot" }, signal: AbortSignal.timeout(15000) });
-        source = stripHtml(await r.text());
+        source = await smartScrapeMenu(url);
       } catch (e) {
         return new Response(JSON.stringify({ error: "could not fetch url: " + String(e) }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }

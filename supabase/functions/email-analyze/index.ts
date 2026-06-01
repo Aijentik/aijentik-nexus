@@ -8,6 +8,7 @@ import { generateText, Output } from "npm:ai@^5.0.0";
 import { z } from "npm:zod@^3.23.0";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { fetchLiveMenuItems } from "../_shared/menu.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

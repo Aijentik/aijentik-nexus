@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
     } else if (action.kind === "create_order") {
       const items = Array.isArray(payload.order_items) ? payload.order_items : [];
       if (items.length) {
-        const { data: menu } = await svc.from("menu_items").select("id,name,price").eq("venue_id", action.venue_id).limit(500);
+        const menu = await fetchLiveMenuItems(svc, action.venue_id, "id,name,price", 500);
         const parsePrice = (p: any) => { const n = Number(String(p || "").replace(/[^0-9.]/g, "")); return isNaN(n) ? 0 : Math.round(n * 100); };
         const resolved = items.map((it: any) => {
           const m = (menu || []).find((x: any) => (x.name || "").toLowerCase().trim() === String(it.name || "").toLowerCase().trim());

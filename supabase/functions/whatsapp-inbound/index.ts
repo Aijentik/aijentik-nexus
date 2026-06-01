@@ -352,9 +352,9 @@ Deno.serve(async (req) => {
     const fmtBooking = (b: any) => `${b.guest_name}, party of ${b.party_size}, ${b.booking_time} (id: ${b.id}, status: ${b.status})`;
 
     const basePrompt = buildPrompt(venue, kb || [], {
-      tools: { create_booking: true, update_booking: true, take_message: true },
+      tools: { create_booking: true, update_booking: true, take_message: true, take_order: orderingEnabled },
       responseLength: "short",
-    }, { bookings: venueBookings || [] });
+    }, { bookings: venueBookings || [], menu });
 
     const now = new Date();
     const todayLong = now.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Australia/Sydney" });

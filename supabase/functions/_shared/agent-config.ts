@@ -64,16 +64,21 @@ export function buildPrompt(venue: any, kb: any[] = [], cfg: AgentConfig | null 
   const messages = (context.messages || []).map((m: any) => `• ${m.direction || "message"} ${m.channel || "sms"} ${m.contact || ""}: ${m.body}`).join("\n");
   const events = (context.events || []).map((e: any) => `• ${e.title}: ${e.reason || ""}`).join("\n");
   const insights = (context.insights || []).map((i: any) => `• ${i.title}: ${i.body}`).join("\n");
+  const menu = (context.menu || []).slice(0, 80).map((m: any) =>
+    `• ${m.name}${m.price ? ` — ${m.price}` : ""}${m.section ? ` [${m.section}]` : ""}${m.description ? ` — ${m.description}` : ""}`
+  ).join("\n");
+  const orderingEnabled = !!venue?.features?.ordering;
 
   const intention = cfg?.intention?.trim() || "Greet guests, take reservations, and answer questions about the menu, hours, location, policies, and current operational context.";
   const demeanor = resolveDemeanor(cfg);
   const lengthRule = LENGTH_PRESETS[cfg?.responseLength || "medium"];
-  const tools = cfg?.tools || { create_booking: true, update_booking: true, take_message: true };
+  const tools = cfg?.tools || { create_booking: true, update_booking: true, take_message: true, take_order: true };
   const enabledTools: string[] = [];
   if (tools.create_booking !== false) enabledTools.push("create_booking — confirm bookings only after collecting name, party size, date, time, and phone.");
   if (tools.update_booking !== false) enabledTools.push("update_booking — change or cancel an existing booking. Use the caller's recognised booking from CALLER CONTEXT when available; otherwise confirm which booking to change before calling.");
   if (tools.take_message) enabledTools.push("take_message — for anything you cannot resolve, take a clear message for the team.");
   if (tools.transfer_call && tools.transfer_number) enabledTools.push(`transfer_call — if the caller insists on speaking to a human, transfer to ${tools.transfer_number}.`);
+  if (orderingEnabled && tools.take_order !== false) enabledTools.push("create_takeaway_order — take a takeaway, delivery, or pickup order from the MENU below. Confirm items, qty, fulfillment (takeaway/delivery), pickup time or delivery address, then read back the total before creating.");
 
   return `You are a real human hospitality staff member at ${venue.name} (${venue.venue_type || "restaurant"}${venue.cuisine ? `, ${venue.cuisine}` : ""}) speaking naturally over the phone.
 

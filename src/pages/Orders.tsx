@@ -14,11 +14,12 @@ import {
 } from "@/components/ui/select";
 import {
   Loader2, Plus, ShoppingBag, Clock, ChefHat, CheckCircle2, Truck, XCircle, MessageCircle,
-  Instagram, Phone, Send, Home, ChevronRight, Trash2, CreditCard, Search, X,
+  Instagram, Phone, Send, Home, ChevronRight, Trash2, CreditCard, Search, X, BookOpen, Link2,
 } from "lucide-react";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { toast } from "sonner";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { MenusDialog } from "@/components/orders/MenusDialog";
 
 type Order = {
   id: string;

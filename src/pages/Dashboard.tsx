@@ -170,9 +170,11 @@ export default function Dashboard() {
               </div>
               <div className="font-medium text-[15px]">Decisions, narrated</div>
             </div>
-            <Link to="/app/brain" className="text-[11px] uppercase tracking-wider text-primary hover:text-primary-glow transition-colors flex items-center gap-1">
-              Open <ArrowUpRight className="h-3 w-3" />
-            </Link>
+            {!wedgeMode && (
+              <Link to="/app/brain" className="text-[11px] uppercase tracking-wider text-primary hover:text-primary-glow transition-colors flex items-center gap-1">
+                Open <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            )}
           </div>
           <div className="space-y-2 relative">
             {events.length === 0 && (

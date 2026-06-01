@@ -123,10 +123,10 @@ Deno.serve(async (req) => {
       venue_id,
       title: `Menu imported · ${menu.name}`,
       reason: `${items.length} items added${url ? ` from ${url}` : " from pasted text"}`,
-      severity: "success",
+      severity: items.length ? "success" : "warning",
     });
 
-    return new Response(JSON.stringify({ ok: true, menu, count: items.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: true, menu, count: items.length, warning: items.length ? null : "No items could be extracted automatically — menu created empty, add items manually." }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

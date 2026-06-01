@@ -201,20 +201,27 @@ export default function Orders() {
         title="Ordering"
         subtitle="Live kanban for every order across every channel — WhatsApp, Instagram, web, phone, in-house."
         actions={
-          <Dialog open={newOpen} onOpenChange={setNewOpen}>
-            <DialogTrigger asChild>
-              <Button
-                size="lg"
-                className="h-11 bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40
-                  shadow-[0_12px_40px_-12px_hsl(var(--primary)/0.7),0_1px_0_hsl(36_100%_90%_/_0.25)_inset]"
-              >
-                <Plus className="h-4 w-4 mr-2" /> New order
-              </Button>
-            </DialogTrigger>
-            <NewOrderDialog venueId={venue?.id} onCreated={() => { setNewOpen(false); load(); }} />
-          </Dialog>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="lg" className="h-11" onClick={() => setMenusOpen(true)}>
+              <BookOpen className="h-4 w-4 mr-2" /> Menus
+            </Button>
+            <Dialog open={newOpen} onOpenChange={setNewOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  size="lg"
+                  className="h-11 bg-gradient-to-r from-primary to-accent text-primary-foreground border border-primary/40
+                    shadow-[0_12px_40px_-12px_hsl(var(--primary)/0.7),0_1px_0_hsl(36_100%_90%_/_0.25)_inset]"
+                >
+                  <Plus className="h-4 w-4 mr-2" /> New order
+                </Button>
+              </DialogTrigger>
+              <NewOrderDialog venueId={venue?.id} onCreated={() => { setNewOpen(false); load(); }} />
+            </Dialog>
+          </div>
         }
       />
+
+      <MenusDialog open={menusOpen} onOpenChange={setMenusOpen} venueId={venue?.id} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">

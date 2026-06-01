@@ -44,6 +44,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <WedgeModeProvider>
           <DemoTourProvider>
             <Routes>
               <Route path="/" element={<Landing />} />

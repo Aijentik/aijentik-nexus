@@ -396,7 +396,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         guest_phone: { type: "string", description: "Phone number, optional" },
         notes: { type: "string", description: "Special requests / notes, optional" },
       },
-      ["tool_name", "guest_name", "party_size", "booking_time"],
+      ["guest_name", "party_size", "booking_time"],
       toolToken,
       venueId,
     ));

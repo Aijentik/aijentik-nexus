@@ -30,7 +30,10 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const tool_name = body.tool_name as string | undefined;
+    const url = new URL(req.url);
+    // Tool name is baked into the per-tool webhook URL (?tool=create_booking).
+    // Fall back to body.tool_name for legacy callers.
+    const tool_name = (url.searchParams.get("tool") || (typeof body.tool_name === "string" ? body.tool_name : "")).trim() || undefined;
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     // venue_id is baked into the webhook URL per-agent (?venue_id=<uuid>).
     // Fall back to header/body only for legacy callers.

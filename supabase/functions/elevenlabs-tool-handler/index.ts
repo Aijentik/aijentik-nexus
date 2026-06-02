@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
     }
 
     if (tool_name === "take_message") {
-      const { caller_name, caller_phone, message } = body;
+      const { caller_name, caller_phone, message, reason } = body;
       if (!message) return ok("Sorry, I didn't catch the message.");
       const { error } = await sb.from("messages").insert({
         venue_id,
@@ -163,7 +163,8 @@ Deno.serve(async (req) => {
         direction: "inbound",
         channel: "voice",
         status: "received",
-      });
+        reason: reason === "Call Back" ? "Call Back" : "Message",
+      } as any);
       if (error) {
         console.error("[take_message] insert failed", error);
         return ok("I couldn't save that message just now — please call back shortly.");

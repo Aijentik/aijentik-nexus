@@ -429,7 +429,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         caller_phone: { type: "string", description: "Callback phone number, optional" },
         message: { type: "string", description: "The message to relay to the venue team" },
       },
-      ["tool_name", "caller_name", "message"],
+      ["caller_name", "message"],
       toolToken,
       venueId,
     ));

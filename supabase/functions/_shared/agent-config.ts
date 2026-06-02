@@ -352,7 +352,7 @@ export async function ensureToolSecretId(): Promise<string> {
   return _toolSecretIdPromise;
 }
 
-function webhookTool(name: string, description: string, properties: Record<string, any>, required: string[], secretId: string) {
+function webhookTool(name: string, description: string, properties: Record<string, any>, required: string[], toolToken: string) {
   return {
     type: "webhook",
     name,
@@ -370,7 +370,7 @@ function webhookTool(name: string, description: string, properties: Record<strin
         required,
       },
       request_headers: {
-        "Authorization": { secret_id: secretId },
+        "Authorization": `Bearer ${toolToken}`,
         "Content-Type": "application/json",
       },
     },
@@ -381,7 +381,9 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
   const voiceId = resolveVoiceId(cfg);
   const tools = cfg?.tools || { create_booking: true, take_message: true };
   const toolDefs: any[] = [];
-  const secretId = await ensureToolSecretId();
+  const toolToken = Deno.env.get("ELEVENLABS_TOOL_SECRET");
+  if (!toolToken) throw new Error("ELEVENLABS_TOOL_SECRET not configured");
+
 
   if (tools.create_booking !== false) {
     toolDefs.push(webhookTool(
@@ -395,7 +397,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         notes: { type: "string", description: "Special requests / notes, optional" },
       },
       ["tool_name", "venue_id", "guest_name", "party_size", "booking_time"],
-      secretId,
+      toolToken,
     ));
   }
   if (tools.update_booking !== false) {
@@ -413,7 +415,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         notes: { type: "string", description: "New or additional notes." },
       },
       ["tool_name", "venue_id", "action"],
-      secretId,
+      toolToken,
     ));
   }
   if (tools.take_message) {
@@ -426,7 +428,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         message: { type: "string", description: "The message to relay to the venue team" },
       },
       ["tool_name", "venue_id", "caller_name", "message"],
-      secretId,
+      toolToken,
     ));
   }
   if (tools.transfer_call && tools.transfer_number) {

@@ -20,6 +20,10 @@ async function createElAgent(body: any) {
 }
 
 async function patchElAgent(agentId: string, body: any) {
+  try {
+    const tool0 = body?.conversation_config?.agent?.prompt?.tools?.[0];
+    console.log("[patchElAgent] tools[0]=", JSON.stringify(tool0));
+  } catch (_) {}
   const res = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
     method: "PATCH",
     headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },

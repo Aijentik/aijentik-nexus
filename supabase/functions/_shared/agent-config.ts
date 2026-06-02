@@ -397,7 +397,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         notes: { type: "string", description: "Special requests / notes, optional" },
       },
       ["tool_name", "venue_id", "guest_name", "party_size", "booking_time"],
-      secretId,
+      toolToken,
     ));
   }
   if (tools.update_booking !== false) {
@@ -415,7 +415,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         notes: { type: "string", description: "New or additional notes." },
       },
       ["tool_name", "venue_id", "action"],
-      secretId,
+      toolToken,
     ));
   }
   if (tools.take_message) {
@@ -428,7 +428,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         message: { type: "string", description: "The message to relay to the venue team" },
       },
       ["tool_name", "venue_id", "caller_name", "message"],
-      secretId,
+      toolToken,
     ));
   }
   if (tools.transfer_call && tools.transfer_number) {

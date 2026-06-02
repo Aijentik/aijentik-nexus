@@ -377,10 +377,11 @@ function webhookTool(name: string, description: string, properties: Record<strin
   };
 }
 
-export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | null | undefined) {
+export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | null | undefined) {
   const voiceId = resolveVoiceId(cfg);
   const tools = cfg?.tools || { create_booking: true, take_message: true };
   const toolDefs: any[] = [];
+  const secretId = await ensureToolSecretId();
 
   if (tools.create_booking !== false) {
     toolDefs.push(webhookTool(
@@ -394,6 +395,7 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         notes: { type: "string", description: "Special requests / notes, optional" },
       },
       ["tool_name", "venue_id", "guest_name", "party_size", "booking_time"],
+      secretId,
     ));
   }
   if (tools.update_booking !== false) {
@@ -411,6 +413,7 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         notes: { type: "string", description: "New or additional notes." },
       },
       ["tool_name", "venue_id", "action"],
+      secretId,
     ));
   }
   if (tools.take_message) {
@@ -423,6 +426,7 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         message: { type: "string", description: "The message to relay to the venue team" },
       },
       ["tool_name", "venue_id", "caller_name", "message"],
+      secretId,
     ));
   }
   if (tools.transfer_call && tools.transfer_number) {

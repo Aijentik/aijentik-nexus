@@ -364,7 +364,6 @@ function webhookTool(name: string, description: string, properties: Record<strin
         type: "object",
         properties: {
           tool_name: { type: "string", description: "Always set to this tool's name" },
-          venue_id: { type: "string", description: "Use the {{venue_id}} dynamic variable" },
           ...properties,
         },
         required,
@@ -372,6 +371,10 @@ function webhookTool(name: string, description: string, properties: Record<strin
       request_headers: {
         "Authorization": `Bearer ${toolToken}`,
         "Content-Type": "application/json",
+        // ElevenLabs substitutes {{venue_id}} from dynamic_variables into headers.
+        // Passing it here (instead of as a tool argument) means the LLM cannot
+        // fabricate or mangle the UUID.
+        "X-Venue-Id": "{{venue_id}}",
       },
     },
   };

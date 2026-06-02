@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     const context = { bookings: bookings || [], messages: messages || [], events: events || [], insights: insights || [], menu: menuItems || [] };
 
     const prompt = buildPrompt(venue, kb || [], cfg, context);
-    const body = buildAgentBody(venue, prompt, cfg);
+    const body = await buildAgentBody(venue, prompt, cfg);
 
     let agentId = agent?.elevenlabs_agent_id;
     if (!agentId) {

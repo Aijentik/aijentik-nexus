@@ -76,7 +76,7 @@ export function buildPrompt(venue: any, kb: any[] = [], cfg: AgentConfig | null 
   const enabledTools: string[] = [];
   if (tools.create_booking !== false) enabledTools.push("create_booking — confirm bookings only after collecting name, party size, date, time, and phone.");
   if (tools.update_booking !== false) enabledTools.push("update_booking — change or cancel an existing booking. Use the caller's recognised booking from CALLER CONTEXT when available; otherwise confirm which booking to change before calling.");
-  if (tools.take_message) enabledTools.push("take_message — for anything you cannot resolve, take a clear message for the team.");
+  if (tools.take_message) enabledTools.push(`take_message — MUST call this tool whenever the caller: asks to leave a message, asks for a callback, asks to speak to a manager/owner/human, or says anything you can't resolve yourself. Simply saying "I'll pass that on" or "I'll let them know" WITHOUT calling the tool is a failure. Collect caller name, callback number (read it back to confirm), and the message, then call take_message with reason="Call Back" if they want a human to ring them back or be transferred, otherwise reason="Message". Only confirm out loud ("got it, I've left that with the team") AFTER the tool has been called.`);
   if (tools.transfer_call && tools.transfer_number) enabledTools.push(`transfer_call — if the caller insists on speaking to a human, transfer to ${tools.transfer_number}.`);
   if (orderingEnabled && tools.take_order !== false) enabledTools.push("create_takeaway_order — take a takeaway, delivery, or pickup order from the MENU below. Confirm items, qty, fulfillment (takeaway/delivery), pickup time or delivery address, then read back the total before creating.");
 

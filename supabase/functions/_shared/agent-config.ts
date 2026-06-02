@@ -358,15 +358,13 @@ function webhookTool(name: string, description: string, properties: Record<strin
     name,
     description,
     api_schema: {
-      // venue_id is baked into the URL per-agent so the LLM can never fabricate it.
-      url: `${TOOL_HANDLER_URL}?venue_id=${encodeURIComponent(venueId)}`,
+      // venue_id AND tool name are baked into the URL per-tool so the LLM can never
+      // mislabel the call (ElevenLabs sometimes writes "default_api" into body fields).
+      url: `${TOOL_HANDLER_URL}?venue_id=${encodeURIComponent(venueId)}&tool=${encodeURIComponent(name)}`,
       method: "POST",
       request_body_schema: {
         type: "object",
-        properties: {
-          tool_name: { type: "string", description: "Always set to this tool's name" },
-          ...properties,
-        },
+        properties,
         required,
       },
       request_headers: {
@@ -398,7 +396,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         guest_phone: { type: "string", description: "Phone number, optional" },
         notes: { type: "string", description: "Special requests / notes, optional" },
       },
-      ["tool_name", "guest_name", "party_size", "booking_time"],
+      ["guest_name", "party_size", "booking_time"],
       toolToken,
       venueId,
     ));
@@ -417,7 +415,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         new_party_size: { type: "integer", description: "New party size if changing." },
         notes: { type: "string", description: "New or additional notes." },
       },
-      ["tool_name", "action"],
+      ["action"],
       toolToken,
       venueId,
     ));
@@ -431,7 +429,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         caller_phone: { type: "string", description: "Callback phone number, optional" },
         message: { type: "string", description: "The message to relay to the venue team" },
       },
-      ["tool_name", "caller_name", "message"],
+      ["caller_name", "message"],
       toolToken,
       venueId,
     ));

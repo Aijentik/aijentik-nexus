@@ -20,7 +20,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const auth = req.headers.get("Authorization") || "";
-    const authOk = !!TOOL_SECRET && auth === `Bearer ${TOOL_SECRET}`;
+    const token = auth.replace(/^Bearer\s+/i, "").trim();
+    const authOk = !!TOOL_SECRET && token === TOOL_SECRET;
     if (!authOk) {
       console.error("[elevenlabs-tool-handler] unauthorized", { hasSecret: !!TOOL_SECRET, authPrefix: auth.slice(0, 12) });
       return new Response(JSON.stringify({ error: "unauthorized" }), {

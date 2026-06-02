@@ -299,65 +299,80 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
   return base;
 }
 
+const TOOL_HANDLER_URL = `https://${(Deno.env.get("SUPABASE_URL") || "https://ifqizzldcgkttwlltdbo.supabase.co").replace(/^https?:\/\//, "")}/functions/v1/elevenlabs-tool-handler`;
+
+function webhookTool(name: string, description: string, properties: Record<string, any>, required: string[]) {
+  return {
+    type: "webhook",
+    name,
+    description,
+    api_schema: {
+      url: TOOL_HANDLER_URL,
+      method: "POST",
+      request_body_schema: {
+        type: "object",
+        properties: {
+          tool_name: { type: "string", description: "Always set to this tool's name" },
+          venue_id: { type: "string", description: "Use the {{venue_id}} dynamic variable" },
+          ...properties,
+        },
+        required,
+      },
+      request_headers: {
+        "Authorization": "Bearer {ELEVENLABS_TOOL_SECRET}",
+        "Content-Type": "application/json",
+      },
+    },
+  };
+}
+
 export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | null | undefined) {
   const voiceId = resolveVoiceId(cfg);
   const tools = cfg?.tools || { create_booking: true, take_message: true };
   const toolDefs: any[] = [];
 
   if (tools.create_booking !== false) {
-    toolDefs.push({
-      type: "client",
-      name: "create_booking",
-      description: "Create a confirmed booking in the venue's diary. Call this only after explicitly confirming all required details with the caller.",
-      parameters: {
-        type: "object",
-        required: ["guest_name", "party_size", "booking_time"],
-        properties: {
-          guest_name: { type: "string", description: "Full name of the guest" },
-          party_size: { type: "integer", description: "Number of guests" },
-          booking_time: { type: "string", description: "ISO 8601 datetime, e.g. 2026-05-06T19:30:00Z" },
-          guest_phone: { type: "string", description: "Phone number, optional" },
-          notes: { type: "string", description: "Special requests / notes, optional" },
-        },
+    toolDefs.push(webhookTool(
+      "create_booking",
+      "Create a confirmed booking in the venue's diary. Call this only after explicitly confirming all required details with the caller.",
+      {
+        guest_name: { type: "string", description: "Full name of the guest" },
+        party_size: { type: "integer", description: "Number of guests" },
+        booking_time: { type: "string", description: "ISO 8601 datetime, e.g. 2026-05-06T19:30:00+10:00" },
+        guest_phone: { type: "string", description: "Phone number, optional" },
+        notes: { type: "string", description: "Special requests / notes, optional" },
       },
-    });
+      ["tool_name", "venue_id", "guest_name", "party_size", "booking_time"],
+    ));
   }
   if (tools.update_booking !== false) {
-    toolDefs.push({
-      type: "client",
-      name: "update_booking",
-      description: "Modify or cancel an existing booking. Provide as many identifying details as possible (booking_id if known, otherwise guest_name + original_booking_time + guest_phone). Set action to 'cancel' to cancel, or 'update' with the new fields.",
-      parameters: {
-        type: "object",
-        required: ["action"],
-        properties: {
-          action: { type: "string", description: "Either 'update' or 'cancel'." },
-          booking_id: { type: "string", description: "Booking id if known from caller context." },
-          guest_name: { type: "string", description: "Name on the booking, used to find it if no id." },
-          guest_phone: { type: "string", description: "Phone on the booking, used to find it if no id." },
-          original_booking_time: { type: "string", description: "Current ISO 8601 time on the booking, used to identify it." },
-          new_booking_time: { type: "string", description: "New ISO 8601 datetime if changing the time." },
-          new_party_size: { type: "integer", description: "New party size if changing." },
-          notes: { type: "string", description: "New or additional notes." },
-        },
+    toolDefs.push(webhookTool(
+      "update_booking",
+      "Modify or cancel an existing booking. Provide as many identifying details as possible (booking_id if known, otherwise guest_name + original_booking_time + guest_phone). Set action to 'cancel' to cancel, or 'update' with the new fields.",
+      {
+        action: { type: "string", description: "Either 'update' or 'cancel'." },
+        booking_id: { type: "string", description: "Booking id if known from caller context." },
+        guest_name: { type: "string", description: "Name on the booking, used to find it if no id." },
+        guest_phone: { type: "string", description: "Phone on the booking, used to find it if no id." },
+        original_booking_time: { type: "string", description: "Current ISO 8601 time on the booking, used to identify it." },
+        new_booking_time: { type: "string", description: "New ISO 8601 datetime if changing the time." },
+        new_party_size: { type: "integer", description: "New party size if changing." },
+        notes: { type: "string", description: "New or additional notes." },
       },
-    });
+      ["tool_name", "venue_id", "action"],
+    ));
   }
   if (tools.take_message) {
-    toolDefs.push({
-      type: "client",
-      name: "take_message",
-      description: "Record a message for the venue team when the caller wants to leave one or you cannot resolve their request.",
-      parameters: {
-        type: "object",
-        required: ["caller_name", "message"],
-        properties: {
-          caller_name: { type: "string", description: "Full name of the caller leaving the message" },
-          caller_phone: { type: "string", description: "Callback phone number, optional" },
-          message: { type: "string", description: "The message to relay to the venue team" },
-        },
+    toolDefs.push(webhookTool(
+      "take_message",
+      "Record a message for the venue team when the caller wants to leave one or you cannot resolve their request.",
+      {
+        caller_name: { type: "string", description: "Full name of the caller leaving the message" },
+        caller_phone: { type: "string", description: "Callback phone number, optional" },
+        message: { type: "string", description: "The message to relay to the venue team" },
       },
-    });
+      ["tool_name", "venue_id", "caller_name", "message"],
+    ));
   }
   if (tools.transfer_call && tools.transfer_number) {
     toolDefs.push({
@@ -400,6 +415,9 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
       },
     });
   }
+
+
+
 
 
   const firstMessage = cfg?.firstMessage?.trim() || `Hi, thanks for calling ${venue.name}. How can I help today?`;

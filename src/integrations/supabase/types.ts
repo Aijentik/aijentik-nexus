@@ -19,6 +19,7 @@ export type Database = {
           config: Json | null
           created_at: string
           elevenlabs_agent_id: string | null
+          external_booking_webhook_url: string | null
           id: string
           kind: Database["public"]["Enums"]["agent_kind"]
           name: string
@@ -33,6 +34,7 @@ export type Database = {
           config?: Json | null
           created_at?: string
           elevenlabs_agent_id?: string | null
+          external_booking_webhook_url?: string | null
           id?: string
           kind: Database["public"]["Enums"]["agent_kind"]
           name: string
@@ -47,6 +49,7 @@ export type Database = {
           config?: Json | null
           created_at?: string
           elevenlabs_agent_id?: string | null
+          external_booking_webhook_url?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["agent_kind"]
           name?: string

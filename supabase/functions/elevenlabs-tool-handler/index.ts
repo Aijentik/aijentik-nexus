@@ -31,17 +31,20 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const tool_name = body.tool_name as string | undefined;
-    // Prefer header (set by ElevenLabs via {{venue_id}} substitution) over body,
-    // so the LLM can never fabricate or mangle the venue id.
-    const headerVenueId = req.headers.get("x-venue-id")?.trim() || undefined;
-    const bodyVenueId = typeof body.venue_id === "string" ? body.venue_id.trim() : undefined;
-    const venue_id = headerVenueId || bodyVenueId;
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    console.log("[elevenlabs-tool-handler] call", { tool_name, venue_id, source: headerVenueId ? "header" : "body", keys: Object.keys(body) });
+    // Pick the first valid UUID from body or header. Ignore literal "{{venue_id}}"
+    // placeholders or anything that isn't a real UUID (prevents the LLM from
+    // ever fabricating something like "hello-harry").
+    const candidates = [
+      typeof body.venue_id === "string" ? body.venue_id.trim() : "",
+      (req.headers.get("x-venue-id") || "").trim(),
+    ].filter(Boolean);
+    const venue_id = candidates.find((v) => UUID_RE.test(v));
+    console.log("[elevenlabs-tool-handler] call", { tool_name, venue_id, candidates, keys: Object.keys(body) });
 
     if (!tool_name) return ok("Sorry, I couldn't process that request.");
-    if (!venue_id || !UUID_RE.test(venue_id)) {
-      console.error("[elevenlabs-tool-handler] missing/invalid venue_id", { venue_id, headerVenueId, bodyVenueId });
+    if (!venue_id) {
+      console.error("[elevenlabs-tool-handler] missing/invalid venue_id", { candidates });
       return ok("Sorry, I'm not connected to the venue right now.");
     }
 

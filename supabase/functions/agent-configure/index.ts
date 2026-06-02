@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     const { data: userData } = await userClient.auth.getUser();
     if (!userData.user) return new Response(JSON.stringify({ error: "invalid token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const { agent_id, config } = await req.json();
+    const { agent_id, config, external_booking_webhook_url } = await req.json();
     if (!agent_id || !config) return new Response(JSON.stringify({ error: "agent_id and config required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { data: agent, error: aErr } = await sb.from("agents").select("*").eq("id", agent_id).single();
@@ -62,12 +62,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    await sb.from("agents").update({
+    const agentUpdate: Record<string, any> = {
       config: cfg,
       prompt,
       elevenlabs_agent_id: elevenlabsAgentId,
       status: "active",
-    }).eq("id", agent.id);
+    };
+    if (external_booking_webhook_url !== undefined) {
+      agentUpdate.external_booking_webhook_url = external_booking_webhook_url || null;
+    }
+    await sb.from("agents").update(agentUpdate).eq("id", agent.id);
 
     await sb.from("brain_events").insert({
       venue_id: agent.venue_id,

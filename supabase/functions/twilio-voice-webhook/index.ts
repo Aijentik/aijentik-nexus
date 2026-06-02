@@ -159,7 +159,7 @@ Deno.serve(async (req) => {
             to_number: to,
             direction: "inbound",
             conversation_initiation_client_data: {
-              dynamic_variables: { ...callerCtx, twilio_call_sid: callSid },
+              dynamic_variables: { ...callerCtx, venue_id: String(agent.venue_id), venue_name: venueName, twilio_call_sid: callSid },
               ...(dynamicFirstMessage ? { conversation_config_override: { agent: { first_message: dynamicFirstMessage } } } : {}),
             },
           }),

@@ -20,7 +20,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const auth = req.headers.get("Authorization") || "";
-    if (!TOOL_SECRET || auth !== `Bearer ${TOOL_SECRET}`) {
+    const authOk = !!TOOL_SECRET && auth === `Bearer ${TOOL_SECRET}`;
+    if (!authOk) {
+      console.error("[elevenlabs-tool-handler] unauthorized", { hasSecret: !!TOOL_SECRET, authPrefix: auth.slice(0, 12) });
       return new Response(JSON.stringify({ error: "unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -29,6 +31,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const tool_name = body.tool_name as string | undefined;
     const venue_id = body.venue_id as string | undefined;
+    console.log("[elevenlabs-tool-handler] call", { tool_name, venue_id, keys: Object.keys(body) });
 
     if (!tool_name) return ok("Sorry, I couldn't process that request.");
     if (!venue_id) {

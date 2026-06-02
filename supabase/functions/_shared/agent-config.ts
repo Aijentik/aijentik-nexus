@@ -300,8 +300,59 @@ export async function buildCallerContext(sb: any, venueId: string, callerPhone: 
 }
 
 const TOOL_HANDLER_URL = `https://${(Deno.env.get("SUPABASE_URL") || "https://ifqizzldcgkttwlltdbo.supabase.co").replace(/^https?:\/\//, "")}/functions/v1/elevenlabs-tool-handler`;
+const TOOL_SECRET_NAME = "ELEVENLABS_TOOL_SECRET";
 
-function webhookTool(name: string, description: string, properties: Record<string, any>, required: string[]) {
+// Cache the resolved ElevenLabs workspace secret id for the lifetime of the worker.
+let _toolSecretIdPromise: Promise<string> | null = null;
+
+// Ensures an ElevenLabs convai workspace secret named ELEVENLABS_TOOL_SECRET exists
+// holding the same value as our Deno env var, and returns its secret_id so we can
+// reference it from webhook tool headers via { type: "secret", secret_id }.
+export async function ensureToolSecretId(): Promise<string> {
+  if (_toolSecretIdPromise) return _toolSecretIdPromise;
+  _toolSecretIdPromise = (async () => {
+    const apiKey = Deno.env.get("ELEVENLABS_API_KEY");
+    const value = Deno.env.get("ELEVENLABS_TOOL_SECRET");
+    if (!apiKey) throw new Error("ELEVENLABS_API_KEY not configured");
+    if (!value) throw new Error("ELEVENLABS_TOOL_SECRET not configured");
+
+    const listRes = await fetch("https://api.elevenlabs.io/v1/convai/secrets", {
+      headers: { "xi-api-key": apiKey },
+    });
+    if (listRes.ok) {
+      const list = await listRes.json();
+      const existing = (list?.secrets || []).find((s: any) => s.name === TOOL_SECRET_NAME);
+      if (existing?.secret_id) return existing.secret_id as string;
+    } else {
+      console.warn("[ensureToolSecretId] list failed", listRes.status, await listRes.text());
+    }
+
+    const createRes = await fetch("https://api.elevenlabs.io/v1/convai/secrets", {
+      method: "POST",
+      headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "new", name: TOOL_SECRET_NAME, value }),
+    });
+    if (!createRes.ok) {
+      const t = await createRes.text();
+      // On conflict, re-list and try to find it
+      if (createRes.status === 409 || /already exists/i.test(t)) {
+        const r2 = await fetch("https://api.elevenlabs.io/v1/convai/secrets", { headers: { "xi-api-key": apiKey } });
+        if (r2.ok) {
+          const l2 = await r2.json();
+          const ex = (l2?.secrets || []).find((s: any) => s.name === TOOL_SECRET_NAME);
+          if (ex?.secret_id) return ex.secret_id as string;
+        }
+      }
+      _toolSecretIdPromise = null;
+      throw new Error(`create elevenlabs secret failed: ${createRes.status} ${t}`);
+    }
+    const created = await createRes.json();
+    return created.secret_id as string;
+  })();
+  return _toolSecretIdPromise;
+}
+
+function webhookTool(name: string, description: string, properties: Record<string, any>, required: string[], secretId: string) {
   return {
     type: "webhook",
     name,
@@ -318,18 +369,19 @@ function webhookTool(name: string, description: string, properties: Record<strin
         },
         required,
       },
-      request_headers: {
-        "Authorization": "Bearer {ELEVENLABS_TOOL_SECRET}",
-        "Content-Type": "application/json",
-      },
+      request_headers: [
+        { type: "secret", name: "Authorization", secret_id: secretId },
+        { type: "value", name: "Content-Type", value: "application/json" },
+      ],
     },
   };
 }
 
-export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | null | undefined) {
+export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | null | undefined) {
   const voiceId = resolveVoiceId(cfg);
   const tools = cfg?.tools || { create_booking: true, take_message: true };
   const toolDefs: any[] = [];
+  const secretId = await ensureToolSecretId();
 
   if (tools.create_booking !== false) {
     toolDefs.push(webhookTool(
@@ -343,6 +395,7 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         notes: { type: "string", description: "Special requests / notes, optional" },
       },
       ["tool_name", "venue_id", "guest_name", "party_size", "booking_time"],
+      secretId,
     ));
   }
   if (tools.update_booking !== false) {
@@ -360,6 +413,7 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         notes: { type: "string", description: "New or additional notes." },
       },
       ["tool_name", "venue_id", "action"],
+      secretId,
     ));
   }
   if (tools.take_message) {
@@ -372,6 +426,7 @@ export function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | nu
         message: { type: "string", description: "The message to relay to the venue team" },
       },
       ["tool_name", "venue_id", "caller_name", "message"],
+      secretId,
     ));
   }
   if (tools.transfer_call && tools.transfer_number) {

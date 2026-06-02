@@ -30,7 +30,7 @@ async function provisionElevenLabsAgent(sb: any, agent: any) {
   const res = await fetch("https://api.elevenlabs.io/v1/convai/agents/create", {
     method: "POST",
     headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify(buildAgentBody(venue, prompt, cfg)),
+    body: JSON.stringify(await buildAgentBody(venue, prompt, cfg)),
   });
   if (!res.ok) throw new Error(`ElevenLabs agent create failed: ${res.status} ${await res.text()}`);
   const data = await res.json();

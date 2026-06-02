@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
     const cfg = config as AgentConfig;
     const prompt = buildPrompt(venue, kb || [], cfg);
-    const body = buildAgentBody(venue, prompt, cfg);
+    const body = await buildAgentBody(venue, prompt, cfg);
 
     let elevenlabsAgentId = agent.elevenlabs_agent_id;
     if (agent.kind === "voice") {

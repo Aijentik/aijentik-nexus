@@ -415,7 +415,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         new_party_size: { type: "integer", description: "New party size if changing." },
         notes: { type: "string", description: "New or additional notes." },
       },
-      ["tool_name", "action"],
+      ["action"],
       toolToken,
       venueId,
     ));

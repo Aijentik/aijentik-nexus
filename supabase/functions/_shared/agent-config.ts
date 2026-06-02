@@ -423,7 +423,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
   if (tools.take_message) {
     toolDefs.push(webhookTool(
       "take_message",
-      "Record a message for the venue team when the caller wants to leave one, cannot be helped, or asks to speak to or be transferred to a human. Use reason='Call Back' when the caller wants a human to call them back or be transferred; use reason='Message' for a standard voicemail.",
+      "Record a message for the venue team. YOU MUST CALL THIS TOOL — do not just verbally say you will pass something on. Trigger phrases include: 'can I leave a message', 'have someone call me back', 'can you get them to ring me', 'can I speak to the manager/owner', 'tell them that...', or any request you cannot fulfil yourself. Use reason='Call Back' when the caller wants a human to call them back or be transferred to a person; use reason='Message' for a standard voicemail-style note.",
       {
         caller_name: { type: "string", description: "Full name of the caller leaving the message" },
         caller_phone: { type: "string", description: "Callback phone number, optional" },

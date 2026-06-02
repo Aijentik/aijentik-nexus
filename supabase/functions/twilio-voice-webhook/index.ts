@@ -133,6 +133,7 @@ Deno.serve(async (req) => {
       // {{caller_*}} / {{today_*}} tokens render blank in the prompt.
       const allParams: Record<string, string> = {
         agent_id: String(elevenlabsAgentId),
+        venue_id: String(agent.venue_id),
         venue_name: venueName,
         twilio_call_sid: callSid,
         call_sid: callSid,

@@ -91,7 +91,12 @@ Deno.serve(async (req) => {
     }
     const signedUrlData = await signedUrlRes.json();
 
-    return new Response(JSON.stringify({ signed_url: signedUrlData.signed_url, agent_id: agentId, prompt }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({
+      signed_url: signedUrlData.signed_url,
+      agent_id: agentId,
+      prompt,
+      dynamic_variables: { venue_id, venue_name: venue.name },
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

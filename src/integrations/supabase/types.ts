@@ -843,6 +843,7 @@ export type Database = {
           created_at: string
           direction: string | null
           id: string
+          reason: string | null
           status: string | null
           venue_id: string
         }
@@ -853,6 +854,7 @@ export type Database = {
           created_at?: string
           direction?: string | null
           id?: string
+          reason?: string | null
           status?: string | null
           venue_id: string
         }
@@ -863,6 +865,7 @@ export type Database = {
           created_at?: string
           direction?: string | null
           id?: string
+          reason?: string | null
           status?: string | null
           venue_id?: string
         }

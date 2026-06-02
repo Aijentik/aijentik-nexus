@@ -364,7 +364,6 @@ function webhookTool(name: string, description: string, properties: Record<strin
         type: "object",
         properties: {
           tool_name: { type: "string", description: "Always set to this tool's name" },
-          venue_id: { type: "string", description: "Use the {{venue_id}} dynamic variable" },
           ...properties,
         },
         required,
@@ -372,6 +371,10 @@ function webhookTool(name: string, description: string, properties: Record<strin
       request_headers: {
         "Authorization": `Bearer ${toolToken}`,
         "Content-Type": "application/json",
+        // ElevenLabs substitutes {{venue_id}} from dynamic_variables into headers.
+        // Passing it here (instead of as a tool argument) means the LLM cannot
+        // fabricate or mangle the UUID.
+        "X-Venue-Id": "{{venue_id}}",
       },
     },
   };
@@ -396,7 +399,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         guest_phone: { type: "string", description: "Phone number, optional" },
         notes: { type: "string", description: "Special requests / notes, optional" },
       },
-      ["tool_name", "venue_id", "guest_name", "party_size", "booking_time"],
+      ["tool_name", "guest_name", "party_size", "booking_time"],
       toolToken,
     ));
   }
@@ -414,7 +417,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         new_party_size: { type: "integer", description: "New party size if changing." },
         notes: { type: "string", description: "New or additional notes." },
       },
-      ["tool_name", "venue_id", "action"],
+      ["tool_name", "action"],
       toolToken,
     ));
   }
@@ -427,7 +430,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         caller_phone: { type: "string", description: "Callback phone number, optional" },
         message: { type: "string", description: "The message to relay to the venue team" },
       },
-      ["tool_name", "venue_id", "caller_name", "message"],
+      ["tool_name", "caller_name", "message"],
       toolToken,
     ));
   }

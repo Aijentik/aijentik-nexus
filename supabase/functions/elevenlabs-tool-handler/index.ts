@@ -32,10 +32,11 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const tool_name = body.tool_name as string | undefined;
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    // Pick the first valid UUID from body or header. Ignore literal "{{venue_id}}"
-    // placeholders or anything that isn't a real UUID (prevents the LLM from
-    // ever fabricating something like "hello-harry").
+    // venue_id is baked into the webhook URL per-agent (?venue_id=<uuid>).
+    // Fall back to header/body only for legacy callers.
+    const url = new URL(req.url);
     const candidates = [
+      (url.searchParams.get("venue_id") || "").trim(),
       typeof body.venue_id === "string" ? body.venue_id.trim() : "",
       (req.headers.get("x-venue-id") || "").trim(),
     ].filter(Boolean);

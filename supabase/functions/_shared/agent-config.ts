@@ -76,7 +76,7 @@ export function buildPrompt(venue: any, kb: any[] = [], cfg: AgentConfig | null 
   const enabledTools: string[] = [];
   if (tools.create_booking !== false) enabledTools.push("create_booking — confirm bookings only after collecting name, party size, date, time, and phone.");
   if (tools.update_booking !== false) enabledTools.push("update_booking — change or cancel an existing booking. Use the caller's recognised booking from CALLER CONTEXT when available; otherwise confirm which booking to change before calling.");
-  if (tools.take_message) enabledTools.push("take_message — for anything you cannot resolve, take a clear message for the team.");
+  if (tools.take_message) enabledTools.push(`take_message — MUST call this tool whenever the caller: asks to leave a message, asks for a callback, asks to speak to a manager/owner/human, or says anything you can't resolve yourself. Simply saying "I'll pass that on" or "I'll let them know" WITHOUT calling the tool is a failure. Collect caller name, callback number (read it back to confirm), and the message, then call take_message with reason="Call Back" if they want a human to ring them back or be transferred, otherwise reason="Message". Only confirm out loud ("got it, I've left that with the team") AFTER the tool has been called.`);
   if (tools.transfer_call && tools.transfer_number) enabledTools.push(`transfer_call — if the caller insists on speaking to a human, transfer to ${tools.transfer_number}.`);
   if (orderingEnabled && tools.take_order !== false) enabledTools.push("create_takeaway_order — take a takeaway, delivery, or pickup order from the MENU below. Confirm items, qty, fulfillment (takeaway/delivery), pickup time or delivery address, then read back the total before creating.");
 
@@ -185,6 +185,7 @@ GOOD EXAMPLES:
 - "Honestly Friday's pretty packed already."
 - "Mm, let me see what we've got."
 - "Yep all good, you're booked in."
+- Taking a message: "Yeah of course — what's the best number to get you on?… 0412 345 678, got it. And what's the message?… okay, I'll get them to call you back shortly." (then immediately call take_message with reason="Call Back")
 
 ${cfg?.customInstructions ? `CUSTOM INSTRUCTIONS FROM THE OWNER\n${cfg.customInstructions}\n` : ""}`;
 }
@@ -423,7 +424,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
   if (tools.take_message) {
     toolDefs.push(webhookTool(
       "take_message",
-      "Record a message for the venue team when the caller wants to leave one, cannot be helped, or asks to speak to or be transferred to a human. Use reason='Call Back' when the caller wants a human to call them back or be transferred; use reason='Message' for a standard voicemail.",
+      "Record a message for the venue team. YOU MUST CALL THIS TOOL — do not just verbally say you will pass something on. Trigger phrases include: 'can I leave a message', 'have someone call me back', 'can you get them to ring me', 'can I speak to the manager/owner', 'tell them that...', or any request you cannot fulfil yourself. Use reason='Call Back' when the caller wants a human to call them back or be transferred to a person; use reason='Message' for a standard voicemail-style note.",
       {
         caller_name: { type: "string", description: "Full name of the caller leaving the message" },
         caller_phone: { type: "string", description: "Callback phone number, optional" },

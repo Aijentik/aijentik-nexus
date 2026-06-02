@@ -185,6 +185,7 @@ GOOD EXAMPLES:
 - "Honestly Friday's pretty packed already."
 - "Mm, let me see what we've got."
 - "Yep all good, you're booked in."
+- Taking a message: "Yeah of course — what's the best number to get you on?… 0412 345 678, got it. And what's the message?… okay, I'll get them to call you back shortly." (then immediately call take_message with reason="Call Back")
 
 ${cfg?.customInstructions ? `CUSTOM INSTRUCTIONS FROM THE OWNER\n${cfg.customInstructions}\n` : ""}`;
 }

@@ -67,6 +67,7 @@ export function AgentConfigDialog({ agent, open, onOpenChange, onSaved }: {
 }) {
   const [cfg, setCfg] = useState<AgentConfig>(DEFAULTS);
   const [demeanorMode, setDemeanorMode] = useState<string>("warm");
+  const [externalBookingWebhookUrl, setExternalBookingWebhookUrl] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -75,6 +76,7 @@ export function AgentConfigDialog({ agent, open, onOpenChange, onSaved }: {
     setCfg(merged);
     const presetKeys = DEMEANORS.map(d => d.v).filter(v => v !== "custom");
     setDemeanorMode(presetKeys.includes(merged.demeanor || "") ? (merged.demeanor as string) : "custom");
+    setExternalBookingWebhookUrl(agent.external_booking_webhook_url || "");
   }, [agent]);
 
   if (!agent) return null;
@@ -88,7 +90,11 @@ export function AgentConfigDialog({ agent, open, onOpenChange, onSaved }: {
       const finalCfg = { ...cfg };
       if (demeanorMode !== "custom") finalCfg.demeanor = demeanorMode;
       const { data, error } = await supabase.functions.invoke("agent-configure", {
-        body: { agent_id: agent.id, config: finalCfg },
+        body: {
+          agent_id: agent.id,
+          config: finalCfg,
+          external_booking_webhook_url: externalBookingWebhookUrl.trim() || null,
+        },
       });
       if (error || (data as any)?.error) throw new Error((data as any)?.error || error?.message || "Save failed");
       toast.success("Agent configuration synced live");
@@ -190,6 +196,19 @@ export function AgentConfigDialog({ agent, open, onOpenChange, onSaved }: {
                 <Input value={cfg.tools?.transfer_number || ""} onChange={e => updateTool({ transfer_number: e.target.value })} placeholder="+14155551212" />
               </div>
             )}
+
+            <div className="pt-4 mt-2 border-t border-white/5">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">External system integration</div>
+              <Label>External booking webhook URL</Label>
+              <Input
+                value={externalBookingWebhookUrl}
+                onChange={e => setExternalBookingWebhookUrl(e.target.value)}
+                placeholder="https://their-system.com/webhook/..."
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Bookings, amendments, and inbound messages will be forwarded to this URL as JSON. Leave blank to disable.
+              </p>
+            </div>
           </TabsContent>
 
           <TabsContent value="advanced" className="space-y-3 mt-4">

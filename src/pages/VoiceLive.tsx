@@ -122,53 +122,15 @@ function VoiceLiveInner() {
       toast.error(e?.message || "Voice error");
     },
     clientTools: {
-      create_booking: async (params: any) => {
-        try {
-          if (!venue) return "No venue selected";
-          const time = new Date(params.booking_time);
-          if (isNaN(time.getTime())) return "Invalid booking_time; please use ISO 8601";
-          const { data, error } = await supabase.from("bookings").insert({
-            venue_id: venue.id,
-            guest_name: params.guest_name,
-            party_size: Number(params.party_size) || 2,
-            booking_time: time.toISOString(),
-            guest_phone: params.guest_phone || null,
-            notes: params.notes || null,
-            source: "ai_voice",
-            status: "confirmed",
-          }).select().single();
-          if (error) throw error;
-          await supabase.from("brain_events").insert({
-            venue_id: venue.id,
-            title: "Booking created by voice agent",
-            reason: `${params.guest_name} · party of ${params.party_size} · ${time.toLocaleString()}`,
-            severity: "info",
-          });
-          if (params.guest_phone) {
-            supabase.functions.invoke("send-sms", {
-              body: {
-                venue_id: venue.id,
-                to: params.guest_phone,
-                booking_id: data.id,
-                body: `Hi ${params.guest_name}, your table for ${params.party_size} at ${venue.name} on ${time.toLocaleString()} is confirmed. Reply STOP to opt out.`,
-              },
-            }).catch(() => {});
-          }
-          toast.success(`Booking added: ${params.guest_name}`);
-          return `Booking confirmed for ${params.guest_name}, party of ${params.party_size} at ${time.toLocaleString()}. Booking id: ${data.id}`;
-        } catch (e: any) {
-          console.error("[create_booking] failed", e);
-          toast.error(e.message || "Booking failed");
-          return `Failed to create booking: ${e.message || "unknown error"}`;
-        }
-      },
+      // create_booking, update_booking, take_message are now server-side webhooks
+      // executed by the elevenlabs-tool-handler edge function. Keeping only
+      // create_takeaway_order here since ordering is still wired client-side.
       create_takeaway_order: async (params: any) => {
         try {
           if (!venue) return "No venue selected";
           if (!(venue.features as any)?.ordering) return "Ordering is disabled for this venue";
           const items = Array.isArray(params.items) ? params.items : [];
           if (!items.length) return "No items provided";
-          // Resolve menu items by name for price lookup
           const { data: menu } = await supabase.from("menu_items")
             .select("id,name,price").eq("venue_id", venue.id).limit(500);
           const parsePrice = (p: any) => {

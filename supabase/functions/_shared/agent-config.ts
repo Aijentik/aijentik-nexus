@@ -371,10 +371,6 @@ function webhookTool(name: string, description: string, properties: Record<strin
       request_headers: {
         "Authorization": `Bearer ${toolToken}`,
         "Content-Type": "application/json",
-        // ElevenLabs substitutes {{venue_id}} from dynamic_variables into headers.
-        // Passing it here (instead of as a tool argument) means the LLM cannot
-        // fabricate or mangle the UUID.
-        "X-Venue-Id": "{{venue_id}}",
       },
     },
   };
@@ -388,18 +384,26 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
   if (!toolToken) throw new Error("ELEVENLABS_TOOL_SECRET not configured");
 
 
+  // IMPORTANT: venue_id is passed as a tool argument and MUST be filled from the
+  // {{venue_id}} dynamic variable. The handler validates it is a real UUID before
+  // any DB insert, so a fabricated value (e.g. "hello-harry") is safely rejected.
+  const venueIdProp = {
+    venue_id: { type: "string", description: "The venue UUID. ALWAYS set this exactly to the {{venue_id}} dynamic variable provided in this conversation. Never invent it, never use the venue name." },
+  };
+
   if (tools.create_booking !== false) {
     toolDefs.push(webhookTool(
       "create_booking",
       "Create a confirmed booking in the venue's diary. Call this only after explicitly confirming all required details with the caller.",
       {
+        ...venueIdProp,
         guest_name: { type: "string", description: "Full name of the guest" },
         party_size: { type: "integer", description: "Number of guests" },
         booking_time: { type: "string", description: "ISO 8601 datetime, e.g. 2026-05-06T19:30:00+10:00" },
         guest_phone: { type: "string", description: "Phone number, optional" },
         notes: { type: "string", description: "Special requests / notes, optional" },
       },
-      ["tool_name", "guest_name", "party_size", "booking_time"],
+      ["tool_name", "venue_id", "guest_name", "party_size", "booking_time"],
       toolToken,
     ));
   }
@@ -408,6 +412,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
       "update_booking",
       "Modify or cancel an existing booking. Provide as many identifying details as possible (booking_id if known, otherwise guest_name + original_booking_time + guest_phone). Set action to 'cancel' to cancel, or 'update' with the new fields.",
       {
+        ...venueIdProp,
         action: { type: "string", description: "Either 'update' or 'cancel'." },
         booking_id: { type: "string", description: "Booking id if known from caller context." },
         guest_name: { type: "string", description: "Name on the booking, used to find it if no id." },
@@ -417,7 +422,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         new_party_size: { type: "integer", description: "New party size if changing." },
         notes: { type: "string", description: "New or additional notes." },
       },
-      ["tool_name", "action"],
+      ["tool_name", "venue_id", "action"],
       toolToken,
     ));
   }
@@ -426,11 +431,12 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
       "take_message",
       "Record a message for the venue team when the caller wants to leave one or you cannot resolve their request.",
       {
+        ...venueIdProp,
         caller_name: { type: "string", description: "Full name of the caller leaving the message" },
         caller_phone: { type: "string", description: "Callback phone number, optional" },
         message: { type: "string", description: "The message to relay to the venue team" },
       },
-      ["tool_name", "caller_name", "message"],
+      ["tool_name", "venue_id", "caller_name", "message"],
       toolToken,
     ));
   }

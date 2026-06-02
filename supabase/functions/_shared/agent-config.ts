@@ -352,13 +352,14 @@ export async function ensureToolSecretId(): Promise<string> {
   return _toolSecretIdPromise;
 }
 
-function webhookTool(name: string, description: string, properties: Record<string, any>, required: string[], toolToken: string) {
+function webhookTool(name: string, description: string, properties: Record<string, any>, required: string[], toolToken: string, venueId: string) {
   return {
     type: "webhook",
     name,
     description,
     api_schema: {
-      url: TOOL_HANDLER_URL,
+      // venue_id is baked into the URL per-agent so the LLM can never fabricate it.
+      url: `${TOOL_HANDLER_URL}?venue_id=${encodeURIComponent(venueId)}`,
       method: "POST",
       request_body_schema: {
         type: "object",

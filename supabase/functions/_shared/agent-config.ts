@@ -369,10 +369,10 @@ function webhookTool(name: string, description: string, properties: Record<strin
         },
         required,
       },
-      request_headers: [
-        { type: "secret", name: "Authorization", secret_id: secretId },
-        { type: "value", name: "Content-Type", value: "application/json" },
-      ],
+      request_headers: {
+        "Authorization": { secret_id: secretId },
+        "Content-Type": "application/json",
+      },
     },
   };
 }

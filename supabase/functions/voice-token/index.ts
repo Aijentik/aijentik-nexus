@@ -53,12 +53,15 @@ Deno.serve(async (req) => {
       orderingEnabled ? fetchLiveMenuItems(sb, venue_id, "name,price,section,description", 120) : Promise.resolve([] as any[]),
     ]);
 
-    let { data: agent } = await sb.from("agents").select("*").eq("venue_id", venue_id).eq("kind", "voice").maybeSingle();
+    // Live Voice in-browser uses a separate ElevenLabs agent configured for
+    // PCM audio (the WebSocket SDK in the browser can't speak μ-law 8kHz like
+    // the Twilio mixer does). The phone agent (kind='voice') is left alone.
+    let { data: agent } = await sb.from("agents").select("*").eq("venue_id", venue_id).eq("kind", "voice_browser").maybeSingle();
     const cfg = agent?.config || {};
     const context = { bookings: bookings || [], messages: messages || [], events: events || [], insights: insights || [], menu: menuItems || [] };
 
     const prompt = buildPrompt(venue, kb || [], cfg, context);
-    const body = await buildAgentBody(venue, prompt, cfg);
+    const body = await buildAgentBody(venue, prompt, cfg, "browser");
 
     let agentId = agent?.elevenlabs_agent_id;
     if (!agentId) {
@@ -66,7 +69,7 @@ Deno.serve(async (req) => {
       if (agent) {
         await sb.from("agents").update({ elevenlabs_agent_id: agentId, status: "active", prompt }).eq("id", agent.id);
       } else {
-        const { data: inserted } = await sb.from("agents").insert({ venue_id, kind: "voice", name: "Voice Host", elevenlabs_agent_id: agentId, status: "active", prompt }).select().single();
+        const { data: inserted } = await sb.from("agents").insert({ venue_id, kind: "voice_browser", name: "Voice Host (Browser)", elevenlabs_agent_id: agentId, status: "active", prompt }).select().single();
         agent = inserted;
       }
     } else {

@@ -64,6 +64,17 @@ Deno.serve(async (req) => {
       } else {
         await patchElAgent(elevenlabsAgentId, body);
       }
+      // Keep the browser-variant agent in sync so Live Voice picks up the same
+      // prompt/voice/tools (it uses PCM audio formats instead of μ-law).
+      const { data: browserAgent } = await sb.from("agents")
+        .select("id, elevenlabs_agent_id")
+        .eq("venue_id", agent.venue_id).eq("kind", "voice_browser").maybeSingle();
+      if (browserAgent?.elevenlabs_agent_id) {
+        const browserBody = await buildAgentBody(venue, prompt, cfg, "browser");
+        try { await patchElAgent(browserAgent.elevenlabs_agent_id, browserBody); }
+        catch (e) { console.error("[agent-configure] browser sync failed", e); }
+        await sb.from("agents").update({ config: cfg, prompt, status: "active" }).eq("id", browserAgent.id);
+      }
     }
 
     const agentUpdate: Record<string, any> = {

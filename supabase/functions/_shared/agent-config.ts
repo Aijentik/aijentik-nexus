@@ -376,7 +376,7 @@ function webhookTool(name: string, description: string, properties: Record<strin
   };
 }
 
-export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | null | undefined) {
+export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | null | undefined, mode: "phone" | "browser" = "phone") {
   const voiceId = resolveVoiceId(cfg);
   const tools = cfg?.tools || { create_booking: true, take_message: true };
   const toolDefs: any[] = [];

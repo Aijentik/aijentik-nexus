@@ -502,7 +502,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         language: cfg?.language || "en",
       },
       asr: { quality: "high", user_input_audio_format: asrFormat },
-      turn: { turn_timeout: turnTimeout, silence_end_call_timeout: 30, mode: "turn" },
+      turn: { turn_timeout: turnTimeout, silence_end_call_timeout: 30, mode: "turn", turn_eagerness: "balanced" },
       tts: {
         voice_id: voiceId,
         model_id: "eleven_flash_v2",

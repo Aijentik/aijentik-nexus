@@ -376,7 +376,7 @@ function webhookTool(name: string, description: string, properties: Record<strin
   };
 }
 
-export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | null | undefined) {
+export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfig | null | undefined, mode: "phone" | "browser" = "phone") {
   const voiceId = resolveVoiceId(cfg);
   const tools = cfg?.tools || { create_booking: true, take_message: true };
   const toolDefs: any[] = [];
@@ -488,20 +488,25 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
 
   const firstMessage = cfg?.firstMessage?.trim() || `Hi, thanks for calling ${venue.name}. How can I help today?`;
 
+  const isBrowser = mode === "browser";
+  const asrFormat = isBrowser ? "pcm_16000" : "ulaw_8000";
+  const ttsFormat = isBrowser ? "pcm_16000" : "ulaw_8000";
+  const turnTimeout = isBrowser ? 7 : 1;
+
   return {
-    name: `${venue.name} — Voice Host`,
+    name: `${venue.name} — Voice Host${isBrowser ? " (Browser)" : ""}`,
     conversation_config: {
       agent: {
         prompt: { prompt, tools: toolDefs },
         first_message: firstMessage,
         language: cfg?.language || "en",
       },
-      asr: { quality: "high", user_input_audio_format: "ulaw_8000" },
-      turn: { turn_timeout: 1, silence_end_call_timeout: 30, mode: "turn" },
+      asr: { quality: "high", user_input_audio_format: asrFormat },
+      turn: { turn_timeout: turnTimeout, silence_end_call_timeout: 30, mode: "turn" },
       tts: {
         voice_id: voiceId,
         model_id: "eleven_flash_v2",
-        agent_output_audio_format: "ulaw_8000",
+        agent_output_audio_format: ttsFormat,
         stability: typeof cfg?.stability === "number" ? cfg.stability : 0.4,
         similarity_boost: typeof cfg?.similarity_boost === "number" ? cfg.similarity_boost : 0.75,
         style: typeof cfg?.style === "number" ? cfg.style : 0.05,

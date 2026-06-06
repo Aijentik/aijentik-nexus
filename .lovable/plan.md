@@ -1,49 +1,56 @@
-## Problem
+# Fix: Live Voice closes immediately after greeting
 
-The `take_message` webhook tool is wired up correctly — earlier logs show it firing successfully with the right venue_id, payload, and reason field. The issue now is purely behavioural: when you asked to leave a message, the model held the conversation but never invoked the tool, so nothing was recorded and the edge function received zero calls.
+## Root cause
 
-This is a classic LLM-tool-use failure: the agent treats "I'll pass that along" as the action itself instead of actually calling the function.
+The shared ElevenLabs agent is configured for **Twilio phone calls** (`asr.user_input_audio_format: "ulaw_8000"`, `tts.agent_output_audio_format: "ulaw_8000"`, `turn.turn_timeout: 1`). The Fly mixer bridges Twilio's μ-law audio to that agent fine. But the in-app Live Voice page (`src/pages/VoiceLive.tsx`) connects the **browser** directly to ElevenLabs via the signed WebSocket URL returned by `voice-token`. Browsers can't produce or play μ-law 8 kHz frames through the SDK, so:
 
-## Fix
+1. The agent plays its first message (TTS works one-way).
+2. Mic audio from the browser is unintelligible to the agent's ASR.
+3. The aggressive `turn_timeout: 1` plus malformed audio causes ElevenLabs to terminate the session right after the greeting.
 
-Two targeted prompt changes in `supabase/functions/_shared/agent-config.ts`. No DB or handler changes — those are already correct.
+This regressed when `supabase/functions/agents-set-ulaw/index.ts` was run to force μ-law on every linked agent for the Twilio mixer.
 
-### 1. Make the `take_message` capability line in the system prompt mandatory and explicit
+## Fix strategy
 
-Today (line 79):
-```
-take_message — for anything you cannot resolve, take a clear message for the team.
-```
+Provision **two distinct ElevenLabs agents per venue**, using the same prompt and tools:
 
-Replace with a stronger, action-forcing instruction that lists the trigger conditions and forbids fake-acknowledgement:
-- Caller asks to leave a message, asks for a callback, asks for a manager/owner/human, or says something you cannot help with.
-- You MUST call the `take_message` tool. Saying "I'll pass that on" without calling the tool is a failure.
-- Collect: caller name, callback number (read it back), the message itself, then call the tool with `reason: "Call Back"` if they want a human to call them, otherwise `"Message"`.
-- Confirm out loud only AFTER the tool returns ("got it, I've left that with the team").
+- `kind = "voice"` — Twilio/phone, keeps `ulaw_8000` for both ASR and TTS (used by `twilio-voice-webhook` + Fly mixer).
+- `kind = "voice_browser"` — In-app Live Voice, uses browser-friendly formats (`pcm_16000` ASR input, `pcm_16000` TTS output) and a sane `turn_timeout`.
 
-### 2. Tighten the tool description itself (line 426)
+The split keeps the existing phone path 100% unchanged and gives the browser its own correctly-configured agent.
 
-Current description is good but soft. Add an explicit "Call this tool — do not just say you will" line and list trigger phrases ("can I leave a message", "have someone call me back", "can I speak to the owner/manager", "tell them that…").
+## Changes
 
-### 3. Add a short worked example in the GOOD EXAMPLES block
+### 1. `supabase/functions/_shared/agent-config.ts`
+- Add an optional `mode: "phone" | "browser"` parameter to `buildAgentBody`.
+- When `mode === "browser"`:
+  - `asr.user_input_audio_format = "pcm_16000"`
+  - `tts.agent_output_audio_format = "pcm_16000"`
+  - `turn.turn_timeout = 7` (default-ish, not 1)
+  - Drop `optimize_streaming_latency` override or keep mild.
+- Phone mode keeps existing μ-law config exactly as today.
 
-Add one line showing the natural flow that ends in a tool call, e.g.:
-> "Yeah of course — what's the best number?... 0412 345 678, got it. And what's the message?... okay, I'll get them to call you back." (then call `take_message` with reason="Call Back")
+### 2. `supabase/functions/voice-token/index.ts`
+- Look up / upsert the agent row with `kind = "voice_browser"` (separate from the existing `kind = "voice"` row).
+- Call `buildAgentBody(venue, prompt, cfg, "browser")` and `createElAgent` / `syncElAgent` against that agent's `elevenlabs_agent_id`.
+- Return the signed URL for the browser agent.
+- Twilio webhook stays on the existing `kind = "voice"` row — no change.
 
-## Why this should work
+### 3. `supabase/functions/agent-configure/index.ts` (only if it touches one agent today)
+- When the owner edits config in the UI, propagate the same prompt/tools/voice to BOTH the phone agent and the browser agent if both exist, so behavior stays in sync. (Read file first to confirm exact scope.)
 
-ElevenLabs Convai agents almost always call a tool when (a) the tool description names the exact trigger utterances and (b) the system prompt explicitly forbids the "I'll pass it on" shortcut. Both changes together close the loop.
+### 4. No client changes required
+`VoiceLive.tsx` already handles both `signed_url` (WebSocket) and `token` (WebRTC). The fix is entirely server-side; the browser will just receive a working signed URL pointing at the pcm-configured agent.
 
-## Verification steps after deploy
+## Verification
 
-1. Open Agent Config → Save (pushes the new prompt + tool description to ElevenLabs).
-2. Start a voice session and say "can I leave a message for the manager?"
-3. Check `elevenlabs-tool-handler` logs — expect a `[elevenlabs-tool-handler] call { tool_name: "take_message", ... }` entry.
-4. Check the `messages` table for the new row with `reason = 'Call Back'`.
-5. Repeat with "can you take a quick message" → expect `reason = 'Message'`.
+1. Deploy `voice-token` and confirm a new `voice_browser` agent row is created on first call.
+2. Open `/app/voice`, click **Start call** — agent should greet AND continue the conversation, mic activity should reach the agent (visible in transcript), call should not drop until the user ends it.
+3. Place a real Twilio call to the linked number — phone path still works through the Fly mixer (unchanged agent).
+4. Check edge logs for `voice-token` to confirm no signed-url 4xx and no audio-format errors.
 
-## Files touched
+## Out of scope
 
-- `supabase/functions/_shared/agent-config.ts` — prompt line 79, tool description line 426, GOOD EXAMPLES block around line 182.
-
-No migrations, no handler changes, no schema changes.
+- No UI changes.
+- No change to the Fly mixer, Twilio webhook, or tool webhooks.
+- No prompt/personality changes.

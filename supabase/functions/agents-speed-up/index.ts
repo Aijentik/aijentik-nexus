@@ -15,7 +15,7 @@ const cors = {
 async function patchAgent(id: string, isBrowser: boolean) {
   const body = {
     conversation_config: {
-      turn: { turn_timeout: 7, mode: "turn", turn_eagerness: "balanced", silence_end_call_timeout: 30 },
+      turn: { turn_timeout: 7, mode: "turn", turn_eagerness: "normal", silence_end_call_timeout: 30 },
       tts: { model_id: "eleven_flash_v2", optimize_streaming_latency: 3 },
     },
   };

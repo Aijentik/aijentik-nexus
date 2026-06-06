@@ -491,7 +491,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
   const isBrowser = mode === "browser";
   const asrFormat = isBrowser ? "pcm_16000" : "ulaw_8000";
   const ttsFormat = isBrowser ? "pcm_16000" : "ulaw_8000";
-  const turnTimeout = isBrowser ? 7 : 1;
+  const turnTimeout = isBrowser ? 7 : 7;
 
   return {
     name: `${venue.name} — Voice Host${isBrowser ? " (Browser)" : ""}`,
@@ -502,7 +502,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
         language: cfg?.language || "en",
       },
       asr: { quality: "high", user_input_audio_format: asrFormat },
-      turn: { turn_timeout: turnTimeout, silence_end_call_timeout: 30, mode: "turn" },
+      turn: { turn_timeout: turnTimeout, silence_end_call_timeout: 30, mode: "turn", turn_eagerness: "normal" },
       tts: {
         voice_id: voiceId,
         model_id: "eleven_flash_v2",

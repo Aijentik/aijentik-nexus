@@ -491,7 +491,7 @@ export async function buildAgentBody(venue: any, prompt: string, cfg: AgentConfi
   const isBrowser = mode === "browser";
   const asrFormat = isBrowser ? "pcm_16000" : "ulaw_8000";
   const ttsFormat = isBrowser ? "pcm_16000" : "ulaw_8000";
-  const turnTimeout = isBrowser ? 7 : 1;
+  const turnTimeout = isBrowser ? 7 : 7;
 
   return {
     name: `${venue.name} — Voice Host${isBrowser ? " (Browser)" : ""}`,
